@@ -6,7 +6,6 @@ from pdf_processor import extraer_datos_oc
 
 st.set_page_config(page_title="Control de Compras", page_icon="📦", layout="wide")
 
-# --- FUNCIONES DE FORMATO ---
 def formato_moneda(valor):
     if pd.isna(valor): return "0,00"
     return "{:,.2f}".format(float(valor)).replace(',', 'X').replace('.', ',').replace('X', '.')
@@ -25,12 +24,14 @@ def cargar_ordenes():
     conn = obtener_conexion()
     query = '''
         SELECT 
-            o.id AS "Nº Orden",
+            o.id AS "ID_BD",
+            o.numero_orden AS "Nº OC",
             p.nombre AS "Proveedor",
             o.tienda_destino AS "Tienda Destino",
             o.fecha_emision AS "Fecha Emisión",
             o.fecha_envio AS "Fecha Envío",
-            o.fecha_vencimiento AS "Fecha Vencimiento",
+            o.fecha_recepcion AS "Fecha Recepción",
+            o.fecha_vencimiento AS "Vencimiento Factura",
             o.monto_total AS "Monto Total ($)",
             o.estatus AS "Estatus",
             p.dias_credito AS "_dias_credito"
@@ -42,11 +43,10 @@ def cargar_ordenes():
     conn.close()
     return df
 
-def guardar_orden_completa(proveedor_nombre, tienda_destino, fecha_emision_dt, fecha_envio_dt, monto_total, df_productos_editados):
+def guardar_orden(numero_orden, proveedor_nombre, tienda_destino, fecha_emi_dt, fecha_env_dt, fecha_rec_dt, monto_total, df_productos, estatus="No despachado"):
     conn = obtener_conexion()
     cursor = conn.cursor()
     
-    # Proveedor
     cursor.execute("SELECT id, dias_credito FROM Proveedores WHERE LOWER(nombre) = LOWER(?)", (proveedor_nombre.strip(),))
     prov = cursor.fetchone()
     
@@ -57,185 +57,256 @@ def guardar_orden_completa(proveedor_nombre, tienda_destino, fecha_emision_dt, f
         cursor.execute("INSERT INTO Proveedores (nombre, dias_credito, dias_despacho) VALUES (?, ?, ?)", (proveedor_nombre.strip(), dias_credito, 3))
         proveedor_id = cursor.lastrowid
 
-    fecha_emision_fmt = fecha_emision_dt.strftime("%Y-%m-%d")
-    fecha_envio_fmt = fecha_envio_dt.strftime("%Y-%m-%d")
-    fecha_vencimiento_dt = fecha_emision_dt + timedelta(days=dias_credito)
-    fecha_vencimiento_fmt = fecha_vencimiento_dt.strftime("%Y-%m-%d")
+    fecha_emi_fmt = fecha_emi_dt.strftime("%Y-%m-%d") if fecha_emi_dt else None
+    fecha_env_fmt = fecha_env_dt.strftime("%Y-%m-%d") if fecha_env_dt else None
+    fecha_rec_fmt = fecha_rec_dt.strftime("%Y-%m-%d") if fecha_rec_dt else None
+    
+    if fecha_rec_dt:
+        fecha_venc_dt = fecha_rec_dt + timedelta(days=dias_credito)
+        fecha_venc_fmt = fecha_venc_dt.strftime("%Y-%m-%d")
+    else:
+        fecha_venc_fmt = None
 
     cursor.execute('''
-        INSERT INTO Ordenes_Compra (proveedor_id, tienda_destino, fecha_emision, fecha_envio, fecha_vencimiento, monto_total, estatus)
-        VALUES (?, ?, ?, ?, ?, ?, 'No despachado')
-    ''', (proveedor_id, tienda_destino, fecha_emision_fmt, fecha_envio_fmt, fecha_vencimiento_fmt, monto_total))
+        INSERT INTO Ordenes_Compra (numero_orden, proveedor_id, tienda_destino, fecha_emision, fecha_envio, fecha_recepcion, fecha_vencimiento, monto_total, estatus)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ''', (numero_orden, proveedor_id, tienda_destino, fecha_emi_fmt, fecha_env_fmt, fecha_rec_fmt, fecha_venc_fmt, monto_total, estatus))
     
     orden_id = cursor.lastrowid
 
-    for _, prod in df_productos_editados.iterrows():
+    for _, prod in df_productos.iterrows():
         cursor.execute('''
             INSERT INTO Detalles_Productos (orden_id, codigo, descripcion, cantidad, precio_unitario)
             VALUES (?, ?, ?, ?, ?)
-        ''', (orden_id, prod['codigo'], prod['descripcion'], prod['cantidad'], prod['precio_unitario']))
+        ''', (orden_id, prod.get('codigo', ''), prod.get('descripcion', ''), prod.get('cantidad', 0), prod.get('precio_unitario', 0)))
 
     conn.commit()
     conn.close()
     return orden_id
 
-def calcular_alerta(row):
-    fecha_venc_str = row["Fecha Vencimiento"]
-    dias_credito = row["_dias_credito"]
+def actualizar_orden(orden_id, num_oc, tienda, f_emi, f_env, f_rec, f_ven, monto, estatus):
+    conn = obtener_conexion()
+    cursor = conn.cursor()
     
-    if not fecha_venc_str: return "Sin Fecha"
+    f_emi_str = f_emi.strftime("%Y-%m-%d") if f_emi else None
+    f_env_str = f_env.strftime("%Y-%m-%d") if f_env else None
+    f_rec_str = f_rec.strftime("%Y-%m-%d") if f_rec else None
+    f_ven_str = f_ven.strftime("%Y-%m-%d") if f_ven else None
+
+    cursor.execute('''
+        UPDATE Ordenes_Compra 
+        SET numero_orden = ?, tienda_destino = ?, fecha_emision = ?, 
+            fecha_envio = ?, fecha_recepcion = ?, fecha_vencimiento = ?, 
+            monto_total = ?, estatus = ?
+        WHERE id = ?
+    ''', (num_oc, tienda, f_emi_str, f_env_str, f_rec_str, f_ven_str, monto, estatus, orden_id))
+    
+    conn.commit()
+    conn.close()
+
+def eliminar_orden(orden_id):
+    conn = obtener_conexion()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM Detalles_Productos WHERE orden_id = ?", (orden_id,))
+    cursor.execute("DELETE FROM Ordenes_Compra WHERE id = ?", (orden_id,))
+    conn.commit()
+    conn.close()
+
+def calcular_alerta(row):
+    fecha_venc_str = row["Vencimiento Factura"]
+    if not fecha_venc_str: return "Sin recepción"
     
     fecha_venc = datetime.strptime(fecha_venc_str, "%Y-%m-%d").date()
     hoy = datetime.now().date()
     dias_restantes = (fecha_venc - hoy).days
 
-    alerta = f"({dias_restantes} días rest. de {dias_credito})"
     if dias_restantes < 0:
         return f"🔴 Vencida hace {abs(dias_restantes)} días"
     elif dias_restantes <= 5:
-        return f"🟡 Por vencer {alerta}"
+        return f"🟡 Por vencer ({dias_restantes} días)"
     else:
-        return f"🟢 Vigente {alerta}"
+        return f"🟢 Vigente ({dias_restantes} días)"
 
-# --- INTERFAZ GRÁFICA ---
 st.title("📦 Diario de Control de Compras")
 
-tab_ordenes, tab_subir, tab_proveedores = st.tabs(["📋 Órdenes de Compra", "📤 Cargar PDF", "🏢 Proveedores"])
+tab_ordenes, tab_escaner, tab_manual, tab_proveedores = st.tabs(["📋 Diario de Órdenes", "📥 Escanear PDF", "✍️ Registro Manual", "🏢 Proveedores"])
 
-# --- PESTAÑA: CARGAR PDF ---
-with tab_subir:
-    st.subheader("Cargar Orden de Compra desde PDF")
-    
-    archivo_pdf = st.file_uploader("Selecciona o arrastra el archivo PDF de la OC:", type=["pdf"])
-    
-    if archivo_pdf is not None:
-        with st.spinner("Extrayendo datos del PDF..."):
-            datos_oc = extraer_datos_oc(archivo_pdf)
-
-        if datos_oc is None:
-            st.warning("⚠️ No se pudieron extraer datos automáticamente. Completa los campos manualmente.")
-            datos_oc = {"proveedor": "", "tienda_destino": "", "fecha_emision": "", "monto_total": 0.0, "productos": []}
-        
-        with st.form(key="form_confirmar_oc"):
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                proveedor = st.text_input("Proveedor:", value=datos_oc["proveedor"])
-                tienda_destino = st.text_input("Tienda Destino:", value=datos_oc["tienda_destino"])
-            
-            with col2:
-                # Convertir string extraído a objeto date para el calendario
-                fecha_str = datos_oc.get("fecha_emision", "")
-                fecha_defecto = datetime.now().date()
-                if fecha_str:
-                    try:
-                        fecha_defecto = datetime.strptime(fecha_str, "%Y-%m-%d").date()
-                    except ValueError:
-                        pass
-                        
-                fecha_emision = st.date_input("Fecha Emisión:", value=fecha_defecto, format="DD/MM/YYYY")
-                fecha_envio = st.date_input("Fecha de Envío:", value=datetime.now().date(), format="DD/MM/YYYY")
-                monto_total = st.number_input("Monto Total ($):", value=float(datos_oc["monto_total"]), step=0.01)
-
-            st.write("### Productos Detectados (¡Puedes editarlos libremente!)")
-            df_prods_temp = pd.DataFrame(datos_oc["productos"]) if datos_oc["productos"] else pd.DataFrame(columns=["codigo", "descripcion", "cantidad", "precio_unitario"])
-            
-            # Editor interactivo de datos extraídos
-            productos_editados = st.data_editor(df_prods_temp, num_rows="dynamic", use_container_width=True)
-
-            btn_guardar = st.form_submit_button("💾 Guardar Orden en la Base de Datos", type="primary")
-            
-            if btn_guardar:
-                if not proveedor or not tienda_destino:
-                    st.error("Por favor completa al menos el Proveedor y la Tienda Destino.")
-                else:
-                    nueva_orden_id = guardar_orden_completa(
-                        proveedor, tienda_destino, fecha_emision, fecha_envio, monto_total, productos_editados
-                    )
-                    st.success(f"¡Orden Nº {nueva_orden_id} registrada con éxito!")
-                    st.balloons()
-
-# --- PESTAÑA: ÓRDENES DE COMPRA ---
+# --- PESTAÑA 1: DIARIO Y ESTATUS ---
 with tab_ordenes:
     df_ordenes = cargar_ordenes()
-
     if not df_ordenes.empty:
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total Órdenes", len(df_ordenes))
-        col2.metric("🟢 Recibidas", len(df_ordenes[df_ordenes["Estatus"] == "Recibido"]))
-        col3.metric("🔵 Enviadas", len(df_ordenes[df_ordenes["Estatus"] == "Enviada"]))
-        col4.metric("🟠 No Despachadas", len(df_ordenes[df_ordenes["Estatus"] == "No despachado"]))
-        st.divider()
-
-    st.subheader("Diario / Estado de las Órdenes")
-    
-    if df_ordenes.empty:
-        st.info("Aún no hay órdenes registradas.")
-    else:
         df_display = df_ordenes.copy()
+        df_display["Alerta de Pago"] = df_display.apply(calcular_alerta, axis=1)
         
-        # Calcular alertas
-        df_display["Alerta de Crédito"] = df_display.apply(calcular_alerta, axis=1)
-        
-        # Aplicar formato Venezolano y fechas DD-MM-YYYY para visualización
         df_display["Monto Total ($)"] = df_display["Monto Total ($)"].apply(formato_moneda)
         df_display["Fecha Emisión"] = df_display["Fecha Emisión"].apply(formato_fecha)
         df_display["Fecha Envío"] = df_display["Fecha Envío"].apply(formato_fecha)
-        df_display["Fecha Vencimiento"] = df_display["Fecha Vencimiento"].apply(formato_fecha)
+        df_display["Fecha Recepción"] = df_display["Fecha Recepción"].apply(formato_fecha)
+        df_display["Vencimiento Factura"] = df_display["Vencimiento Factura"].apply(formato_fecha)
         
-        df_display = df_display.drop(columns=["_dias_credito"]) # Ocultar columna técnica
+        # Ocultamos la columna técnica de BD para la vista
+        st.dataframe(df_display.drop(columns=["ID_BD", "_dias_credito"]), use_container_width=True)
         
-        st.dataframe(df_display, use_container_width=True)
         st.divider()
-
-        # Cambiar Estatus
-        st.subheader("🔄 Cambiar Estatus de una Orden")
-        col_form1, col_form2 = st.columns([1, 2])
+        st.subheader("⚙️ Gestionar, Editar o Eliminar Orden")
         
-        with col_form1:
-            opciones_ordenes = {f"Nº {r['Nº Orden']} | {r['Proveedor']}": r['Nº Orden'] for _, r in df_ordenes.iterrows()}
-            orden_seleccionada_label = st.selectbox("Selecciona la Orden:", options=list(opciones_ordenes.keys()))
-            orden_id_seleccionada = opciones_ordenes[orden_seleccionada_label]
-            estatus_actual = df_ordenes[df_ordenes["Nº Orden"] == orden_id_seleccionada]["Estatus"].values[0]
-
-        with col_form2:
-            with st.form(key="form_cambiar_estatus"):
-                opciones_estatus = ["No despachado", "Enviada", "Recibido"]
-                idx_estatus = opciones_estatus.index(estatus_actual) if estatus_actual in opciones_estatus else 0
-                nuevo_estatus = st.selectbox("Nuevo Estatus:", options=opciones_estatus, index=idx_estatus)
+        # Selector de orden a editar
+        opciones_ordenes = {f"OC: {r['Nº OC']} | {r['Proveedor']}": r['ID_BD'] for _, r in df_ordenes.iterrows()}
+        orden_seleccionada_label = st.selectbox("Selecciona la Orden:", options=list(opciones_ordenes.keys()))
+        orden_id_seleccionada = opciones_ordenes[orden_seleccionada_label]
+        
+        # Filtrar datos de la orden seleccionada para llenar el formulario
+        orden_data = df_ordenes[df_ordenes["ID_BD"] == orden_id_seleccionada].iloc[0]
+        
+        with st.form(key="form_editar_orden"):
+            st.write(f"Modificando datos de la orden de **{orden_data['Proveedor']}**")
+            c1, c2, c3 = st.columns(3)
+            
+            with c1:
+                e_num = st.text_input("Número de OC:", value=str(orden_data["Nº OC"]) if pd.notna(orden_data["Nº OC"]) else "")
+                e_tienda = st.text_input("Tienda Destino:", value=str(orden_data["Tienda Destino"]) if pd.notna(orden_data["Tienda Destino"]) else "")
+                e_monto = st.number_input("Monto Total ($):", value=float(orden_data["Monto Total ($)"]), step=0.01)
                 
-                if st.form_submit_button("Actualizar Estatus", type="primary"):
-                    conn = obtener_conexion()
-                    conn.execute('UPDATE Ordenes_Compra SET estatus = ? WHERE id = ?', (nuevo_estatus, orden_id_seleccionada))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Estatus actualizado a {nuevo_estatus}")
-                    st.rerun()
+                opciones_estatus = ["No despachado", "Enviada", "Recibido"]
+                idx_estatus = opciones_estatus.index(orden_data["Estatus"]) if orden_data["Estatus"] in opciones_estatus else 0
+                e_estatus = st.selectbox("Estatus:", options=opciones_estatus, index=idx_estatus)
+            
+            with c2:
+                # Helper para convertir texto de BD a objeto fecha para el widget
+                def parse_date(d_str):
+                    if pd.isna(d_str) or not d_str: return None
+                    return datetime.strptime(str(d_str), "%Y-%m-%d").date()
+                
+                d_emi = parse_date(orden_data["Fecha Emisión"])
+                d_env = parse_date(orden_data["Fecha Envío"])
+                d_rec = parse_date(orden_data["Fecha Recepción"])
+                
+                e_emi = st.date_input("Fecha Emisión:", value=d_emi if d_emi else datetime.now().date(), format="DD/MM/YYYY")
+                e_env = st.date_input("Fecha Envío:", value=d_env if d_env else datetime.now().date(), format="DD/MM/YYYY")
+                
+                rec_check = st.checkbox("Orden Recibida (Habilita Recepción)", value=True if d_rec else False)
+                e_rec = st.date_input("Fecha Recepción:", value=d_rec if d_rec else datetime.now().date(), format="DD/MM/YYYY") if rec_check else None
+                
+            with c3:
+                st.write("### Acciones")
+                btn_actualizar = st.form_submit_button("💾 Guardar Cambios", type="primary")
+                st.write("") # Espaciador visual
+                btn_eliminar = st.form_submit_button("🗑️ Eliminar Orden permanentemente")
+                
+        # Acciones según el botón presionado
+        if btn_actualizar:
+            e_ven = None
+            if e_rec: # Si se marca como recibida, se recalculan los días de vencimiento
+                e_ven = e_rec + timedelta(days=int(orden_data["_dias_credito"]))
+                
+            actualizar_orden(orden_id_seleccionada, e_num, e_tienda, e_emi, e_env, e_rec, e_ven, e_monto, e_estatus)
+            st.success("¡Orden actualizada con éxito!")
+            st.rerun()
+            
+        if btn_eliminar:
+            eliminar_orden(orden_id_seleccionada)
+            st.success("¡Orden eliminada de la base de datos!")
+            st.rerun()
 
-# --- PESTAÑA: PROVEEDORES ---
-with tab_proveedores:
-    st.subheader("Gestión de Proveedores (Base de Datos)")
-    st.write("Edita directamente los días en la tabla inferior y presiona Guardar.")
+    else:
+        st.info("Aún no hay órdenes registradas.")
+
+# --- PESTAÑA 2: ESCANEAR PDF ---
+with tab_escaner:
+    st.subheader("Extraer datos desde PDF")
+    archivo_pdf = st.file_uploader("Sube el PDF de la OC:", type=["pdf"])
     
+    if archivo_pdf is not None:
+        with st.spinner("Extrayendo datos..."):
+            datos_oc = extraer_datos_oc(archivo_pdf)
+
+        st.info("💡 Todos los campos a continuación son libres. Modifica cualquier dato si el escáner cometió un error.")
+        
+        with st.form("form_pdf"):
+            col1, col2 = st.columns(2)
+            with col1:
+                num_oc = st.text_input("Número de OC:", value=datos_oc.get("numero_orden", ""))
+                proveedor = st.text_input("Proveedor:", value=datos_oc.get("proveedor", ""))
+                tienda = st.text_input("Tienda Destino:", value=datos_oc.get("tienda_destino", ""))
+                monto = st.number_input("Monto Total ($):", value=float(datos_oc.get("monto_total", 0.0)), step=0.01)
+            with col2:
+                fecha_str = datos_oc.get("fecha_emision", "")
+                fecha_defecto = datetime.strptime(fecha_str, "%Y-%m-%d").date() if fecha_str else datetime.now().date()
+                
+                f_emision = st.date_input("Fecha Emisión:", value=fecha_defecto, format="DD/MM/YYYY")
+                f_envio = st.date_input("Fecha de Envío:", value=datetime.now().date(), format="DD/MM/YYYY")
+                
+                recibida = st.checkbox("¿Esta orden ya fue recibida hoy?")
+                f_recepcion = st.date_input("Fecha de Recepción:", value=datetime.now().date(), format="DD/MM/YYYY") if recibida else None
+
+            st.write("### Productos (Modificables)")
+            df_p = pd.DataFrame(datos_oc["productos"]) if datos_oc["productos"] else pd.DataFrame(columns=["codigo", "descripcion", "cantidad", "precio_unitario"])
+            prods_editados = st.data_editor(df_p, num_rows="dynamic", use_container_width=True)
+
+            if st.form_submit_button("Guardar Orden Extraída", type="primary"):
+                estatus = "Recibido" if recibida else "No despachado"
+                guardar_orden(num_oc, proveedor, tienda, f_emision, f_envio, f_recepcion, monto, prods_editados, estatus)
+                st.success("¡Orden guardada exitosamente!")
+                st.rerun()
+
+# --- PESTAÑA 3: REGISTRO MANUAL ---
+with tab_manual:
+    st.subheader("Registrar Orden Manualmente (Sin PDF)")
+    with st.form("form_manual"):
+        col_m1, col_m2 = st.columns(2)
+        with col_m1:
+            m_num = st.text_input("Número de OC:")
+            m_prov = st.text_input("Proveedor:")
+            m_tienda = st.text_input("Tienda Destino:")
+            m_monto = st.number_input("Monto Total ($):", min_value=0.0, step=0.01)
+        with col_m2:
+            m_emi = st.date_input("Fecha Emisión (Manual):", format="DD/MM/YYYY")
+            m_env = st.date_input("Fecha Envío (Manual):", format="DD/MM/YYYY")
+            m_recibida = st.checkbox("Marcar como Recibida")
+            m_rec = st.date_input("Fecha Recepción (Manual):", format="DD/MM/YYYY") if m_recibida else None
+
+        st.write("Añadir Productos (Opcional)")
+        m_prods = st.data_editor(pd.DataFrame(columns=["codigo", "descripcion", "cantidad", "precio_unitario"]), num_rows="dynamic", use_container_width=True)
+
+        if st.form_submit_button("Guardar Orden Manual"):
+            if m_prov and m_num:
+                estatus_m = "Recibido" if m_recibida else "No despachado"
+                guardar_orden(m_num, m_prov, m_tienda, m_emi, m_env, m_rec, m_monto, m_prods, estatus_m)
+                st.success("Orden manual registrada.")
+                st.rerun()
+            else:
+                st.error("Por favor completa el Número de OC y el Proveedor.")
+
+# --- PESTAÑA 4: PROVEEDORES ---
+with tab_proveedores:
+    st.subheader("Base de Datos de Proveedores")
     conn = obtener_conexion()
     df_prov = pd.read_sql_query("SELECT id AS 'ID', nombre AS 'Proveedor', dias_credito AS 'Días de Crédito', dias_despacho AS 'Días de Despacho' FROM Proveedores", conn)
     conn.close()
     
-    if df_prov.empty:
-        st.info("No hay proveedores registrados.")
-    else:
-        with st.form("form_proveedores"):
-            # Editor de tabla de proveedores
+    with st.expander("➕ Agregar Nuevo Proveedor Manualmente"):
+        with st.form("form_nuevo_prov"):
+            n_prov = st.text_input("Nombre del Proveedor:")
+            n_credito = st.number_input("Días de Crédito:", min_value=0, value=30)
+            n_despacho = st.number_input("Días de Despacho:", min_value=0, value=3)
+            if st.form_submit_button("Registrar Proveedor"):
+                if n_prov:
+                    conn = obtener_conexion()
+                    conn.execute("INSERT INTO Proveedores (nombre, dias_credito, dias_despacho) VALUES (?, ?, ?)", (n_prov, n_credito, n_despacho))
+                    conn.commit()
+                    conn.close()
+                    st.success("Proveedor agregado.")
+                    st.rerun()
+
+    st.write("Editar Proveedores Existentes:")
+    if not df_prov.empty:
+        with st.form("form_editar_prov"):
             prov_editados = st.data_editor(df_prov, disabled=["ID", "Proveedor"], use_container_width=True)
-            
-            if st.form_submit_button("Guardar Cambios en Proveedores"):
+            if st.form_submit_button("Guardar Cambios en Tiempos"):
                 conn = obtener_conexion()
-                cursor = conn.cursor()
                 for _, row in prov_editados.iterrows():
-                    cursor.execute('''
-                        UPDATE Proveedores SET dias_credito = ?, dias_despacho = ? WHERE id = ?
-                    ''', (row['Días de Crédito'], row['Días de Despacho'], row['ID']))
+                    conn.execute('UPDATE Proveedores SET dias_credito = ?, dias_despacho = ? WHERE id = ?', (row['Días de Crédito'], row['Días de Despacho'], row['ID']))
                 conn.commit()
                 conn.close()
-                st.success("¡Base de datos de proveedores actualizada!")
+                st.success("Tiempos actualizados.")
                 st.rerun()

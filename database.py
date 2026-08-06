@@ -4,7 +4,6 @@ def inicializar_base_de_datos():
     conexion = sqlite3.connect('compras.db')
     cursor = conexion.cursor()
 
-    # Se añade "dias_despacho" a la tabla
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS Proveedores (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -14,14 +13,15 @@ def inicializar_base_de_datos():
         )
     ''')
 
-    # Se añade "fecha_envio" a la tabla
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS Ordenes_Compra (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            numero_orden TEXT,
             proveedor_id INTEGER,
             tienda_destino TEXT NOT NULL,
             fecha_emision DATE,
             fecha_envio DATE,
+            fecha_recepcion DATE,
             fecha_vencimiento DATE,
             monto_total REAL,
             estatus TEXT DEFAULT 'No despachado',
@@ -44,7 +44,7 @@ def inicializar_base_de_datos():
 
     conexion.commit()
     conexion.close()
-    print("¡Base de datos 'compras.db' inicializada con éxito con las nuevas columnas!")
+    print("¡Base de datos 'compras.db' inicializada con éxito con los nuevos campos!")
 
 if __name__ == '__main__':
     inicializar_base_de_datos()
