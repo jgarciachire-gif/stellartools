@@ -1,13 +1,27 @@
-import streamlit as st
+try:
+    import streamlit as st  # type: ignore
+except Exception:
+    # Fallback stub for environments where streamlit is not installed (for linting/tests)
+    from types import SimpleNamespace
+
+    class _SessionState(dict):
+        pass
+
+    st = SimpleNamespace(
+        secrets={},
+        session_state=_SessionState(),
+        set_page_config=lambda *a, **k: None,
+    )
 import sqlite3
-import pandas as pd
 from datetime import datetime, timedelta, date
 from pdf_processor import extraer_datos_oc
 import os
 
+import pandas as pd  # type: ignore
+
 # Intento de conexión a BD en la nube (PostgreSQL) vía st.secrets
 try:
-    import psycopg2
+    import psycopg2  # type: ignore
     DB_URL = st.secrets["DATABASE_URL"]
     IS_POSTGRES = True
 except (FileNotFoundError, KeyError, ImportError):
