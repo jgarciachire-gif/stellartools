@@ -1,3 +1,5 @@
 streamlit
 pandas
 pdfplumber
+lxml
+psycopg2-binary
