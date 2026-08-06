@@ -36,8 +36,7 @@ if "last_filename" not in st.session_state: st.session_state.last_filename = Non
 if "pdf_guardado_exito" not in st.session_state: st.session_state.pdf_guardado_exito = False
 if "df_actual" not in st.session_state: st.session_state.df_actual = pd.DataFrame()
 if "df_prov_actual" not in st.session_state: st.session_state.df_prov_actual = pd.DataFrame()
-if "grid_diario_ordenes" not in st.session_state: st.session_state.grid_diario_ordenes = {}
-if "grid_proveedores" not in st.session_state: st.session_state.grid_proveedores = {}
+
 
 # --- FUNCIONES AUXILIARES ---
 def formato_moneda(valor):
