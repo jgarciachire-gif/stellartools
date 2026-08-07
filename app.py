@@ -94,7 +94,7 @@ def inicializar_db():
     queries = [
         '''CREATE TABLE IF NOT EXISTS Proveedores (
             id INTEGER PRIMARY KEY AUTOINCREMENT, codigo TEXT, nombre TEXT UNIQUE, dias_credito INTEGER DEFAULT 30, 
-            dias_despacho INTEGER DEFAULT 3, dias_inventario INTEGER DEFAULT 15)''',
+            dias_despacho INTEGER DEFAULT 3, dias_inventario INTEGER DEFAULT 15, contacto TEXT)''',
         '''CREATE TABLE IF NOT EXISTS Ordenes_Compra (
             id INTEGER PRIMARY KEY AUTOINCREMENT, numero_orden TEXT, proveedor_id INTEGER, proveedor TEXT, 
             tienda_destino TEXT, fecha_emision TEXT, fecha_envio TEXT, fecha_recepcion TEXT, 
@@ -112,7 +112,8 @@ def inicializar_db():
         "ALTER TABLE Ordenes_Compra ADD COLUMN proveedor TEXT",
         "ALTER TABLE Ordenes_Compra ADD COLUMN dias_inventario INTEGER",
         "ALTER TABLE Proveedores ADD COLUMN dias_inventario INTEGER DEFAULT 15",
-        "ALTER TABLE Proveedores ADD COLUMN codigo TEXT"
+        "ALTER TABLE Proveedores ADD COLUMN codigo TEXT",
+        "ALTER TABLE Proveedores ADD COLUMN contacto TEXT"
     ]
     for m in migraciones:
         try: ejecutar_query(m)
@@ -224,11 +225,102 @@ def calcular_alerta_inventario(row):
 # --- UI PRINCIPAL ---
 st.title("📦 Diario de Control de Compras")
 
-tab_ordenes, tab_escaner, tab_manual, tab_proveedores = st.tabs([
-    "📋 Registro Diario", "📥 Escanear PDF", "✍️ Registro Manual", "🏢 Proveedores e Inventario"
+tab_dashboard, tab_ordenes, tab_escaner, tab_proveedores = st.tabs([
+    "📊 Dashboard & Alertas", "📋 Registro Diario", "📥 Escanear PDF", "🏢 Proveedores (BD)"
 ])
 
-# --- PESTAÑA 1: REGISTRO DIARIO (LIMPIO) ---
+# --- PESTAÑA 1: DASHBOARD Y ALERTAS ---
+with tab_dashboard:
+    st.subheader("🚨 Panel de Alertas de Reposición de Inventario")
+    
+    # Extraer todas las últimas órdenes por tienda y proveedor para calcular alertas
+    df_ocs_prov = ejecutar_query('''
+        SELECT p.nombre AS "Proveedor", o.tienda_destino AS "Tienda", o.numero_orden AS "Último Nº OC", o.estatus AS "Estatus", 
+               o.dias_inventario, o.fecha_recepcion
+        FROM Ordenes_Compra o
+        JOIN Proveedores p ON o.proveedor_id = p.id
+        ORDER BY o.id DESC
+    ''', is_select=True)
+    
+    if not df_ocs_prov.empty:
+        df_ultimas = df_ocs_prov.drop_duplicates(subset=['Proveedor', 'Tienda'], keep='first').copy()
+        df_ultimas["Alerta de Inventario"] = df_ultimas.apply(calcular_alerta_inventario, axis=1)
+        df_alertas = df_ultimas[df_ultimas["Alerta de Inventario"] != "No definido"].copy()
+        
+        alerta_roja = df_alertas[df_alertas["Alerta de Inventario"].str.startswith("🔴")]
+        alerta_amarilla = df_alertas[df_alertas["Alerta de Inventario"].str.startswith("🟡")]
+        alerta_verde = df_alertas[df_alertas["Alerta de Inventario"].str.startswith("🟢")]
+        
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.error(f"🔴 **Alerta Roja (Agotado): {len(alerta_roja)}**")
+            if not alerta_roja.empty: st.dataframe(alerta_roja[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
+        with c2:
+            st.warning(f"🟡 **Alerta Amarilla (Reponer pronto): {len(alerta_amarilla)}**")
+            if not alerta_amarilla.empty: st.dataframe(alerta_amarilla[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
+        with c3:
+            st.success(f"🟢 **Inventario OK: {len(alerta_verde)}**")
+            if not alerta_verde.empty: st.dataframe(alerta_verde[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
+    else:
+        st.info("Aún no hay suficientes datos para generar alertas de inventario.")
+
+    st.divider()
+    
+    st.subheader("🔍 Ficha de Proveedores")
+    df_prov_list = ejecutar_query("SELECT id, codigo, nombre, dias_credito, contacto FROM Proveedores ORDER BY nombre ASC", is_select=True)
+    if not df_prov_list.empty:
+        nombres_prov = [""] + df_prov_list["nombre"].tolist()
+        buscador = st.selectbox("Buscar proveedor para ver su información:", options=nombres_prov)
+        if buscador:
+            datos_prov = df_prov_list[df_prov_list["nombre"] == buscador].iloc[0]
+            st.info(f"""
+            **Código:** {datos_prov['codigo'] if pd.notna(datos_prov['codigo']) and str(datos_prov['codigo']).strip() else 'No asignado'}  
+            **Descripción:** {datos_prov['nombre']}  
+            **Días de Crédito:** {datos_prov['dias_credito']} días  
+            **Contacto:** {datos_prov['contacto'] if pd.notna(datos_prov['contacto']) and str(datos_prov['contacto']).strip() else 'Sin información'}
+            """)
+            
+    st.divider()
+
+    st.subheader("📅 Calendario de Envíos y Estadísticas")
+    df_fechas = ejecutar_query('SELECT proveedor, tienda_destino, fecha_envio FROM Ordenes_Compra WHERE fecha_envio IS NOT NULL AND fecha_envio != ""', is_select=True)
+    
+    if not df_fechas.empty:
+        # Convertir a Datetime para trabajar fácilmente
+        df_fechas['Fecha'] = pd.to_datetime(df_fechas['fecha_envio']).dt.date
+        df_fechas['Año'] = pd.to_datetime(df_fechas['fecha_envio']).dt.year
+        df_fechas['Mes'] = pd.to_datetime(df_fechas['fecha_envio']).dt.month
+        df_fechas['Semana'] = pd.to_datetime(df_fechas['fecha_envio']).dt.isocalendar().week
+        
+        # --- Estadísticas y Contadores ---
+        hoy = datetime.now().date()
+        año_actual = hoy.year
+        mes_actual = hoy.month
+        semana_actual = datetime.now().isocalendar()[1]
+        
+        c_semana = len(df_fechas[(df_fechas['Año'] == año_actual) & (df_fechas['Semana'] == semana_actual)])
+        c_mes = len(df_fechas[(df_fechas['Año'] == año_actual) & (df_fechas['Mes'] == mes_actual)])
+        c_año = len(df_fechas[df_fechas['Año'] == año_actual])
+        
+        col_est1, col_est2, col_est3 = st.columns(3)
+        col_est1.metric("OC Enviadas (Esta Semana)", c_semana)
+        col_est2.metric("OC Enviadas (Este Mes)", c_mes)
+        col_est3.metric("OC Enviadas (Este Año)", c_año)
+        
+        st.write("")
+        # --- Calendario Interactivo ---
+        fecha_calendario = st.date_input("🗓️ Selecciona una fecha para visualizar las Órdenes de Compra enviadas:", value=hoy)
+        df_dia = df_fechas[df_fechas['Fecha'] == fecha_calendario]
+        
+        if not df_dia.empty:
+            df_mostrar = df_dia[['proveedor', 'tienda_destino']].rename(columns={'proveedor': 'Proveedor', 'tienda_destino': 'Tienda Destino'})
+            st.dataframe(df_mostrar, hide_index=True, use_container_width=True)
+        else:
+            st.caption(f"No se enviaron órdenes de compra el día {fecha_calendario.strftime('%d/%m/%Y')}.")
+    else:
+        st.info("No hay órdenes de compra registradas con fecha de envío para generar el calendario.")
+
+# --- PESTAÑA 2: REGISTRO DIARIO (LIMPIO) ---
 with tab_ordenes:
     st.subheader("📋 Registro Diario de Órdenes")
     st.caption("💡 Se han ocultado los detalles de emisión e inventario para priorizar el seguimiento diario de facturas.")
@@ -260,7 +352,7 @@ with tab_ordenes:
     else:
         st.info("Aún no hay órdenes registradas.")
 
-# --- PESTAÑA 2: ESCANEAR PDF ---
+# --- PESTAÑA 3: ESCANEAR PDF ---
 with tab_escaner:
     st.subheader("Extraer datos desde PDF")
     archivo_pdf = st.file_uploader("Sube el PDF de la OC:", type=["pdf"], key="uploader_pdf")
@@ -287,7 +379,7 @@ with tab_escaner:
                     tienda = st.text_input("Tienda Destino:", value=datos_oc.get("tienda_destino", ""))
                     monto = st.number_input("Monto Total ($):", value=float(datos_oc.get("monto_total", 0.0) or 0.0), step=0.01)
                 with c2:
-                    f_emision = st.date_input("Fecha Emisión:", value=datetime.now().date())
+                    # Se eliminó el campo de Fecha de Emisión
                     f_envio = st.date_input("Fecha de Envío:", value=datetime.now().date())
                     
                     df_std = ejecutar_query("SELECT dias_inventario FROM Proveedores WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))", (proveedor,), is_select=True)
@@ -300,40 +392,17 @@ with tab_escaner:
                 prods_editados = st.data_editor(pd.DataFrame(datos_oc["productos"]) if datos_oc.get("productos") else pd.DataFrame(columns=["codigo", "descripcion", "cantidad", "precio_unitario"]), num_rows="dynamic", width="stretch")
 
                 if st.form_submit_button("Guardar Orden Extraída", type="primary"):
-                    orden_id, err = guardar_orden(num_oc, proveedor, tienda, f_emision, f_envio, f_recepcion, monto, prods_editados, "Recibido" if recibida else "No despachado", dias_inv)
+                    # Mandamos None como Fecha de Emisión
+                    orden_id, err = guardar_orden(num_oc, proveedor, tienda, None, f_envio, f_recepcion, monto, prods_editados, "Recibido" if recibida else "No despachado", dias_inv)
                     if err: st.error(err)
                     else:
                         st.session_state.pdf_guardado_exito = True
                         st.rerun()
 
-# --- PESTAÑA 3: REGISTRO MANUAL ---
-with tab_manual:
-    with st.form("form_manual_limpio"):
-        c1, c2 = st.columns(2)
-        with c1:
-            m_num = st.text_input("Número de OC:")
-            m_prov = st.text_input("Proveedor:")
-            m_tienda = st.text_input("Tienda Destino:")
-            m_monto = st.number_input("Monto Total ($):", min_value=0.0, step=0.01)
-        with c2:
-            m_emi = st.date_input("Fecha Emisión:")
-            m_env = st.date_input("Fecha Envío:")
-            m_dias_inv = st.number_input("Días Inventario a cubrir:", value=15, min_value=0, step=1)
-            m_recibida = st.checkbox("Marcar como Recibida")
-            m_rec = st.date_input("Fecha Recepción:") if m_recibida else None
 
-        m_prods = st.data_editor(pd.DataFrame(columns=["codigo", "descripcion", "cantidad", "precio_unitario"]), num_rows="dynamic", width="stretch")
-        if st.form_submit_button("Guardar Orden Manual", type="primary"):
-            if m_prov and m_num and m_tienda:
-                f_rec_fin = m_rec if m_recibida else None
-                orden_id, err = guardar_orden(m_num, m_prov, m_tienda, m_emi, m_env, f_rec_fin, m_monto, m_prods, "Recibido" if f_rec_fin else "No despachado", m_dias_inv)
-                if err: st.error(err)
-                else: st.success(f"¡Orden manual N° {m_num} registrada con éxito!")
-            else: st.error("Completa Número de OC, Proveedor y Tienda Destino.")
-
-# --- PESTAÑA 4: PROVEEDORES E INVENTARIO ---
+# --- PESTAÑA 4: BASE DE DATOS DE PROVEEDORES ---
 with tab_proveedores:
-    st.subheader("Base de Datos y Control de Inventario por Proveedor")
+    st.subheader("Base de Datos Maestra de Proveedores")
     
     # 1. Carga masiva por XML
     with st.expander("📥 Cargar Lista de Proveedores vía XML"):
@@ -341,7 +410,6 @@ with tab_proveedores:
         if xml_file:
             try:
                 df_xml = pd.read_xml(xml_file)
-                # Normalizar nombres de columnas ignorando mayúsculas/minúsculas
                 df_xml.columns = df_xml.columns.str.lower()
                 
                 if 'codigo' in df_xml.columns and 'descripcion' in df_xml.columns:
@@ -350,7 +418,6 @@ with tab_proveedores:
                         cod = str(row['codigo']).strip()
                         desc = str(row['descripcion']).strip()
                         
-                        # Evitar duplicados por nombre
                         existe = ejecutar_query("SELECT id FROM Proveedores WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))", (desc,), is_select=True)
                         if existe.empty:
                             ejecutar_query("INSERT INTO Proveedores (codigo, nombre, dias_credito, dias_despacho, dias_inventario) VALUES (?, ?, 30, 3, 15)", (cod, desc))
@@ -364,43 +431,8 @@ with tab_proveedores:
     
     st.divider()
 
-    # 2. Detalles de Inventario Desplegables (Autocompletado)
-    df_prov = ejecutar_query("SELECT id AS 'ID', codigo AS 'Código', nombre AS 'Proveedor', dias_credito AS 'Días de Crédito', dias_despacho AS 'Días de Despacho', dias_inventario AS 'Días Inventario (Estándar)' FROM Proveedores ORDER BY Proveedor ASC", is_select=True)
-    
-    if not df_prov.empty:
-        opciones_prov = [""] + df_prov["Proveedor"].tolist()
-        prov_seleccionado = st.selectbox("🔍 Buscar y seleccionar un Proveedor para ver su estatus actual:", options=opciones_prov)
-        
-        if prov_seleccionado:
-            st.markdown(f"### Estatus de Inventario: **{prov_seleccionado}**")
-            # Extraer las órdenes para el proveedor y obtener la ÚLTIMA por Tienda
-            df_ocs_prov = ejecutar_query('''
-                SELECT tienda_destino AS "Tienda", numero_orden AS "Último Nº OC", estatus AS "Estatus", 
-                       dias_inventario, fecha_recepcion, fecha_emision
-                FROM Ordenes_Compra
-                WHERE LOWER(TRIM(proveedor)) = LOWER(TRIM(?))
-                ORDER BY fecha_emision DESC
-            ''', (prov_seleccionado,), is_select=True)
-            
-            if not df_ocs_prov.empty:
-                # Filtrar solo la más reciente por Tienda
-                df_ultimas = df_ocs_prov.drop_duplicates(subset=['Tienda'], keep='first').copy()
-                
-                # Calcular dinámicamente las alertas
-                df_ultimas["Alerta de Inventario"] = df_ultimas.apply(calcular_alerta_inventario, axis=1)
-                
-                # Renombrar para estética
-                df_ultimas = df_ultimas.rename(columns={"dias_inventario": "Días Inventario OC"})
-                
-                # Ocultar campos de cálculo y mostrar la tabla limpia
-                st.dataframe(df_ultimas[["Tienda", "Último Nº OC", "Estatus", "Días Inventario OC", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
-            else:
-                st.info("No hay historial de órdenes de compra registradas para este proveedor en ninguna tienda.")
-            
-    st.divider()
-
-    # 3. Editor de Base de Datos
-    st.write("🔧 **Gestión de Base de Datos de Proveedores**")
+    # 2. Editor Directo de Base de Datos
+    st.write("🔧 **Edición Manual (Aquí puedes actualizar los datos de contacto)**")
     def procesar_cambios_proveedores():
         cambios = st.session_state.grid_proveedores
         df = st.session_state.df_prov_actual
@@ -412,13 +444,14 @@ with tab_proveedores:
         for idx, col_cambios in cambios.get("edited_rows", {}).items():
             prov_id = int(df.iloc[int(idx)]["ID"])
             for col, valor in col_cambios.items():
-                campo = {"Código": "codigo", "Proveedor": "nombre", "Días de Crédito": "dias_credito", "Días de Despacho": "dias_despacho", "Días Inventario (Estándar)": "dias_inventario"}.get(col)
+                campo = {"Código": "codigo", "Proveedor": "nombre", "Días de Crédito": "dias_credito", "Días de Despacho": "dias_despacho", "Días Inventario (Estándar)": "dias_inventario", "Contacto": "contacto"}.get(col)
                 if campo: ejecutar_query(f"UPDATE Proveedores SET {campo} = ? WHERE id = ?", (valor, prov_id))
                     
         for row in cambios.get("added_rows", []):
-            ejecutar_query("INSERT INTO Proveedores (codigo, nombre, dias_credito, dias_despacho, dias_inventario) VALUES (?, ?, ?, ?, ?)", 
-                           (row.get("Código", ""), row.get("Proveedor", "Nuevo Proveedor"), row.get("Días de Crédito", 30), row.get("Días de Despacho", 3), row.get("Días Inventario (Estándar)", 15)))
+            ejecutar_query("INSERT INTO Proveedores (codigo, nombre, dias_credito, dias_despacho, dias_inventario, contacto) VALUES (?, ?, ?, ?, ?, ?)", 
+                           (row.get("Código", ""), row.get("Proveedor", "Nuevo Proveedor"), row.get("Días de Crédito", 30), row.get("Días de Despacho", 3), row.get("Días Inventario (Estándar)", 15), row.get("Contacto", "")))
 
+    df_prov = ejecutar_query("SELECT id AS 'ID', codigo AS 'Código', nombre AS 'Proveedor', dias_credito AS 'Días de Crédito', dias_despacho AS 'Días de Despacho', dias_inventario AS 'Días Inventario (Estándar)', contacto AS 'Contacto' FROM Proveedores ORDER BY Proveedor ASC", is_select=True)
     st.session_state.df_prov_actual = df_prov.copy()
     
     st.data_editor(
@@ -426,7 +459,8 @@ with tab_proveedores:
         column_config={
             "ID": None, 
             "Código": st.column_config.TextColumn("Código"),
-            "Días Inventario (Estándar)": st.column_config.NumberColumn("Días Inv (Estándar)", min_value=0, step=1)
+            "Días Inventario (Estándar)": st.column_config.NumberColumn("Días Inv (Estándar)", min_value=0, step=1),
+            "Contacto": st.column_config.TextColumn("Contacto")
         },
         width="stretch",
         num_rows="dynamic",
