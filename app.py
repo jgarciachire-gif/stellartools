@@ -28,7 +28,69 @@ except (FileNotFoundError, KeyError, ImportError):
     DB_URL = 'compras.db'
     IS_POSTGRES = False
 
-st.set_page_config(page_title="Control de Compras Pro", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Control de Compras", page_icon="📦", layout="wide")
+
+# --- DISEÑO DE UI / UX (ESTILOS AVANZADOS) ---
+st.markdown("""
+<style>
+    /* Color de fondo sutil para toda la aplicación */
+    .stApp {
+        background-color: #f8fafc;
+    }
+    
+    /* Estilo tipo "Tarjeta" para los KPIs y Métricas */
+    div[data-testid="stMetric"] {
+        background-color: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 15px 20px;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+        transition: transform 0.2s ease-in-out;
+    }
+    div[data-testid="stMetric"]:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    }
+    div[data-testid="stMetricValue"] {
+        color: #0f172a;
+        font-weight: 700 !important;
+    }
+    
+    /* Estilizar las Pestañas (Tabs) para que parezcan un menú de navegación moderno */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+        background-color: #ffffff;
+        padding: 10px;
+        border-radius: 12px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px !important;
+        padding: 10px 24px !important;
+        border: none !important;
+        transition: all 0.2s;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #3b82f6 !important; /* Azul profesional */
+        color: white !important;
+    }
+    .stTabs [aria-selected="false"]:hover {
+        background-color: #f1f5f9 !important;
+    }
+    
+    /* Ocultar elementos de Streamlit para un look de App real */
+    #MainMenu {visibility: hidden;}
+    header {visibility: hidden;}
+    
+    /* Títulos más limpios */
+    h1, h2, h3 {
+        color: #1e293b;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+        padding-bottom: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # --- INICIALIZACIÓN DEL ESTADO ---
 if "pdf_data" not in st.session_state: st.session_state.pdf_data = None
@@ -231,94 +293,103 @@ tab_dashboard, tab_ordenes, tab_escaner, tab_proveedores = st.tabs([
 
 # --- PESTAÑA 1: DASHBOARD Y ALERTAS ---
 with tab_dashboard:
-    st.subheader("🚨 Panel de Alertas de Reposición de Inventario")
+    st.markdown("## 📊 Panel de Control y Alertas")
+    st.write("Visión general del estado del inventario y envíos.")
     
-    # Extraer todas las últimas órdenes por tienda y proveedor para calcular alertas
-    df_ocs_prov = ejecutar_query('''
-        SELECT p.nombre AS "Proveedor", o.tienda_destino AS "Tienda", o.numero_orden AS "Último Nº OC", o.estatus AS "Estatus", 
-               o.dias_inventario, o.fecha_recepcion
-        FROM Ordenes_Compra o
-        JOIN Proveedores p ON o.proveedor_id = p.id
-        ORDER BY o.id DESC
-    ''', is_select=True)
-    
-    if not df_ocs_prov.empty:
-        df_ultimas = df_ocs_prov.drop_duplicates(subset=['Proveedor', 'Tienda'], keep='first').copy()
-        df_ultimas["Alerta de Inventario"] = df_ultimas.apply(calcular_alerta_inventario, axis=1)
-        df_alertas = df_ultimas[df_ultimas["Alerta de Inventario"] != "No definido"].copy()
-        
-        alerta_roja = df_alertas[df_alertas["Alerta de Inventario"].str.startswith("🔴")]
-        alerta_amarilla = df_alertas[df_alertas["Alerta de Inventario"].str.startswith("🟡")]
-        alerta_verde = df_alertas[df_alertas["Alerta de Inventario"].str.startswith("🟢")]
-        
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.error(f"🔴 **Alerta Roja (Agotado): {len(alerta_roja)}**")
-            if not alerta_roja.empty: st.dataframe(alerta_roja[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
-        with c2:
-            st.warning(f"🟡 **Alerta Amarilla (Reponer pronto): {len(alerta_amarilla)}**")
-            if not alerta_amarilla.empty: st.dataframe(alerta_amarilla[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
-        with c3:
-            st.success(f"🟢 **Inventario OK: {len(alerta_verde)}**")
-            if not alerta_verde.empty: st.dataframe(alerta_verde[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
-    else:
-        st.info("Aún no hay suficientes datos para generar alertas de inventario.")
-
-    st.divider()
-    
-    st.subheader("🔍 Ficha de Proveedores")
-    df_prov_list = ejecutar_query("SELECT id, codigo, nombre, dias_credito, contacto FROM Proveedores ORDER BY nombre ASC", is_select=True)
-    if not df_prov_list.empty:
-        nombres_prov = [""] + df_prov_list["nombre"].tolist()
-        buscador = st.selectbox("Buscar proveedor para ver su información:", options=nombres_prov)
-        if buscador:
-            datos_prov = df_prov_list[df_prov_list["nombre"] == buscador].iloc[0]
-            st.info(f"""
-            **Código:** {datos_prov['codigo'] if pd.notna(datos_prov['codigo']) and str(datos_prov['codigo']).strip() else 'No asignado'}  
-            **Descripción:** {datos_prov['nombre']}  
-            **Días de Crédito:** {datos_prov['dias_credito']} días  
-            **Contacto:** {datos_prov['contacto'] if pd.notna(datos_prov['contacto']) and str(datos_prov['contacto']).strip() else 'Sin información'}
-            """)
-            
-    st.divider()
-
-    st.subheader("📅 Calendario de Envíos y Estadísticas")
+    # --- Sección de Métricas Generales (Encabezado) ---
     df_fechas = ejecutar_query('SELECT proveedor, tienda_destino, fecha_envio FROM Ordenes_Compra WHERE fecha_envio IS NOT NULL AND fecha_envio != ""', is_select=True)
     
     if not df_fechas.empty:
-        # Convertir a Datetime para trabajar fácilmente
-        df_fechas['Fecha'] = pd.to_datetime(df_fechas['fecha_envio']).dt.date
         df_fechas['Año'] = pd.to_datetime(df_fechas['fecha_envio']).dt.year
         df_fechas['Mes'] = pd.to_datetime(df_fechas['fecha_envio']).dt.month
         df_fechas['Semana'] = pd.to_datetime(df_fechas['fecha_envio']).dt.isocalendar().week
         
-        # --- Estadísticas y Contadores ---
         hoy = datetime.now().date()
-        año_actual = hoy.year
-        mes_actual = hoy.month
-        semana_actual = datetime.now().isocalendar()[1]
+        c_semana = len(df_fechas[(df_fechas['Año'] == hoy.year) & (df_fechas['Semana'] == datetime.now().isocalendar()[1])])
+        c_mes = len(df_fechas[(df_fechas['Año'] == hoy.year) & (df_fechas['Mes'] == hoy.month)])
+        c_año = len(df_fechas[df_fechas['Año'] == hoy.year])
         
-        c_semana = len(df_fechas[(df_fechas['Año'] == año_actual) & (df_fechas['Semana'] == semana_actual)])
-        c_mes = len(df_fechas[(df_fechas['Año'] == año_actual) & (df_fechas['Mes'] == mes_actual)])
-        c_año = len(df_fechas[df_fechas['Año'] == año_actual])
+        # Envolvemos las métricas en un contenedor para agruparlas visualmente
+        with st.container():
+            col_est1, col_est2, col_est3 = st.columns(3)
+            col_est1.metric("📦 OC Enviadas (Semana)", c_semana, delta="Flujo activo", delta_color="normal")
+            col_est2.metric("📅 OC Enviadas (Mes)", c_mes)
+            col_est3.metric("📈 OC Enviadas (Año)", c_año)
+    
+    st.write("") # Espaciador
+    
+    # --- Sección Dividida: Alertas e Información ---
+    col_izq, col_der = st.columns([1.5, 1]) # Columna izquierda más ancha
+    
+    with col_izq:
+        # Tarjeta de Alertas de Inventario
+        with st.container(border=True):
+            st.markdown("#### 🚨 Estatus de Reposición")
+            
+            df_ocs_prov = ejecutar_query('''
+                SELECT p.nombre AS "Proveedor", o.tienda_destino AS "Tienda", o.numero_orden AS "Último Nº OC", o.estatus AS "Estatus", 
+                       o.dias_inventario, o.fecha_recepcion
+                FROM Ordenes_Compra o JOIN Proveedores p ON o.proveedor_id = p.id
+                ORDER BY o.id DESC
+            ''', is_select=True)
+            
+            if not df_ocs_prov.empty:
+                df_ultimas = df_ocs_prov.drop_duplicates(subset=['Proveedor', 'Tienda'], keep='first').copy()
+                df_ultimas["Alerta de Inventario"] = df_ultimas.apply(calcular_alerta_inventario, axis=1)
+                
+                # Pestañas internas dentro de la tarjeta para no saturar de tablas
+                tab_roja, tab_amarilla, tab_verde = st.tabs(["🔴 Crítico (Agotado)", "🟡 Precaución (Pronto)", "🟢 Saludable (OK)"])
+                
+                with tab_roja:
+                    alerta_roja = df_ultimas[df_ultimas["Alerta de Inventario"].str.startswith("🔴")]
+                    if not alerta_roja.empty:
+                        st.dataframe(alerta_roja[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
+                    else: st.success("Todo en orden. No hay alertas críticas.")
+                        
+                with tab_amarilla:
+                    alerta_amarilla = df_ultimas[df_ultimas["Alerta de Inventario"].str.startswith("🟡")]
+                    if not alerta_amarilla.empty:
+                        st.dataframe(alerta_amarilla[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
+                    else: st.info("No hay inventario próximo a agotarse.")
+                        
+                with tab_verde:
+                    alerta_verde = df_ultimas[df_ultimas["Alerta de Inventario"].str.startswith("🟢")]
+                    if not alerta_verde.empty:
+                        st.dataframe(alerta_verde[["Proveedor", "Tienda", "Alerta de Inventario"]], hide_index=True, use_container_width=True)
+                    else: st.info("No hay datos en estado saludable.")
+            else:
+                st.info("Aún no hay suficientes datos para generar alertas.")
+
+    with col_der:
+        # Tarjeta del Calendario
+        with st.container(border=True):
+            st.markdown("#### 🗓️ Calendario de Actividad")
+            fecha_calendario = st.date_input("Selecciona un día:", value=datetime.now().date())
+            
+            if not df_fechas.empty:
+                df_fechas['Fecha'] = pd.to_datetime(df_fechas['fecha_envio']).dt.date
+                df_dia = df_fechas[df_fechas['Fecha'] == fecha_calendario]
+                
+                if not df_dia.empty:
+                    df_mostrar = df_dia[['proveedor', 'tienda_destino']].rename(columns={'proveedor': 'Proveedor', 'tienda_destino': 'Destino'})
+                    st.dataframe(df_mostrar, hide_index=True, use_container_width=True)
+                else:
+                    st.caption(f"No hay envíos registrados el {fecha_calendario.strftime('%d/%m/%Y')}.")
         
-        col_est1, col_est2, col_est3 = st.columns(3)
-        col_est1.metric("OC Enviadas (Esta Semana)", c_semana)
-        col_est2.metric("OC Enviadas (Este Mes)", c_mes)
-        col_est3.metric("OC Enviadas (Este Año)", c_año)
-        
-        st.write("")
-        # --- Calendario Interactivo ---
-        fecha_calendario = st.date_input("🗓️ Selecciona una fecha para visualizar las Órdenes de Compra enviadas:", value=hoy)
-        df_dia = df_fechas[df_fechas['Fecha'] == fecha_calendario]
-        
-        if not df_dia.empty:
-            df_mostrar = df_dia[['proveedor', 'tienda_destino']].rename(columns={'proveedor': 'Proveedor', 'tienda_destino': 'Tienda Destino'})
-            st.dataframe(df_mostrar, hide_index=True, use_container_width=True)
-        else:
-            st.caption(f"No se enviaron órdenes de compra el día {fecha_calendario.strftime('%d/%m/%Y')}.")
-    else:
-        st.info("No hay órdenes de compra registradas con fecha de envío para generar el calendario.")
+        # Tarjeta de Búsqueda Rápida de Proveedores
+        with st.container(border=True):
+            st.markdown("#### 🔍 Búsqueda Rápida")
+            df_prov_list = ejecutar_query("SELECT id, codigo, nombre, dias_credito, contacto FROM Proveedores ORDER BY nombre ASC", is_select=True)
+            if not df_prov_list.empty:
+                nombres_prov = [""] + df_prov_list["nombre"].tolist()
+                buscador = st.selectbox("Selecciona un proveedor:", options=nombres_prov, label_visibility="collapsed")
+                if buscador:
+                    datos_prov = df_prov_list[df_prov_list["nombre"] == buscador].iloc[0]
+                    st.markdown(f"""
+                    **Cod:** `{datos_prov['codigo'] if pd.notna(datos_prov['codigo']) else 'N/A'}`  
+                    **Días Crédito:** {datos_prov['dias_credito']}  
+                    **Contacto:** {datos_prov['contacto'] if pd.notna(datos_prov['contacto']) else 'N/A'}
+                    """)
 
 # --- PESTAÑA 2: REGISTRO DIARIO (LIMPIO) ---
 with tab_ordenes:
