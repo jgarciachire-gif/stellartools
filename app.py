@@ -431,6 +431,100 @@ with tab_proveedores:
     
     st.divider()
 
+    # 2. Directorio y Ficha de Proveedor
+    st.write("🔍 **Directorio de Proveedores**")
+    
+    df_prov = ejecutar_query("SELECT id, codigo, nombre, dias_credito, contacto FROM Proveedores ORDER BY nombre ASC", is_select=True)
+    
+    if not df_prov.empty:
+        # Buscador / Lista desplegable interactiva
+        nombres_prov = [""] + df_prov["nombre"].tolist()
+        prov_seleccionado = st.selectbox(
+            "Busca o selecciona un proveedor de la lista:", 
+            options=nombres_prov, 
+            help="Puedes escribir directamente aquí para filtrar la lista extensa de proveedores."
+        )
+        
+        if prov_seleccionado:
+            # Extraer datos del proveedor seleccionado
+            datos_prov = df_prov[df_prov["nombre"] == prov_seleccionado].iloc[0]
+            prov_id = int(datos_prov['id'])
+            
+            st.markdown(f"### 📇 Ficha de Datos: {prov_seleccionado}")
+            
+            with st.container(border=True):
+                # Formulario para modificar datos
+                with st.form(key="form_ficha_prov"):
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        f_codigo = st.text_input("Código", value=str(datos_prov['codigo']) if pd.notna(datos_prov['codigo']) and str(datos_prov['codigo']).strip() != "None" else "")
+                        f_nombre = st.text_input("Descripción (Nombre)", value=str(datos_prov['nombre']))
+                    with c2:
+                        f_dias = st.number_input("Días de Crédito", value=int(datos_prov['dias_credito']), min_value=0, step=1)
+                        f_contacto = st.text_input("Contacto", value=str(datos_prov['contacto']) if pd.notna(datos_prov['contacto']) and str(datos_prov['contacto']).strip() != "None" else "")
+                    
+                    btn_guardar = st.form_submit_button("💾 Guardar Cambios", type="primary")
+                    
+                # Botón de eliminar (separado del form para evitar errores de actualización)
+                with st.popover("⚠️ Eliminar Proveedor"):
+                    st.error(f"¿Estás seguro de que deseas eliminar permanentemente a **{prov_seleccionado}**?")
+                    st.caption("Esto lo quitará del directorio, pero mantendrá el registro de texto en las órdenes de compra ya asociadas.")
+                    if st.button("Sí, eliminar proveedor definitivamente"):
+                        ejecutar_query("DELETE FROM Proveedores WHERE id = ?", (prov_id,))
+                        st.success("Proveedor eliminado del sistema.")
+                        st.rerun()
+
+                if btn_guardar:
+                    if not f_nombre.strip():
+                        st.error("El nombre/descripción no puede estar vacío.")
+                    else:
+                        # Validar que no se duplique el nombre si se cambió
+                        if f_nombre.strip().lower() != prov_seleccionado.strip().lower():
+                            existe = ejecutar_query("SELECT id FROM Proveedores WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))", (f_nombre,), is_select=True)
+                            if not existe.empty:
+                                st.error("Ya existe otro proveedor con ese nombre en la base de datos.")
+                                st.stop()
+
+                        ejecutar_query('''
+                            UPDATE Proveedores 
+                            SET codigo = ?, nombre = ?, dias_credito = ?, contacto = ?
+                            WHERE id = ?
+                        ''', (f_codigo, f_nombre, f_dias, f_contacto, prov_id))
+                        st.success("¡Datos actualizados exitosamente!")
+                        st.rerun()
+                        
+    else:
+        st.info("No hay proveedores registrados. Sube un archivo XML o agrega uno nuevo para comenzar.")
+
+    st.divider()
+
+    # 3. Creación manual de un nuevo proveedor
+    with st.expander("➕ Agregar un nuevo proveedor manualmente"):
+        with st.form("form_nuevo_prov"):
+            nc1, nc2 = st.columns(2)
+            with nc1:
+                n_codigo = st.text_input("Código")
+                n_nombre = st.text_input("Descripción (Nombre)*")
+            with nc2:
+                n_dias = st.number_input("Días de Crédito", value=30, min_value=0, step=1)
+                n_contacto = st.text_input("Contacto")
+                
+            if st.form_submit_button("Registrar Proveedor", type="primary"):
+                if n_nombre.strip():
+                    existe = ejecutar_query("SELECT id FROM Proveedores WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))", (n_nombre,), is_select=True)
+                    if existe.empty:
+                        # Se agregan los valores por defecto de inventario para que las otras tablas no fallen
+                        ejecutar_query("INSERT INTO Proveedores (codigo, nombre, dias_credito, contacto, dias_despacho, dias_inventario) VALUES (?, ?, ?, ?, 3, 15)", 
+                                       (n_codigo, n_nombre, n_dias, n_contacto))
+                        st.success(f"Proveedor '{n_nombre}' registrado con éxito.")
+                        st.rerun()
+                    else:
+                        st.error("Ya existe un proveedor registrado con ese nombre.")
+                else:
+                    st.error("El campo de Descripción (Nombre) es obligatorio.")
+    
+    st.divider()
+
     # 2. Editor Directo de Base de Datos
     st.write("🔧 **Edición Manual (Aquí puedes actualizar los datos de contacto)**")
     def procesar_cambios_proveedores():
