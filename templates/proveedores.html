@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+    
+    <!-- Columna Izquierda: Buscador y Lista Limpia de Proveedores -->
+    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-1">
+        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+            <i class="fa-solid fa-address-book text-blue-600"></i> Directorio
+        </h3>
+        
+        <!-- Buscador de Proveedores -->
+        <form method="GET" action="/proveedores" class="mb-4">
+            <div class="relative">
+                <input type="text" name="buscar" value="{{ busqueda }}" placeholder="Buscar por nombre..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                <i class="fa-solid fa-search absolute left-3.5 top-3 text-slate-400"></i>
+            </div>
+        </form>
+
+        <!-- Lista de Proveedores (Clickable) -->
+        <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
+            {% for p in proveedores %}
+            <a href="?buscar={{ busqueda }}&select={{ p.id }}" class="block p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 transition">
+                <p class="font-semibold text-slate-800 text-sm">{{ p.nombre }}</p>
+                <p class="text-xs text-slate-500">Cód: {{ p.codigo or 'N/A' }} • Crédito: {{ p.dias_credito }} días</p>
+            </a>
+            {% else %}
+            <p class="text-sm text-slate-500 text-center py-4">No se encontraron proveedores.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Columna Derecha: Ficha de Datos del Proveedor Seleccionado -->
+    <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2">
+        {% set selected_id = request.query_params.get('select') %}
+        {% set prov_obj = proveedores | selectattr("id", "equalto", selected_id | int) | first if selected_id else None %}
+
+        {% if prov_obj %}
+        <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+            <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-id-card text-blue-600"></i> Ficha de Proveedor
+            </h3>
+            <form action="/proveedores/eliminar/{{ prov_obj.id }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este proveedor?');">
+                <button type="submit" class="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-semibold transition">
+                    <i class="fa-solid fa-trash mr-1"></i> Eliminar
+                </button>
+            </form>
+        </div>
+
+        <form action="/proveedores/guardar" method="POST" class="space-y-4">
+            <input type="hidden" name="id" value="{{ prov_obj.id }}">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Código</label>
+                    <input type="text" name="codigo" value="{{ prov_obj.codigo or '' }}" class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Descripción / Nombre</label>
+                    <input type="text" name="nombre" value="{{ prov_obj.nombre }}" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Días de Crédito</label>
+                    <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito }}" class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contacto</label>
+                    <input type="text" name="contacto" value="{{ prov_obj.contacto or '' }}" class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+            </div>
+            <div class="pt-4 flex justify-end">
+                <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-sm transition">
+                    <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Cambios
+                </button>
+            </div>
+        </form>
+        {% else %}
+        <div class="text-center py-24 text-slate-400">
+            <i class="fa-solid fa-hand-pointer text-4xl mb-3 text-slate-300"></i>
+            <p class="text-base font-medium text-slate-600">Selecciona un proveedor de la lista de la izquierda</p>
+            <p class="text-sm">Para ver su ficha completa, editar su información o eliminarlo del sistema.</p>
+        </div>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="space-y-6">
+
+    <h2 class="text-2xl font-bold text-slate-800">Dashboard General</h2>
+
+    <!-- SECCIÓN ALERTAS DE REPOSICIÓN DE INVENTARIO -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="p-6 border-b border-slate-200">
+            <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-boxes-stacked text-amber-500"></i> 
+                Alertas de Reposición de Inventario por Proveedor
+            </h3>
+            <p class="text-xs text-slate-500 mt-1">Haz clic sobre un proveedor para desplegar el estatus por tienda.</p>
+        </div>
+
+        <div class="divide-y divide-slate-100">
+            {% for prov_nombre, tiendas in proveedores_desglose.items() %}
+            <details class="group">
+                <!-- Encabezado del Proveedor (Clickeable) -->
+                <summary class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
+                    <div class="flex items-center gap-3">
+                        <i class="fa-solid fa-chevron-right text-xs text-slate-400 group-open:rotate-90 transition-transform"></i>
+                        <span class="font-bold text-blue-900 text-base">{{ prov_nombre }}</span>
+                        <span class="text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full font-semibold">
+                            {{ tiendas|length }} Tiendas Registradas
+                        </span>
+                    </div>
+                    <span class="text-xs text-slate-500">Ver desglose <i class="fa-solid fa-angle-down ml-1"></i></span>
+                </summary>
+
+                <!-- Sub-Tabla Desplegable con Detalle por Tienda -->
+                <div class="p-4 bg-white border-t border-slate-100 overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-200 text-slate-400 uppercase font-semibold">
+                                <th class="py-2 px-3">Tienda Destino</th>
+                                <th class="py-2 px-3">Última OC</th>
+                                <th class="py-2 px-3">Fecha Envío</th>
+                                <th class="py-2 px-3">Estatus OC</th>
+                                <th class="py-2 px-3 text-center">Días Inventario</th>
+                                <th class="py-2 px-3">Estatus Inventario</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 font-medium">
+                            {% for tienda_nombre, t_info in tiendas.items() %}
+                            <tr class="hover:bg-slate-50">
+                                <td class="py-3 px-3 font-bold text-slate-800">{{ tienda_nombre }}</td>
+                                <td class="py-3 px-3 text-slate-700">{{ t_info.ultima_oc }}</td>
+                                <td class="py-3 px-3 text-slate-600">{{ t_info.fecha_envio }}</td>
+                                <td class="py-3 px-3">
+                                    <span class="px-2 py-0.5 rounded font-semibold {{ 'bg-emerald-100 text-emerald-800' if t_info.estatus_oc == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
+                                        {{ t_info.estatus_oc }}
+                                    </span>
+                                </td>
+                                <td class="py-3 px-3 text-center font-bold text-slate-800">{{ t_info.dias_inventario }}</td>
+                                <td class="py-3 px-3">
+                                    <span class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">
+                                        {{ t_info.estatus_inv }}
+                                    </span>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </details>
+            {% else %}
+            <div class="p-8 text-center text-slate-400">
+                No hay alertas ni órdenes registradas actualmente.
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+</div>
+{% endblock %}

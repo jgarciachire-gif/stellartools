@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="p-6 border-b border-slate-200 flex justify-between items-center">
+        <h3 class="text-lg font-bold text-slate-800">Diario de Órdenes de Compra</h3>
+    </div>
+
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse whitespace-nowrap">
+            <thead>
+                <tr class="border-b border-slate-200 text-xs font-bold text-slate-500 bg-slate-50">
+                    <th class="p-4">Nº OC</th>
+                    <th class="p-4">Proveedor</th>
+                    <th class="p-4">Tienda Destino</th>
+                    <th class="p-4">Fecha Envío</th>
+                    <th class="p-4">Fecha Recepción</th>
+                    <th class="p-4">Venc. Factura</th>
+                    <th class="p-4">Monto Total ($)</th>
+                    <th class="p-4">Estatus</th>
+                    <th class="p-4">Alerta de Pago</th>
+                    <th class="p-4 text-center">Acciones</th>
+                </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+                {% for o in ordenes %}
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                    <form id="form_oc_{{ o.id }}" action="/ordenes/actualizar/{{ o.id }}" method="POST" class="hidden"></form>
+                    
+                    <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
+                    <td class="p-4 font-medium text-blue-700">{{ o.proveedor }}</td>
+                    <td class="p-4 font-medium text-slate-700">{{ o.tienda_destino }}</td>
+                    
+                    <td class="p-4">
+                        <input type="date" name="fecha_envio" form="form_oc_{{ o.id }}" value="{{ o.fecha_envio or '' }}" onchange="document.getElementById('form_oc_{{ o.id }}').submit()" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
+                    </td>
+                    
+                    <td class="p-4">
+                        <input type="date" name="fecha_recepcion" form="form_oc_{{ o.id }}" value="{{ o.fecha_recepcion or '' }}" onchange="document.getElementById('form_oc_{{ o.id }}').submit()" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
+                    </td>
+                    
+                    <td class="p-4 font-semibold text-slate-800">{{ o.vencimiento_factura_str }}</td>
+                    <td class="p-4 font-bold text-slate-900">${{ "%.2f"|format(o.monto_total or 0) }}</td>
+                    
+                    <!-- Estatus verificado -->
+                    <td class="p-4">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
+                            {{ o.estatus }}
+                        </span>
+                    </td>
+                    
+                    <td class="p-4 font-semibold text-slate-900 flex items-center gap-2 mt-1">
+                        {% if o.alerta_text %}
+                            <span class="w-2.5 h-2.5 rounded-full {{ o.alerta_color }}"></span> 
+                            {{ o.alerta_text }}
+                        {% endif %}
+                    </td>
+
+                    <!-- BOTÓN ELIMINAR -->
+                    <td class="p-4 text-center">
+                        <form action="/ordenes/eliminar/{{ o.id }}" method="POST" onsubmit="return confirm('¿Deseas eliminar la orden {{ o.numero_orden }} del diario?');">
+                            <button type="submit" class="text-slate-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors" title="Eliminar Registro">
+                                <i class="fa-solid fa-trash-can text-base"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="10" class="text-center py-12 text-slate-400">
+                        <p>No hay órdenes registradas.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

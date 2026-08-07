@@ -1,5 +1,6 @@
-streamlit
-pandas
+fastapi
+uvicorn
+jinja2
 pdfplumber
-lxml
-psycopg2-binary
+pandas
+pydantic
