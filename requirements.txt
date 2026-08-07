@@ -1,6 +1,6 @@
 fastapi
 uvicorn
 jinja2
-pdfplumber
+python-multipart
 pandas
-pydantic
+pdfplumber
