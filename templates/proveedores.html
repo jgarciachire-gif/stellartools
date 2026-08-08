@@ -65,31 +65,58 @@
             </form>
         </div>
 
-        <form action="/proveedores/guardar" method="POST" class="space-y-4">
+        <!-- INICIO FORMULARIO PROVEEDOR -->
+        <form id="form-proveedor" action="/proveedores/guardar" method="POST" class="space-y-4">
             <input type="hidden" name="id" value="{{ prov_obj.id }}">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Código</label>
-                    <input type="text" name="codigo" value="{{ prov_obj.codigo or '' }}" class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <input type="text" name="codigo" value="{{ prov_obj.codigo or '' }}" disabled class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Descripción / Nombre</label>
-                    <input type="text" name="nombre" value="{{ prov_obj.nombre }}" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <input type="text" name="nombre" value="{{ prov_obj.nombre }}" required disabled class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Días de Crédito</label>
-                    <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito }}" class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito }}" disabled class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contacto</label>
-                    <input type="text" name="contacto" value="{{ prov_obj.contacto or '' }}" class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <input type="text" name="contacto" value="{{ prov_obj.contacto or '' }}" disabled class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
             </div>
-            <div class="pt-4 flex justify-end">
-                <button type="submit" class="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-sm transition">
-                    <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Cambios
+
+            <!-- CONTROLES DE BOTONES DE EDICIÓN -->
+            <div id="modo_vista" class="pt-4 flex justify-end">
+                <button type="button" onclick="habilitarEdicion()" class="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2">
+                    <i class="fa-solid fa-pen"></i> Editar
                 </button>
             </div>
+            
+            <div id="modo_edicion" class="pt-4 flex justify-end gap-3 hidden">
+                <button type="button" onclick="cancelarEdicion()" class="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-sm transition">
+                    Cancelar
+                </button>
+                <button type="submit" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar
+                </button>
+            </div>
+        </form>
+
+        <script>
+            function habilitarEdicion() {
+                document.querySelectorAll('#form-proveedor input:not([type="hidden"])').forEach(inp => inp.disabled = false);
+                document.getElementById('modo_vista').classList.add('hidden');
+                document.getElementById('modo_edicion').classList.remove('hidden');
+            }
+            function cancelarEdicion() {
+                document.querySelectorAll('#form-proveedor input:not([type="hidden"])').forEach(inp => inp.disabled = true);
+                document.getElementById('modo_vista').classList.remove('hidden');
+                document.getElementById('modo_edicion').classList.add('hidden');
+                document.getElementById('form-proveedor').reset(); // Revierte los cambios no guardados
+            }
+        </script>        
         </form>
         {% else %}
         <div class="text-center py-24 text-slate-400">

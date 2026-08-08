@@ -1,48 +1,46 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .tabla-dashboard {
-        table-layout: fixed;
-        width: 100%;
-        border-collapse: collapse;
-    }
-    .tabla-dashboard th, .tabla-dashboard td {
-        width: 16.66%; /* Distribuye el espacio equitativamente entre las 6 columnas */
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
+    .tabla-dashboard { table-layout: fixed; width: 100%; border-collapse: collapse; }
+    .tabla-dashboard th, .tabla-dashboard td { width: 16.66%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 <div class="space-y-6">
 
-    <h2 class="text-2xl font-bold text-slate-800">Dashboard General</h2>
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <h2 class="text-2xl font-bold text-slate-800">Dashboard General</h2>
+        
+        <!-- NUEVO: Controles de búsqueda y filtrado -->
+        <div class="flex gap-2 w-full md:w-auto">
+            <div class="relative w-full md:w-64">
+                <input type="text" id="busqueda_dashboard" onkeyup="filtrarDashboard()" placeholder="Buscar proveedor o tienda..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <i class="fa-solid fa-search absolute left-3.5 top-3 text-slate-400"></i>
+            </div>
+            <select id="filtro_estatus" onchange="filtrarDashboard()" class="px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
+                <option value="Todos">Todos</option>
+                <option value="Stock OK">Stock OK</option>
+                <option value="Próximo a Agotar">Próximo a Agotar</option>
+                <option value="Reponer inventario">Reponer inventario</option>
+            </select>
+        </div>
+    </div>
 
-    <!-- SECCIÓN ALERTAS DE REPOSICIÓN DE INVENTARIO -->
+    <!-- SECCIÓN ALERTAS -->
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
         <div class="p-6 border-b border-slate-200">
             <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
-                <i class="fa-solid fa-boxes-stacked text-amber-500"></i> 
-                Alertas de Reposición de Inventario por Proveedor
+                <i class="fa-solid fa-boxes-stacked text-amber-500"></i> Alertas de Reposición
             </h3>
-            <p class="text-xs text-slate-500 mt-1">Haz clic sobre un proveedor para desplegar el estatus por tienda.</p>
         </div>
 
-        <div class="divide-y divide-slate-100">
+        <div class="divide-y divide-slate-100" id="contenedor_proveedores">
             {% for prov_nombre, tiendas in proveedores_desglose.items() %}
-            <details class="group">
-                <!-- Encabezado del Proveedor (Clickeable) -->
+            <details class="group prov-group" data-prov="{{ prov_nombre }}">
                 <summary class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
                     <div class="flex items-center gap-3">
                         <i class="fa-solid fa-chevron-right text-xs text-slate-400 group-open:rotate-90 transition-transform"></i>
                         <span class="font-bold text-blue-900 text-base">{{ prov_nombre }}</span>
-                        <span class="text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full font-semibold">
-                            {{ tiendas|length }} Tiendas Registradas
-                        </span>
                     </div>
-                    <span class="text-xs text-slate-500"><i class="fa-solid fa-angle-down ml-1"></i></span>
                 </summary>
-
-                <!-- Sub-Tabla Desplegable con Detalle por Tienda -->
                 <div class="p-4 bg-white border-t border-slate-100 overflow-x-auto">
                     <table class="tabla-dashboard w-full text-left text-xs">
                         <thead>
@@ -57,21 +55,13 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium">
                             {% for tienda_nombre, t_info in tiendas.items() %}
-                            <tr class="hover:bg-slate-50">
+                            <tr class="hover:bg-slate-50 tienda-row" data-tienda="{{ tienda_nombre }}" data-estatus-inv="{{ t_info.estatus_inv }}">
                                 <td class="py-3 px-3 font-bold text-slate-800">{{ tienda_nombre }}</td>
                                 <td class="py-3 px-3 text-slate-700">{{ t_info.ultima_oc }}</td>
                                 <td class="py-3 px-3 text-slate-600">{{ t_info.fecha_recepcion }}</td>
-                                <td class="py-3 px-3">
-                                    <span class="px-2 py-0.5 rounded font-semibold {{ 'bg-emerald-100 text-emerald-800' if t_info.estatus_oc == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
-                                        {{ t_info.estatus_oc }}
-                                    </span>
-                                </td>
+                                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded font-semibold {{ 'bg-emerald-100 text-emerald-800' if t_info.estatus_oc == 'Recibido' else 'bg-blue-100 text-blue-800' }}">{{ t_info.estatus_oc }}</span></td>
                                 <td class="py-3 px-3 text-center font-bold text-slate-800">{{ t_info.dias_inventario }}</td>
-                                <td class="py-3 px-3">
-                                    <span class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">
-                                        {{ t_info.estatus_inv }}
-                                    </span>
-                                </td>
+                                <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">{{ t_info.estatus_inv }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -79,12 +69,37 @@
                 </div>
             </details>
             {% else %}
-            <div class="p-8 text-center text-slate-400">
-                No hay alertas ni órdenes registradas actualmente.
-            </div>
+            <div class="p-8 text-center text-slate-400">No hay alertas.</div>
             {% endfor %}
         </div>
     </div>
-
 </div>
+
+<script>
+function filtrarDashboard() {
+    const texto = document.getElementById('busqueda_dashboard').value.toLowerCase();
+    const estatus = document.getElementById('filtro_estatus').value;
+    
+    document.querySelectorAll('.prov-group').forEach(group => {
+        let mostrarGrupo = false;
+        group.querySelectorAll('.tienda-row').forEach(row => {
+            const tienda = row.getAttribute('data-tienda').toLowerCase();
+            const inv = row.getAttribute('data-estatus-inv');
+            const prov = group.getAttribute('data-prov').toLowerCase();
+            
+            const matchTexto = tienda.includes(texto) || prov.includes(texto);
+            const matchEstatus = (estatus === 'Todos' || inv === estatus);
+            
+            if (matchTexto && matchEstatus) {
+                row.style.display = '';
+                mostrarGrupo = true;
+            } else {
+                row.style.display = 'none';
+            }
+        });
+        group.style.display = mostrarGrupo ? '' : 'none';
+        if(mostrarGrupo && (texto !== '' || estatus !== 'Todos')) group.open = true;
+    });
+}
+</script>
 {% endblock %}

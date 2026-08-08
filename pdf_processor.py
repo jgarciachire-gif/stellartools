@@ -6,8 +6,9 @@ def extraer_datos_oc(pdf_file):
         "numero_orden": "",
         "proveedor": "",
         "tienda_destino": "",
-        "fecha_emision": "",
         "monto_total": 0.0,
+        "fecha_emision": "",
+        "fecha_envio": "",
         "productos": []
     }
 
@@ -21,10 +22,11 @@ def extraer_datos_oc(pdf_file):
             words = page.extract_words()
 
             rows = []
+            # Aumentamos la tolerancia vertical a 8 para agrupar mejor las líneas con los separadores '|'
             for w in sorted(words, key=lambda x: x['top']):
                 placed = False
                 for r in rows:
-                    if abs(r['top'] - w['top']) < 5:
+                    if abs(r['top'] - w['top']) < 8:
                         r['words'].append(w)
                         placed = True
                         break
@@ -41,33 +43,37 @@ def extraer_datos_oc(pdf_file):
             for idx, ld in enumerate(lines_data):
                 txt_upper = ld['text'].upper()
 
-                # Buscar número de orden: Busca específicamente "ORDEN DE COMPRA NO."
+                # --- 1. NÚMERO DE ORDEN ---
                 if "ORDEN" in txt_upper or "NO." in txt_upper or "Nº" in txt_upper:
-                    # Esta regla captura lo que esté después de estas combinaciones, ignorando espacios
                     m_oc = re.search(r'(?:ORDEN DE COMPRA NO\.?|NO\.|Nº|NRO\.?)[:\s]*([A-Z0-9-]+)', txt_upper)
-                    
-                    # Nos aseguramos de que no capture palabras sueltas como "DE" o "COMPRA" por error
                     if m_oc and m_oc.group(1) not in ["DE", "COMPRA"]:
                         datos_extraidos["numero_orden"] = m_oc.group(1)
 
+                # --- 2. PROVEEDOR ---
                 if "PROVEEDOR:" in txt_upper and idx + 1 < len(lines_data):
                     w_left = [w['text'] for w in lines_data[idx + 1]['words'] if w['x0'] < width * 0.5 and w['text'] != '|']
                     if w_left:
                         datos_extraidos["proveedor"] = " ".join(w_left).strip()
 
+                # --- 3. TIENDA DESTINO ---
                 if ("ENTREGAR A:" in txt_upper or "ENTREGAR A" in txt_upper) and idx + 1 < len(lines_data):
                     w_right = [w['text'] for w in lines_data[idx + 1]['words'] if w['x0'] >= width * 0.4 and w['text'] != '|']
                     if w_right:
                         datos_extraidos["tienda_destino"] = " ".join(w_right).strip()
 
+                # --- 4. FECHA DE EMISIÓN Y ENVÍO ---
                 if "FECHA DE EMISI" in txt_upper or "EMISION" in txt_upper or "EMISIÓN" in txt_upper:
-                    m_f = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', ld['text'])
+                    m_f = re.search(r'(\d{1,2}[/-]\d{1,2}[/-]\d{4})', ld['text'])
                     if not m_f and idx + 1 < len(lines_data):
-                        m_f = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', lines_data[idx + 1]['text'])
+                        m_f = re.search(r'(\d{1,2}[/-]\d{1,2}[/-]\d{4})', lines_data[idx + 1]['text'])
                     if m_f:
-                        p = m_f.group(1).split('/')
-                        datos_extraidos["fecha_emision"] = f"{p[2]}-{p[1].zfill(2)}-{p[0].zfill(2)}"
+                        p = m_f.group(1).replace('-', '/').split('/')
+                        fecha_formateada = f"{p[2]}-{p[1].zfill(2)}-{p[0].zfill(2)}"
+                        # Asignamos el valor encontrado a AMBAS variables de fecha
+                        datos_extraidos["fecha_emision"] = fecha_formateada
+                        datos_extraidos["fecha_envio"] = fecha_formateada
 
+                # --- 5. MONTO TOTAL ---
                 if "TOTAL" in txt_upper and "SUBTOTAL" not in txt_upper:
                     m_tot = re.search(r'([\d.,]{4,})', ld['text'])
                     if not m_tot and idx + 1 < len(lines_data):
@@ -78,25 +84,38 @@ def extraer_datos_oc(pdf_file):
                         except ValueError:
                             pass
 
+            # --- 6. EXTRACCIÓN DE PRODUCTOS ---
             for ld in lines_data:
                 txt = ld['text']
                 words_in_line = ld['words']
                 first_word = words_in_line[0]['text'] if words_in_line else ""
 
-                if re.match(r'^\d{5,8}$', first_word) and not first_word.startswith("0000"):
+                # Filtro más flexible: Acepta códigos de al menos 3 caracteres alfanuméricos
+                if re.match(r'^[A-Za-z0-9\-_]{3,15}$', first_word) and any(c.isdigit() for c in first_word):
+                    if first_word.upper() in ["0000", "TOTAL", "SUBTOTAL"]:
+                        continue
+                        
                     codigo = first_word
+                    
+                    # Si el PDF detecta las barras separadoras
                     if '|' in txt:
                         partes = [p.strip() for p in txt.split('|') if p.strip()]
-                        if len(partes) >= 6:
+                        if len(partes) >= 5:
                             try:
+                                # Usamos índices negativos para apuntar a 'UNI.' (-3) y 'COSTO UNI.' (-2)
+                                cantidad = float(partes[-3].replace(',', ''))
+                                precio_unitario = float(partes[-2].replace(',', ''))
+                                
                                 datos_extraidos["productos"].append({
                                     "codigo": codigo,
                                     "descripcion": partes[1],
-                                    "cantidad": float(partes[4].replace(',', '')),
-                                    "precio_unitario": float(partes[5].replace(',', ''))
+                                    "cantidad": cantidad,
+                                    "precio_unitario": precio_unitario
                                 })
-                            except:
+                            except Exception:
                                 pass
+                    
+                    # Fallback por si las barras no se detectan bien (texto corrido)
                     else:
                         num_vals = []
                         desc_words = []
@@ -112,8 +131,8 @@ def extraer_datos_oc(pdf_file):
                             datos_extraidos["productos"].append({
                                 "codigo": codigo,
                                 "descripcion": " ".join(desc_words),
-                                "cantidad": num_vals[2] if len(num_vals) >= 4 else num_vals[0],
-                                "precio_unitario": num_vals[3] if len(num_vals) >= 4 else num_vals[1]
+                                "cantidad": num_vals[-3] if len(num_vals) >= 3 else num_vals[0],
+                                "precio_unitario": num_vals[-2] if len(num_vals) >= 2 else num_vals[1]
                             })
 
     except Exception as e:

@@ -8,6 +8,7 @@ from pdf_processor import extraer_datos_oc
 import os
 import io
 import xml.etree.ElementTree as ET
+import json
 from fastapi import Response, Cookie, Depends
 from supabase import create_client, Client
 
@@ -149,7 +150,7 @@ def listar_ordenes(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito)").eq("usuario_id", user.id).order("fecha_emision", desc=True).execute()
+    res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito), detalles_productos(*)").eq("usuario_id", user.id).order("fecha_envio", desc=True).execute()
     
     hoy = datetime.now().date()
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -195,15 +196,15 @@ def listar_ordenes(request: Request):
                     pass
             
             # Agrupación por Mes y Año
-            fecha_emision_raw = str(o.get('fecha_emision') or "").strip()
-            if fecha_emision_raw:
+            fecha_agrupar_raw = str(o.get('fecha_envio') or "").strip()
+            if fecha_agrupar_raw and fecha_agrupar_raw.lower() not in ['none', 'nan', 'nat', 'null']:
                 try:
-                    dt = datetime.strptime(fecha_emision_raw, "%Y-%m-%d")
+                    dt = datetime.strptime(fecha_agrupar_raw, "%Y-%m-%d")
                     mes_anio = f"{meses_espanol[dt.month - 1]} {dt.year}"
                 except ValueError:
                     mes_anio = "Fecha Inválida"
             else:
-                mes_anio = "Sin Fecha"
+                mes_anio = "Sin Fecha de Envío (Pendiente)"
                 
             if mes_anio not in ordenes_agrupadas:
                 ordenes_agrupadas[mes_anio] = []
@@ -386,6 +387,8 @@ def crear_orden_manual(
     monto_total: float = Form(0.0),
     fecha_emision: str = Form(...),
     dias_inventario: int = Form(...),
+    fecha_envio: str = Form(""),       # <-- Nuevo
+    productos_json: str = Form("[]"),  # <-- Nuevo
     access_token: str = Cookie(None)
 ):
     user = obtener_usuario_actual(access_token)
@@ -409,16 +412,33 @@ def crear_orden_manual(
         }).execute()
         prov_id = res_ins_p.data[0]['id'] if res_ins_p.data else None
 
-    supabase.table("ordenes_compra").insert({
+    res_insert = supabase.table("ordenes_compra").insert({
         "usuario_id": user.id,
         "numero_orden": numero_orden,
         "proveedor_id": prov_id,
         "proveedor": proveedor,
         "tienda_destino": tienda_destino,
         "fecha_emision": fecha_emision,
+        "fecha_envio": fecha_envio if fecha_envio else None,
         "monto_total": monto_total,
         "estatus": "Enviada",
         "dias_inventario": dias_inventario
     }).execute()
-    
+
+    if res_insert.data and res_insert.data[0].get("id"):
+        nueva_oc_id = res_insert.data[0]["id"]
+        try:
+            lista_prods = json.loads(productos_json)
+            for p in lista_prods:
+                supabase.table("detalles_productos").insert({
+                    "orden_id": nueva_oc_id,
+                    "codigo": p.get("codigo"),
+                    "descripcion": p.get("descripcion"),
+                    "cantidad": p.get("cantidad"),
+                    "precio_unitario": p.get("precio_unitario")
+                }).execute()
+        except Exception:
+            pass # Ignorar si la cadena JSON falla
+            
     return RedirectResponse(url="/ordenes", status_code=303)
+    

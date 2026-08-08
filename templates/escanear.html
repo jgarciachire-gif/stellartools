@@ -38,7 +38,9 @@
             <input type="hidden" name="tienda_destino" value="{{ datos.tienda_destino }}">
             <input type="hidden" name="monto_total" value="{{ datos.monto_total }}">
             <input type="hidden" name="fecha_emision" value="{{ datos.fecha_emision }}">
-
+            <input type="hidden" name="fecha_envio" value="{{ datos.fecha_envio }}">
+            <input type="hidden" name="productos_json" value="{{ datos.productos | tojson | forceescape }}">
+            
             <!-- RESUMEN VISUAL DE LA OC -->
             <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm">
                 <div>

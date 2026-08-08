@@ -23,6 +23,7 @@
             <table class="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                     <tr class="border-b border-slate-200 text-xs font-bold text-slate-500 bg-white">
+                        <th class="p-4 w-10"></th>
                         <th class="p-4">Nº OC</th>
                         <th class="p-4">Proveedor</th>
                         <th class="p-4">Tienda Destino</th>
@@ -38,8 +39,13 @@
                 <tbody class="divide-y divide-slate-100 text-sm">
                     {% for o in lista_ordenes %}
                     <tr class="hover:bg-slate-50/80 transition-colors">
-                        <form id="form_oc_{{ o.id }}" action="/ordenes/actualizar/{{ o.id }}" method="POST" class="hidden"></form>
-                        
+                        <!-- Botón desplegable y formulario oculto dentro de la primera celda -->
+                        <td class="p-4 text-center">
+                            <form id="form_oc_{{ o.id }}" action="/ordenes/actualizar/{{ o.id }}" method="POST" class="hidden"></form>
+                            <button type="button" onclick="toggleDetalles('detalles-{{ o.id }}')" class="text-slate-400 hover:text-blue-600 transition-colors w-6 h-6 flex justify-center items-center rounded bg-slate-100 hover:bg-blue-100">
+                                <i class="fa-solid fa-chevron-down text-xs"></i>
+                            </button>
+                        </td>                  
                         <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
                         <td class="p-4 font-medium text-blue-700">{{ o.proveedor }}</td>
                         <td class="p-4 font-medium text-slate-700">{{ o.tienda_destino }}</td>
@@ -86,6 +92,39 @@
                             </form>
                         </td>
                     </tr>
+
+                    <!-- FILA DESPLEGABLE DE PRODUCTOS -->
+                    <tr id="detalles-{{ o.id }}" class="hidden bg-slate-50 border-b border-slate-200">
+                        <td colspan="11" class="p-0">
+                            <div class="px-14 py-4">
+                                <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Detalle de Productos Extraídos</h4>
+                                {% if o.detalles_productos %}
+                                <table class="w-full text-xs text-left bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
+                                    <thead class="bg-slate-100 text-slate-600">
+                                        <tr>
+                                            <th class="px-4 py-2 font-semibold">Código</th>
+                                            <th class="px-4 py-2 font-semibold">Descripción</th>
+                                            <th class="px-4 py-2 font-semibold text-center">Cant.</th>
+                                            <th class="px-4 py-2 font-semibold text-right">Costo Unit.</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100">
+                                        {% for p in o.detalles_productos %}
+                                        <tr class="hover:bg-slate-50">
+                                            <td class="px-4 py-2 text-slate-600 font-mono">{{ p.codigo }}</td>
+                                            <td class="px-4 py-2 font-medium text-slate-800">{{ p.descripcion }}</td>
+                                            <td class="px-4 py-2 text-center text-slate-700">{{ p.cantidad }}</td>
+                                            <td class="px-4 py-2 text-right font-semibold text-slate-900">${{ "%.2f"|format(p.precio_unitario or 0) }}</td>
+                                        </tr>
+                                        {% endfor %}
+                                    </tbody>
+                                </table>
+                                {% else %}
+                                <p class="text-xs text-slate-500 italic">No se extrajeron detalles de productos para esta orden.</p>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -125,6 +164,13 @@ async function cambiarEstadoPago(checkbox, idOrden, textoOriginal, colorOriginal
         });
     } catch (error) {
         console.error("Error al guardar estado de pago", error);
+    }
+}
+
+function toggleDetalles(idFila) {
+    const fila = document.getElementById(idFila);
+    if (fila) {
+        fila.classList.toggle('hidden');
     }
 }
 </script>
