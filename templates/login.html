@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Iniciar Sesión - StellarTools+</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+
+    <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
+        <div class="text-center mb-8">
+            <i class="fa-solid fa-boxes-packing text-blue-600 text-5xl mb-3"></i>
+            <h1 class="text-2xl font-bold text-slate-800">StellarTools+</h1>
+            <p class="text-sm text-slate-500">Control de Compras ERP</p>
+        </div>
+
+        <!-- Pestañas para cambiar entre Login y Registro -->
+        <div class="flex border-b border-slate-200 mb-6">
+            <button onclick="mostrarFormulario('login')" id="btn-login" class="flex-1 py-2 font-bold text-blue-600 border-b-2 border-blue-600 transition">Ingresar</button>
+            <button onclick="mostrarFormulario('registro')" id="btn-registro" class="flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition">Crear Cuenta</button>
+        </div>
+
+        <!-- Formulario de Inicio de Sesión -->
+        <form id="form-login" action="/login" method="POST" class="space-y-4 block">
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico</label>
+                <input type="email" name="email" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contraseña</label>
+                <input type="password" name="password" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+            <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition mt-2">
+                Iniciar Sesión
+            </button>
+        </form>
+
+        <!-- Formulario de Registro (Oculto por defecto) -->
+        <form id="form-registro" action="/registro" method="POST" class="space-y-4 hidden">
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico</label>
+                <input type="email" name="email" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Crea una Contraseña (Mín. 6 caracteres)</label>
+                <input type="password" name="password" minlength="6" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+            </div>
+            <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition mt-2">
+                Registrarse
+            </button>
+        </form>
+    </div>
+
+    <script>
+        function mostrarFormulario(tipo) {
+            const fLogin = document.getElementById('form-login');
+            const fRegistro = document.getElementById('form-registro');
+            const bLogin = document.getElementById('btn-login');
+            const bRegistro = document.getElementById('btn-registro');
+
+            if (tipo === 'login') {
+                fLogin.classList.remove('hidden'); fRegistro.classList.add('hidden');
+                bLogin.className = "flex-1 py-2 font-bold text-blue-600 border-b-2 border-blue-600 transition";
+                bRegistro.className = "flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition";
+            } else {
+                fRegistro.classList.remove('hidden'); fLogin.classList.add('hidden');
+                bRegistro.className = "flex-1 py-2 font-bold text-emerald-600 border-b-2 border-emerald-600 transition";
+                bLogin.className = "flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition";
+            }
+        }
+    </script>
+</body>
+</html>

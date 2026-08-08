@@ -2,134 +2,117 @@ from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-import sqlite3
 import pandas as pd
 from datetime import datetime, timedelta, date
 from pdf_processor import extraer_datos_oc
 import os
 import io
+import xml.etree.ElementTree as ET
+from fastapi import Response, Cookie, Depends
+from supabase import create_client, Client
 
-app = FastAPI(title="Control de Compras Pro - ERP", version="2.0")
+SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
+SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+app = FastAPI(title="Control de Compras", version="2.0")
+
+def obtener_usuario_actual(access_token: str = Cookie(None)):
+    if not access_token:
+        return None
+    try:
+        user_response = supabase.auth.get_user(access_token)
+        return user_response.user
+    except Exception:
+        return None
+
+@app.get("/login")
+def vista_login(request: Request):
+    token = request.cookies.get("access_token")
+    if obtener_usuario_actual(token):
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(request, "login.html", {})
+
+@app.post("/registro")
+def procesar_registro(email: str = Form(...), password: str = Form(...)):
+    try:
+        supabase.auth.sign_up({"email": email, "password": password})
+        return HTMLResponse("<script>alert('¡Registro exitoso! Ya puedes iniciar sesión con tu correo.'); window.location.href='/login';</script>")
+    except Exception as e:
+        return HTMLResponse(f"<script>alert('Error al registrar: {str(e)}'); window.history.back();</script>")
+
+@app.post("/login")
+def procesar_login(email: str = Form(...), password: str = Form(...)):
+    try:
+        auth_res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        
+        response = RedirectResponse(url="/", status_code=303)
+        response.set_cookie(
+            key="access_token", 
+            value=auth_res.session.access_token, 
+            httponly=True, 
+            max_age=3600 * 24 * 7
+        )
+        return response
+    except Exception as e:
+        return HTMLResponse(f"<script>alert('Credenciales incorrectas o error en el servidor.'); window.history.back();</script>")
+
+@app.get("/logout")
+def cerrar_sesion():
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie("access_token")
+    return response
+
 
 # Configuración de plantillas
 templates = Jinja2Templates(directory="templates")
 def formato_moneda_latina(valor):
     if valor is None:
         return "0,00"
-    # Formatea con comas para miles y puntos para decimales, luego invierte los roles
     return f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
 
 templates.env.filters["moneda"] = formato_moneda_latina
-DB_URL = 'compras.db'
 
-def obtener_conexion():
-    return sqlite3.connect(DB_URL)
-
-def inicializar_db():
-    conn = obtener_conexion()
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Proveedores (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            codigo TEXT, 
-            nombre TEXT UNIQUE, 
-            dias_credito INTEGER DEFAULT 30, 
-            dias_despacho INTEGER DEFAULT 3, 
-            dias_inventario INTEGER DEFAULT 15,
-            contacto TEXT
-        )''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Ordenes_Compra (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            numero_orden TEXT, 
-            proveedor_id INTEGER, 
-            proveedor TEXT, 
-            tienda_destino TEXT, 
-            fecha_emision TEXT, 
-            fecha_envio TEXT, 
-            fecha_recepcion TEXT, 
-            monto_total REAL, 
-            estatus TEXT, 
-            dias_inventario INTEGER)''')
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS Detalles_Productos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            orden_id INTEGER, 
-            codigo TEXT, 
-            descripcion TEXT, 
-            cantidad REAL, 
-            precio_unitario REAL)''')
-    conn.commit()
-    conn.close()
-
-inicializar_db()
-
-def ejecutar_query(query, params=(), is_select=False, return_id=False):
-    conn = obtener_conexion()
-    if is_select:
-        df = pd.read_sql_query(query, conn, params=params)
-        conn.close()
-        return df
-    else:
-        cursor = conn.cursor()
-        cursor.execute(query, params)
-        last_id = cursor.lastrowid if return_id else None
-        conn.commit()
-        conn.close()
-        return last_id
-
-# --- RUTAS DE NAVEGACIÓN Y VISTAS ---
 
 @app.get("/")
 def dashboard(request: Request):
-    # Consulta que trae todas las OCs con datos de tienda e inventario
-    query = '''
-        SELECT o.id, o.numero_orden, COALESCE(p.nombre, o.proveedor) as proveedor,
-               o.tienda_destino, o.fecha_envio, o.fecha_recepcion, o.estatus, o.dias_inventario
-        FROM Ordenes_Compra o 
-        LEFT JOIN Proveedores p ON o.proveedor_id = p.id
-        ORDER BY o.id DESC
-    '''
-    df = ejecutar_query(query, is_select=True)
-    df = df.where(pd.notnull(df), None)
+    token = request.cookies.get("access_token")
+    user = obtener_usuario_actual(token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
 
+    res_oc = supabase.table("ordenes_compra").select("*, proveedores(nombre)").eq("usuario_id", user.id).order("id", desc=True).execute()
+    
     proveedores_desglose = {}
-    hoy = datetime.now().date() # Capturamos la fecha actual del sistema
+    hoy = datetime.now().date()
 
-    if not df.empty:
-        for _, row in df.iterrows():
-            prov = row['proveedor']
-            tienda = row['tienda_destino'] or "Sin Tienda Asignada"
+    if res_oc.data:
+        for row in res_oc.data:
+            prov_obj = row.get("proveedores")
+            prov = prov_obj["nombre"] if prov_obj else (row.get('proveedor') or "Sin Proveedor")
+            tienda = row.get('tienda_destino') or "Sin Tienda Asignada"
             
             if prov not in proveedores_desglose:
                 proveedores_desglose[prov] = {}
             
-            # Solo conservamos la última OC registrada para cada tienda específica
             if tienda not in proveedores_desglose[prov]:
-                f_rec_raw = str(row.get('fecha_recepcion')).strip() if row.get('fecha_recepcion') else ""
-                tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat']
+                f_rec_raw = str(row.get('fecha_recepcion') or "").strip()
+                tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
                 
                 estatus_oc = "Recibido" if tiene_fecha_rec else "Enviada"
                 dias_inv_totales = int(row.get('dias_inventario') or 15)
                 
-                # --- NUEVA LÓGICA DE ALERTAS DE INVENTARIO ---
                 if tiene_fecha_rec:
                     try:
-                        # 1. Convertimos la fecha de recepción a objeto Date
                         f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
-                        
-                        # 2. Calculamos cuándo se debería acabar el inventario
                         fecha_agotamiento = f_rec + timedelta(days=dias_inv_totales)
-                        
-                        # 3. Calculamos la diferencia contra el día de hoy
                         dias_restantes = (fecha_agotamiento - hoy).days
                         
-                        # 4. Asignamos alertas dinámicas
                         if dias_restantes <= 0:
                             estatus_inv = "Reponer inventario"
                             color_inv = "text-red-700 bg-red-100"
                             dias_mostrar = f"Vencido hace {abs(dias_restantes)}d"
-                        elif dias_restantes <= 5: # Alerta a los 5 días previos
+                        elif dias_restantes <= 5:
                             estatus_inv = "Próximo a Agotar"
                             color_inv = "text-amber-700 bg-amber-100"
                             dias_mostrar = f"Quedan {dias_restantes}d"
@@ -137,20 +120,18 @@ def dashboard(request: Request):
                             estatus_inv = "Stock OK"
                             color_inv = "text-emerald-700 bg-emerald-100"
                             dias_mostrar = f"Quedan {dias_restantes}d"
-                            
                     except ValueError:
                         estatus_inv = "Error de Fecha"
                         color_inv = "text-slate-600 bg-slate-100"
                         dias_mostrar = f"{dias_inv_totales} totales"
                 else:
-                    # Si no ha llegado la mercancía, el inventario no ha empezado a descontarse
                     estatus_inv = "Esperando Recepción"
                     color_inv = "text-blue-700 bg-blue-100"
                     dias_mostrar = "Sin iniciar"
 
                 proveedores_desglose[prov][tienda] = {
-                    "ultima_oc": row['numero_orden'],
-                    "fecha_envio": row['fecha_envio'] or "-",
+                    "ultima_oc": row.get('numero_orden'),
+                    "fecha_envio": row.get('fecha_envio') or "-",
                     "estatus_oc": estatus_oc,
                     "dias_inventario": dias_mostrar,
                     "estatus_inv": estatus_inv,
@@ -163,36 +144,39 @@ def dashboard(request: Request):
 
 @app.get("/ordenes")
 def listar_ordenes(request: Request):
-    query = '''
-        SELECT o.id, o.numero_orden, COALESCE(p.nombre, o.proveedor) as proveedor, 
-               o.tienda_destino, o.fecha_envio, o.fecha_recepcion, o.monto_total, 
-               p.dias_credito
-        FROM Ordenes_Compra o LEFT JOIN Proveedores p ON o.proveedor_id = p.id
-        ORDER BY o.id DESC
-    '''
-    df = ejecutar_query(query, is_select=True)
-    df = df.where(pd.notnull(df), None)
+    token = request.cookies.get("access_token")
+    user = obtener_usuario_actual(token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito)").eq("usuario_id", user.id).order("id", desc=True).execute()
     
     hoy = datetime.now().date()
     ordenes = []
     
-    if not df.empty:
-        for _, row in df.iterrows():
-            o = row.to_dict()
+    if res.data:
+        for row in res.data:
+            o = row.copy()
+            prov_obj = o.get("proveedores")
             
-            # --- CORRECCIÓN DE ESTATUS STRICTO ---
-            f_rec_raw = str(o.get('fecha_recepcion')).strip() if o.get('fecha_recepcion') else ""
-            tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat']
+            if prov_obj:
+                o['proveedor'] = prov_obj.get("nombre")
+                dias_credito = prov_obj.get("dias_credito")
+            else:
+                dias_credito = 30
+
+            f_rec_raw = str(o.get('fecha_recepcion') or "").strip()
+            tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
             
             o['estatus'] = 'Recibido' if tiene_fecha_rec else 'Enviada'
             o['vencimiento_factura_str'] = ""
             o['alerta_text'] = ""
             o['alerta_color'] = "transparent"
             
-            if tiene_fecha_rec and o.get('dias_credito'):
+            if tiene_fecha_rec and dias_credito:
                 try:
                     f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
-                    venc_date = f_rec + timedelta(days=int(o['dias_credito']))
+                    venc_date = f_rec + timedelta(days=int(dias_credito))
                     o['vencimiento_factura_str'] = venc_date.strftime("%d/%m/%Y")
                     dias_restantes = (venc_date - hoy).days
                     
@@ -216,76 +200,146 @@ def listar_ordenes(request: Request):
 def actualizar_orden(
     orden_id: int, 
     fecha_envio: str = Form(None), 
-    fecha_recepcion: str = Form(None)
+    fecha_recepcion: str = Form(None),
+    access_token: str = Cookie(None)
 ):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
     f_rec = fecha_recepcion if fecha_recepcion else None
     f_env = fecha_envio if fecha_envio else None
-    
-    # El estatus se define estrictamente de acuerdo a si existe fecha de recepción
     estatus = "Recibido" if f_rec else "Enviada"
 
-    ejecutar_query('''
-        UPDATE Ordenes_Compra 
-        SET estatus = ?, fecha_envio = ?, fecha_recepcion = ?
-        WHERE id = ?
-    ''', (estatus, f_env, f_rec, orden_id))
+    supabase.table("ordenes_compra").update({
+        "estatus": estatus,
+        "fecha_envio": f_env,
+        "fecha_recepcion": f_rec
+    }).eq("id", orden_id).eq("usuario_id", user.id).execute()
     
     return RedirectResponse(url="/ordenes", status_code=303)
 
 @app.post("/ordenes/eliminar/{orden_id}")
-def eliminar_orden(orden_id: int):
-    ejecutar_query("DELETE FROM Ordenes_Compra WHERE id = ?", (orden_id,))
+def eliminar_orden(orden_id: int, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    supabase.table("ordenes_compra").delete().eq("id", orden_id).eq("usuario_id", user.id).execute()
     return RedirectResponse(url="/ordenes", status_code=303)
 
 @app.get("/proveedores")
-def gestionar_proveedores(request: Request, buscar: str = ""):
+def gestionar_proveedores(request: Request, buscar: str = "", select: int = None, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    query = supabase.table("proveedores").select("*").order("nombre", desc=False)
     if buscar:
-        query = "SELECT id, codigo, nombre, dias_credito, dias_despacho, contacto FROM Proveedores WHERE nombre LIKE ? ORDER BY nombre ASC"
-        df = ejecutar_query(query, (f"%{buscar}%",), is_select=True)
-    else:
-        query = "SELECT id, codigo, nombre, dias_credito, dias_despacho, contacto FROM Proveedores ORDER BY nombre ASC"
-        df = ejecutar_query(query, is_select=True)
-        
-    proveedores = df.to_dict(orient="records") if not df.empty else []
-    return templates.TemplateResponse(request, "proveedores.html", {"proveedores": proveedores, "busqueda": buscar})
+        query = query.ilike("nombre", f"%{buscar}%")
+    
+    res = query.execute()
+    proveedores = res.data if res.data else []
+    
+    prov_obj = next((p for p in proveedores if p["id"] == select), None) if select else None
+    
+    return templates.TemplateResponse(request, "proveedores.html", {
+        "proveedores": proveedores, 
+        "busqueda": buscar,
+        "prov_obj": prov_obj
+    })
+
+@app.post("/proveedores/importar-xml")
+async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    contenido = await archivo_xml.read()
+    try:
+        arbol = ET.fromstring(contenido)
+        for prov in arbol.findall('.//proveedor'):
+            nombre = prov.findtext('nombre')
+            codigo = prov.findtext('codigo', default="")
+            contacto = prov.findtext('contacto', default="")
+            try:
+                dias_credito = int(prov.findtext('dias_credito', default="30"))
+            except ValueError:
+                dias_credito = 30
+            
+            if nombre:
+                try:
+                    supabase.table("proveedores").insert({
+                        "codigo": codigo,
+                        "nombre": nombre,
+                        "dias_credito": dias_credito,
+                        "contacto": contacto,
+                        "dias_despacho": 3,
+                        "dias_inventario": 15
+                    }).execute()
+                except Exception:
+                    pass 
+                    
+        return RedirectResponse(url="/proveedores", status_code=303)
+    except ET.ParseError:
+        return HTMLResponse("<script>alert('Error: El archivo XML no tiene un formato válido.'); window.location.href='/proveedores';</script>")
 
 @app.post("/proveedores/guardar")
-def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str = Form(...), dias_credito: int = Form(30), contacto: str = Form("")):
+def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str = Form(...), dias_credito: int = Form(30), contacto: str = Form(""), access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
     if id:
-        ejecutar_query('''
-            UPDATE Proveedores SET codigo = ?, nombre = ?, dias_credito = ?, contacto = ? WHERE id = ?
-        ''', (codigo, nombre, dias_credito, contacto, id))
+        supabase.table("proveedores").update({
+            "codigo": codigo,
+            "nombre": nombre,
+            "dias_credito": dias_credito,
+            "contacto": contacto
+        }).eq("id", id).execute()
     else:
         try:
-            ejecutar_query('''
-                INSERT INTO Proveedores (codigo, nombre, dias_credito, contacto, dias_despacho, dias_inventario) 
-                VALUES (?, ?, ?, ?, 3, 15)
-            ''', (codigo, nombre, dias_credito, contacto))
-        except sqlite3.IntegrityError:
+            supabase.table("proveedores").insert({
+                "codigo": codigo,
+                "nombre": nombre,
+                "dias_credito": dias_credito,
+                "contacto": contacto,
+                "dias_despacho": 3,
+                "dias_inventario": 15
+            }).execute()
+        except Exception:
             pass 
     return RedirectResponse(url="/proveedores", status_code=303)
 
 @app.post("/proveedores/eliminar/{prov_id}")
-def eliminar_proveedor(prov_id: int):
-    ejecutar_query("DELETE FROM Proveedores WHERE id = ?", (prov_id,))
+def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        supabase.table("proveedores").delete().eq("id", prov_id).execute()
+    except Exception:
+        pass
     return RedirectResponse(url="/proveedores", status_code=303)
 
 @app.get("/escanear")
-def vista_escanear(request: Request):
+def vista_escanear(request: Request, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse(request, "escanear.html", {"datos": None})
 
 @app.post("/escanear/procesar")
-async def procesar_pdf(request: Request, archivo_pdf: UploadFile = File(...)):
-    # 1. Leemos el contenido en bytes del PDF subido
+async def procesar_pdf(request: Request, archivo_pdf: UploadFile = File(...), access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
     contenido_bytes = await archivo_pdf.read()
-    
-    # 2. Convertimos los bytes en un objeto tipo archivo en la memoria RAM
     pdf_en_memoria = io.BytesIO(contenido_bytes)
-    
-    # 3. Llamamos a tu script real pasándole el PDF en memoria
     datos_extraidos = extraer_datos_oc(pdf_en_memoria)
     
-    # 4. Validación por si el PDF es ilegible o no es una Orden de Compra
     if not datos_extraidos:
         datos_extraidos = {
             "numero_orden": "",
@@ -295,7 +349,6 @@ async def procesar_pdf(request: Request, archivo_pdf: UploadFile = File(...)):
             "monto_total": 0.0
         }
     
-    # 5. Renderizamos de nuevo 'escanear.html' con los datos REALES
     return templates.TemplateResponse(request, "escanear.html", {
         "datos": datos_extraidos
     })
@@ -307,26 +360,40 @@ def crear_orden_manual(
     tienda_destino: str = Form(...),
     monto_total: float = Form(0.0),
     fecha_emision: str = Form(...),
-    dias_inventario: int = Form(...) # Solicitamos este nuevo dato del formulario
+    dias_inventario: int = Form(...),
+    access_token: str = Cookie(None)
 ):
-    # 1. Validación de duplicidad
-    df_existe = ejecutar_query("SELECT id FROM Ordenes_Compra WHERE numero_orden = ?", (numero_orden,), is_select=True)
-    if not df_existe.empty:
-        # Lanza una alerta emergente y regresa a la pantalla anterior sin borrar los datos
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    res_existe = supabase.table("ordenes_compra").select("id").eq("numero_orden", numero_orden).eq("usuario_id", user.id).execute()
+    if res_existe.data and len(res_existe.data) > 0:
         alerta_js = f"<script>alert('Cuidado: La Orden de Compra N° {numero_orden} ya fue registrada.'); window.history.back();</script>"
         return HTMLResponse(content=alerta_js)
 
-    # 2. Gestión del Proveedor
-    df_p = ejecutar_query("SELECT id FROM Proveedores WHERE LOWER(TRIM(nombre)) = LOWER(TRIM(?))", (proveedor,), is_select=True)
-    if not df_p.empty:
-        prov_id = int(df_p.iloc[0]['id'])
+    res_p = supabase.table("proveedores").select("id").ilike("nombre", proveedor.strip()).execute()
+    if res_p.data and len(res_p.data) > 0:
+        prov_id = res_p.data[0]['id']
     else:
-        prov_id = ejecutar_query("INSERT INTO Proveedores (nombre, dias_credito, dias_despacho, dias_inventario) VALUES (?, 30, 3, 15)", (proveedor,), return_id=True)
+        res_ins_p = supabase.table("proveedores").insert({
+            "nombre": proveedor.strip(),
+            "dias_credito": 30,
+            "dias_despacho": 3,
+            "dias_inventario": 15
+        }).execute()
+        prov_id = res_ins_p.data[0]['id'] if res_ins_p.data else None
 
-    # 3. Inserción con los días de inventario definidos manualmente
-    ejecutar_query('''
-        INSERT INTO Ordenes_Compra (numero_orden, proveedor_id, proveedor, tienda_destino, fecha_envio, monto_total, estatus, dias_inventario)
-        VALUES (?, ?, ?, ?, ?, ?, 'Enviada', ?)
-    ''', (numero_orden, prov_id, proveedor, tienda_destino, fecha_emision, monto_total, dias_inventario))
+    supabase.table("ordenes_compra").insert({
+        "usuario_id": user.id,
+        "numero_orden": numero_orden,
+        "proveedor_id": prov_id,
+        "proveedor": proveedor,
+        "tienda_destino": tienda_destino,
+        "fecha_emision": fecha_emision,
+        "monto_total": monto_total,
+        "estatus": "Enviada",
+        "dias_inventario": dias_inventario
+    }).execute()
     
     return RedirectResponse(url="/ordenes", status_code=303)

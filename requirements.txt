@@ -1,6 +1,8 @@
 fastapi
 uvicorn
+gunicorn
 jinja2
 python-multipart
 pandas
 pdfplumber
+supabase

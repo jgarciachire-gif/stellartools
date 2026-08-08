@@ -1,5 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
+
+
+    <!-- Botón para Importar XML -->
+<div class="mb-4 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+    <form action="/proveedores/importar-xml" method="POST" enctype="multipart/form-data" class="flex flex-col gap-2">
+        <label class="text-xs font-bold text-blue-800"><i class="fa-solid fa-file-code"></i> Importar Proveedores (XML)</label>
+        <div class="flex gap-2">
+            <input type="file" name="archivo_xml" accept=".xml" required class="block w-full text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-white file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+            <button type="submit" class="bg-blue-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">Subir</button>
+        </div>
+    </form>
+</div>
+
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
     
     <!-- Columna Izquierda: Buscador y Lista Limpia de Proveedores -->
@@ -19,7 +32,8 @@
         <!-- Lista de Proveedores (Clickable) -->
         <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
             {% for p in proveedores %}
-            <a href="?buscar={{ busqueda }}&select={{ p.id }}" class="block p-3 rounded-xl border border-slate-100 bg-slate-50 hover:bg-blue-50 hover:border-blue-200 transition">
+            <a href="?buscar={{ busqueda }}&select={{ p.id }}" 
+               class="block p-3 rounded-xl border transition {{ 'border-blue-400 bg-blue-50' if prov_obj and prov_obj.id == p.id else 'border-slate-100 bg-slate-50 hover:bg-blue-50' }}">
                 <p class="font-semibold text-slate-800 text-sm">{{ p.nombre }}</p>
                 <p class="text-xs text-slate-500">Cód: {{ p.codigo or 'N/A' }} • Crédito: {{ p.dias_credito }} días</p>
             </a>
@@ -31,8 +45,6 @@
 
     <!-- Columna Derecha: Ficha de Datos del Proveedor Seleccionado -->
     <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2">
-        {% set selected_id = request.query_params.get('select') %}
-        {% set prov_obj = proveedores | selectattr("id", "equalto", selected_id | int) | first if selected_id else None %}
 
         {% if prov_obj %}
         <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
