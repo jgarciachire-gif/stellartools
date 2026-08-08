@@ -131,7 +131,7 @@ def dashboard(request: Request):
 
                 proveedores_desglose[prov][tienda] = {
                     "ultima_oc": row.get('numero_orden'),
-                    "fecha_envio": row.get('fecha_envio') or "-",
+                    "fecha_recepcion": row.get('fecha_recepcion') or "-",
                     "estatus_oc": estatus_oc,
                     "dias_inventario": dias_mostrar,
                     "estatus_inv": estatus_inv,
@@ -149,10 +149,11 @@ def listar_ordenes(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito)").eq("usuario_id", user.id).order("id", desc=True).execute()
+    res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito)").eq("usuario_id", user.id).order("fecha_emision", desc=True).execute()
     
     hoy = datetime.now().date()
-    ordenes = []
+    meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    ordenes_agrupadas = {}
     
     if res.data:
         for row in res.data:
@@ -172,6 +173,7 @@ def listar_ordenes(request: Request):
             o['vencimiento_factura_str'] = ""
             o['alerta_text'] = ""
             o['alerta_color'] = "transparent"
+            o['pagada'] = o.get('pagada', False) # Obtenemos el valor de la base de datos
             
             if tiene_fecha_rec and dias_credito:
                 try:
@@ -187,14 +189,27 @@ def listar_ordenes(request: Request):
                         o['alerta_text'] = f"Por vencer ({dias_restantes}d)"
                         o['alerta_color'] = "bg-yellow-400"
                     else:
-                        o['alerta_text'] = "Al día"
+                        o['alerta_text'] = "Vigente"
                         o['alerta_color'] = "bg-green-500"
                 except ValueError:
                     pass
             
-            ordenes.append(o)
+            # Agrupación por Mes y Año
+            fecha_emision_raw = str(o.get('fecha_emision') or "").strip()
+            if fecha_emision_raw:
+                try:
+                    dt = datetime.strptime(fecha_emision_raw, "%Y-%m-%d")
+                    mes_anio = f"{meses_espanol[dt.month - 1]} {dt.year}"
+                except ValueError:
+                    mes_anio = "Fecha Inválida"
+            else:
+                mes_anio = "Sin Fecha"
+                
+            if mes_anio not in ordenes_agrupadas:
+                ordenes_agrupadas[mes_anio] = []
+            ordenes_agrupadas[mes_anio].append(o)
             
-    return templates.TemplateResponse(request, "ordenes.html", {"ordenes": ordenes})
+    return templates.TemplateResponse(request, "ordenes.html", {"ordenes_agrupadas": ordenes_agrupadas})
 
 @app.post("/ordenes/actualizar/{orden_id}")
 def actualizar_orden(
@@ -218,6 +233,18 @@ def actualizar_orden(
     }).eq("id", orden_id).eq("usuario_id", user.id).execute()
     
     return RedirectResponse(url="/ordenes", status_code=303)
+@app.post("/ordenes/pagar/{orden_id}")
+async def actualizar_pago(orden_id: int, request: Request, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return {}
+    
+    data = await request.json()
+    estado_pagada = data.get("pagada", False)
+    
+    # Actualizamos el valor en Supabase
+    supabase.table("ordenes_compra").update({"pagada": estado_pagada}).eq("id", orden_id).eq("usuario_id", user.id).execute()
+    return {"status": "ok"}
 
 @app.post("/ordenes/eliminar/{orden_id}")
 def eliminar_orden(orden_id: int, access_token: str = Cookie(None)):
@@ -258,14 +285,12 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
     contenido = await archivo_xml.read()
     try:
         arbol = ET.fromstring(contenido)
-        for prov in arbol.findall('.//proveedor'):
-            nombre = prov.findtext('nombre')
-            codigo = prov.findtext('codigo', default="")
-            contacto = prov.findtext('contacto', default="")
-            try:
-                dias_credito = int(prov.findtext('dias_credito', default="30"))
-            except ValueError:
-                dias_credito = 30
+        # Apuntamos a 'Registro', 'Descripcion' y 'Codigo' según la estructura de tu XML
+        for prov in arbol.findall('.//Registro'):
+            nombre = prov.findtext('Descripcion')
+            codigo = prov.findtext('Codigo', default="")
+            contacto = "" 
+            dias_credito = 30
             
             if nombre:
                 try:
