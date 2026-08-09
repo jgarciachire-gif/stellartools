@@ -10,7 +10,7 @@
     <!-- Módulo de subida alineado a la derecha -->
     <form action="/proveedores/importar-xml" method="POST" enctype="multipart/form-data" class="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
         <label class="text-xs font-bold text-slate-600 hidden lg:block px-2">
-            <i class="fa-solid fa-file-code text-blue-600 mr-1"></i> Importar XML
+            <i class="fa-solid fa-file-code text-blue-600 mr-1"></i> Actualizar Directorio
         </label>
         <input type="file" name="archivo_xml" accept=".xml" required class="block w-48 text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
         <button type="submit" class="bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition">
@@ -58,11 +58,25 @@
             <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <i class="fa-solid fa-id-card text-blue-600"></i> Ficha de Proveedor
             </h3>
-            <form action="/proveedores/eliminar/{{ prov_obj.id }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este proveedor?');">
-                <button type="submit" class="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-xs font-semibold transition">
-                    <i class="fa-solid fa-trash mr-1"></i> Eliminar
-                </button>
-            </form>
+            
+            <!-- CONTROLES SUPERIORES: Editar y Eliminar -->
+            <div class="flex items-center gap-2">
+                
+                <!-- Botón Editar (Envuelto en modo_vista para que se oculte al editar) -->
+                <div id="modo_vista">
+                    <button type="button" onclick="habilitarEdicion()" title="Editar Proveedor" class="w-9 h-9 flex justify-center items-center bg-slate-50 text-slate-600 hover:bg-slate-200 rounded-lg text-sm transition">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                </div>
+
+                <!-- Botón Eliminar -->
+                <form action="/proveedores/eliminar/{{ prov_obj.id }}" method="POST" onsubmit="return confirm('¿Estás seguro de eliminar este proveedor?');" class="m-0">
+                    <button type="submit" title="Eliminar Proveedor" class="w-9 h-9 flex justify-center items-center bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg text-sm transition">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </form>
+
+            </div>
         </div>
 
         <!-- INICIO FORMULARIO PROVEEDOR -->
@@ -87,13 +101,7 @@
                 </div>
             </div>
 
-            <!-- CONTROLES DE BOTONES DE EDICIÓN -->
-            <div id="modo_vista" class="pt-4 flex justify-end">
-                <button type="button" onclick="habilitarEdicion()" class="px-6 py-2 bg-amber-500 hover:bg-amber-600 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2">
-                    <i class="fa-solid fa-pen"></i> Editar
-                </button>
-            </div>
-            
+            <!-- CONTROLES DE GUARDADO (Solo visibles en modo edición) -->
             <div id="modo_edicion" class="pt-4 flex justify-end gap-3 hidden">
                 <button type="button" onclick="cancelarEdicion()" class="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-sm transition">
                     Cancelar
@@ -114,10 +122,10 @@
                 document.querySelectorAll('#form-proveedor input:not([type="hidden"])').forEach(inp => inp.disabled = true);
                 document.getElementById('modo_vista').classList.remove('hidden');
                 document.getElementById('modo_edicion').classList.add('hidden');
-                document.getElementById('form-proveedor').reset(); // Revierte los cambios no guardados
+                document.getElementById('form-proveedor').reset();
             }
         </script>        
-        </form>
+        
         {% else %}
         <div class="text-center py-24 text-slate-400">
             <i class="fa-solid fa-hand-pointer text-4xl mb-3 text-slate-300"></i>

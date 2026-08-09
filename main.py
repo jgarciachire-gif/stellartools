@@ -11,6 +11,7 @@ import xml.etree.ElementTree as ET
 import json
 from fastapi import Response, Cookie, Depends
 from supabase import create_client, Client
+from fastapi.responses import RedirectResponse
 
 SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
 SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
@@ -316,16 +317,23 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
+    # Definimos la redirección por defecto
+    redirect_url = "/proveedores"
+
     if id:
+        # Modo Edición: Actualizamos y redirigimos al ID editado
         supabase.table("proveedores").update({
             "codigo": codigo,
             "nombre": nombre,
             "dias_credito": dias_credito,
             "contacto": contacto
         }).eq("id", id).execute()
+        
+        redirect_url = f"/proveedores?select={id}"
     else:
+        # Modo Creación: Insertamos e intentamos redirigir al ID recién creado
         try:
-            supabase.table("proveedores").insert({
+            res = supabase.table("proveedores").insert({
                 "codigo": codigo,
                 "nombre": nombre,
                 "dias_credito": dias_credito,
@@ -333,9 +341,16 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
                 "dias_despacho": 3,
                 "dias_inventario": 15
             }).execute()
-        except Exception:
-            pass 
-    return RedirectResponse(url="/proveedores", status_code=303)
+            
+            # Extraemos el ID del nuevo proveedor generado por Supabase
+            if res.data and len(res.data) > 0:
+                nuevo_id = res.data[0]['id']
+                redirect_url = f"/proveedores?select={nuevo_id}"
+                
+        except Exception as e:
+            print(f"Error al guardar proveedor: {e}") 
+            
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 @app.post("/proveedores/eliminar/{prov_id}")
 def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
