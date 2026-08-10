@@ -1,20 +1,40 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="space-y-6">
-    <div class="flex justify-between items-center mb-4 relative z-10">
+    <!-- Encabezado con título, buscador unificado y menú de opciones -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-10">
         <h2 class="text-2xl font-bold text-slate-800">Diario de Órdenes de Compra</h2>
         
-        <!-- Botón Menú 3 Puntos -->
-        <div class="relative">
-            <button id="btn-menu-opciones" class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
-                <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
-            </button>
-            
-            <!-- Dropdown -->
-            <div id="dropdown-opciones" class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
-                <button id="btn-activar-seleccion" class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
-                    <i class="fa-solid fa-list-check"></i> Selección Múltiple
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <!-- Barra de búsqueda unificada con filtro de fecha integrado -->
+            <div class="relative w-full sm:w-72 md:w-80">
+                <input type="text" id="buscador-ordenes" placeholder="Buscar por OC, Proveedor o Tienda..." class="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white shadow-sm">
+                <i class="fa-solid fa-search absolute left-3.5 top-3 text-slate-400"></i>
+                
+                <!-- Icono de calendario e input oculto dentro del mismo contenedor -->
+                <div class="absolute right-3 top-2.5 flex items-center gap-1.5">
+                    <button type="button" id="btn-limpiar-fecha" class="text-slate-400 hover:text-rose-500 hidden" title="Limpiar filtro de fecha">
+                        <i class="fa-solid fa-xmark text-sm"></i>
+                    </button>
+                    <button type="button" id="btn-activar-fecha" class="text-slate-400 hover:text-blue-600 transition-colors focus:outline-none" title="Filtrar por fecha">
+                        <i class="fa-solid fa-calendar-days text-base"></i>
+                    </button>
+                    <input type="date" id="filtro-fecha" class="sr-only">
+                </div>
+            </div>
+
+            <!-- Botón Menú 3 Puntos -->
+            <div class="relative">
+                <button id="btn-menu-opciones" class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
+                    <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
                 </button>
+                
+                <!-- Dropdown -->
+                <div id="dropdown-opciones" class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                    <button id="btn-activar-seleccion" class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
+                        <i class="fa-solid fa-list-check"></i> Selección Múltiple
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -202,6 +222,88 @@ function toggleDetalles(idFila) {
     }
 }
 
+// Script de Búsqueda y Filtrado
+document.addEventListener('DOMContentLoaded', () => {
+    const buscadorOrdenes = document.getElementById('buscador-ordenes');
+    const filtroFecha = document.getElementById('filtro-fecha');
+    const btnActivarFecha = document.getElementById('btn-activar-fecha');
+    const btnLimpiarFecha = document.getElementById('btn-limpiar-fecha');
+
+    // Abrir el selector de fecha nativo al pulsar el icono del calendario
+    if (btnActivarFecha && filtroFecha) {
+        btnActivarFecha.addEventListener('click', () => {
+            if (typeof filtroFecha.showPicker === 'function') {
+                filtroFecha.showPicker();
+            } else {
+                filtroFecha.focus();
+            }
+        });
+    }
+
+    function filtrarOrdenes() {
+        const texto = buscadorOrdenes.value.toLowerCase();
+        const fecha = filtroFecha.value;
+
+        if (fecha) {
+            btnLimpiarFecha.classList.remove('hidden');
+            btnActivarFecha.classList.add('text-blue-600');
+            btnActivarFecha.classList.remove('text-slate-400');
+        } else {
+            btnLimpiarFecha.classList.add('hidden');
+            btnActivarFecha.classList.remove('text-blue-600');
+            btnActivarFecha.classList.add('text-slate-400');
+        }
+
+        const detailsElements = document.querySelectorAll('details.group');
+
+        detailsElements.forEach(details => {
+            let mostrarMes = false;
+            const rows = details.querySelectorAll('.row-orden');
+
+            rows.forEach(row => {
+                const celdas = row.querySelectorAll('td');
+                if (celdas.length < 7) return; 
+
+                const oc = celdas[2].textContent.toLowerCase();
+                const proveedor = celdas[3].textContent.toLowerCase();
+                const tienda = celdas[4].textContent.toLowerCase();
+                
+                const inputEnvio = celdas[5].querySelector('input[type="date"]');
+                const inputRecepcion = celdas[6].querySelector('input[type="date"]');
+                
+                const fechaEnvio = inputEnvio ? inputEnvio.value : '';
+                const fechaRecepcion = inputRecepcion ? inputRecepcion.value : '';
+
+                const coincideTexto = oc.includes(texto) || proveedor.includes(texto) || tienda.includes(texto);
+                const coincideFecha = fecha === "" || fechaEnvio === fecha || fechaRecepcion === fecha;
+
+                if (coincideTexto && coincideFecha) {
+                    row.style.display = '';
+                    mostrarMes = true;
+                } else {
+                    row.style.display = 'none';
+                    // Ocultar también la fila desplegable si está abierta
+                    const idOrden = row.getAttribute('data-id');
+                    const filaDetalles = document.getElementById('detalles-' + idOrden);
+                    if (filaDetalles) filaDetalles.classList.add('hidden');
+                }
+            });
+
+            // Ocultar el mes entero si no hay coincidencias dentro de él
+            details.style.display = mostrarMes ? '' : 'none';
+        });
+    }
+
+    if (buscadorOrdenes) buscadorOrdenes.addEventListener('input', filtrarOrdenes);
+    if (filtroFecha) filtroFecha.addEventListener('change', filtrarOrdenes);
+    if (btnLimpiarFecha) {
+        btnLimpiarFecha.addEventListener('click', () => {
+            filtroFecha.value = '';
+            filtrarOrdenes();
+        });
+    }
+});
+
 // Script de Control de Selección Múltiple
 document.addEventListener('DOMContentLoaded', () => {
     // Elementos de la Interfaz
@@ -274,12 +376,15 @@ document.addEventListener('DOMContentLoaded', () => {
         btnSeleccionarTodo.addEventListener('click', () => {
             todoSeleccionado = !todoSeleccionado;
             checkboxes.forEach(chk => {
-                chk.checked = todoSeleccionado;
+                // Solo seleccionar si la fila está visible (para que funcione bien con los filtros)
                 const tr = chk.closest('tr');
-                if(todoSeleccionado) {
-                    tr.classList.add('bg-blue-50/50');
-                } else {
-                    tr.classList.remove('bg-blue-50/50');
+                if (tr.style.display !== 'none') {
+                    chk.checked = todoSeleccionado;
+                    if(todoSeleccionado) {
+                        tr.classList.add('bg-blue-50/50');
+                    } else {
+                        tr.classList.remove('bg-blue-50/50');
+                    }
                 }
             });
             btnSeleccionarTodo.textContent = todoSeleccionado ? "Desmarcar Todo" : "Seleccionar Todo";
