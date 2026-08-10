@@ -254,6 +254,21 @@ def eliminar_orden(orden_id: int, access_token: str = Cookie(None)):
     supabase.table("ordenes_compra").delete().eq("id", orden_id).eq("usuario_id", user.id).execute()
     return RedirectResponse(url="/ordenes", status_code=303)
 
+@app.post("/ordenes/eliminar_masivo")
+async def eliminar_ordenes_masivo(request: Request, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return {"status": "error", "mensaje": "No autorizado"}
+    
+    data = await request.json()
+    ids = data.get("ids", [])
+    
+    if ids:
+        # Eliminar todos los IDs que coincidan y pertenezcan al usuario
+        supabase.table("ordenes_compra").delete().in_("id", ids).eq("usuario_id", user.id).execute()
+        
+    return {"status": "ok"}
+
 @app.get("/proveedores")
 def gestionar_proveedores(request: Request, buscar: str = "", select: int = None, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)

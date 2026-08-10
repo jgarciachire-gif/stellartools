@@ -1,8 +1,36 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="space-y-6">
-    <div class="flex justify-between items-center mb-4">
+    <div class="flex justify-between items-center mb-4 relative z-10">
         <h2 class="text-2xl font-bold text-slate-800">Diario de Órdenes de Compra</h2>
+        
+        <!-- Botón Menú 3 Puntos -->
+        <div class="relative">
+            <button id="btn-menu-opciones" class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
+                <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
+            </button>
+            
+            <!-- Dropdown -->
+            <div id="dropdown-opciones" class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                <button id="btn-activar-seleccion" class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-list-check"></i> Selección Múltiple
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barra de Acciones de Selección (Oculta por defecto) -->
+    <div id="barra-seleccion" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4 shadow-sm transition-all mb-4">
+        <div class="flex items-center gap-4">
+            <span id="contador-seleccion" class="font-bold text-blue-800 bg-blue-100 px-3 py-1 rounded-lg text-sm">0 seleccionados</span>
+            <button id="btn-seleccionar-todo" class="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">Seleccionar Todo</button>
+        </div>
+        <div class="flex items-center gap-3">
+            <button id="btn-cancelar-seleccion" class="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
+            <button id="btn-eliminar-seleccion" class="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-50 cursor-not-allowed transition-all shadow-sm flex items-center gap-2" disabled>
+                <i class="fa-solid fa-trash-can"></i> Eliminar
+            </button>
+        </div>
     </div>
 
     {% for mes, lista_ordenes in ordenes_agrupadas.items() %}
@@ -23,6 +51,10 @@
             <table class="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                     <tr class="border-b border-slate-200 text-xs font-bold text-slate-500 bg-white">
+                        <!-- Columna Checkbox -->
+                        <th class="col-seleccion hidden p-4 w-10 text-center">
+                            <i class="fa-solid fa-check-double text-slate-300"></i>
+                        </th>
                         <th class="p-4 w-10"></th>
                         <th class="p-4">Nº OC</th>
                         <th class="p-4">Proveedor</th>
@@ -33,12 +65,16 @@
                         <th class="p-4">Monto ($)</th>
                         <th class="p-4">Estatus</th>
                         <th class="p-4">Alerta de Pago</th>
-                        <th class="p-4 text-center">Acciones</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-sm">
                     {% for o in lista_ordenes %}
-                    <tr class="hover:bg-slate-50/80 transition-colors">
+                    <tr class="hover:bg-slate-50/80 transition-colors row-orden cursor-default" data-id="{{ o.id }}">
+                        <!-- Checkbox Oculto -->
+                        <td class="col-seleccion hidden p-4 text-center" onclick="event.stopPropagation();">
+                            <input type="checkbox" class="chk-orden w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer" value="{{ o.id }}">
+                        </td>
+                        
                         <!-- Botón desplegable y formulario oculto dentro de la primera celda -->
                         <td class="p-4 text-center">
                             <form id="form_oc_{{ o.id }}" action="/ordenes/actualizar/{{ o.id }}" method="POST" class="hidden"></form>
@@ -77,19 +113,11 @@
                                         </span>
                                     {% endif %}
                                 </div>
-                                <label class="text-[11px] text-slate-500 flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors">
+                                <label class="text-[11px] text-slate-500 flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors" onclick="event.stopPropagation();">
                                     <input type="checkbox" {{ 'checked' if o.pagada else '' }} onchange="cambiarEstadoPago(this, '{{ o.id }}', '{{ o.alerta_text }}', '{{ o.alerta_color }}')" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"> 
                                     Marcar como Pagada
                                 </label>
                             </div>
-                        </td>
-
-                        <td class="p-4 text-center">
-                            <form action="/ordenes/eliminar/{{ o.id }}" method="POST" onsubmit="return confirm('¿Deseas eliminar la orden {{ o.numero_orden }}?');">
-                                <button type="submit" class="text-slate-400 hover:text-red-600 p-2 rounded-lg hover:bg-red-50 transition-colors">
-                                    <i class="fa-solid fa-trash-can text-base"></i>
-                                </button>
-                            </form>
                         </td>
                     </tr>
 
@@ -173,5 +201,159 @@ function toggleDetalles(idFila) {
         fila.classList.toggle('hidden');
     }
 }
+
+// Script de Control de Selección Múltiple
+document.addEventListener('DOMContentLoaded', () => {
+    // Elementos de la Interfaz
+    const btnMenuOpciones = document.getElementById('btn-menu-opciones');
+    const dropdownOpciones = document.getElementById('dropdown-opciones');
+    const btnActivarSeleccion = document.getElementById('btn-activar-seleccion');
+    
+    const barraSeleccion = document.getElementById('barra-seleccion');
+    const btnCancelarSeleccion = document.getElementById('btn-cancelar-seleccion');
+    const btnSeleccionarTodo = document.getElementById('btn-seleccionar-todo');
+    const btnEliminarSeleccion = document.getElementById('btn-eliminar-seleccion');
+    const contadorSeleccion = document.getElementById('contador-seleccion');
+    
+    const colsSeleccion = document.querySelectorAll('.col-seleccion');
+    const checkboxes = document.querySelectorAll('.chk-orden');
+    const rows = document.querySelectorAll('.row-orden');
+
+    // Manejo del Menú de 3 Puntos
+    if(btnMenuOpciones) {
+        btnMenuOpciones.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdownOpciones.classList.toggle('hidden');
+        });
+    }
+
+    // Cerrar el menú al clickear fuera
+    document.addEventListener('click', () => {
+        if(dropdownOpciones) dropdownOpciones.classList.add('hidden');
+    });
+
+    // --- FUNCIONES DE SELECCIÓN ---
+    function actualizarContador() {
+        const seleccionados = document.querySelectorAll('.chk-orden:checked').length;
+        contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
+        
+        if (seleccionados > 0) {
+            btnEliminarSeleccion.disabled = false;
+            btnEliminarSeleccion.classList.remove('opacity-50', 'cursor-not-allowed');
+        } else {
+            btnEliminarSeleccion.disabled = true;
+            btnEliminarSeleccion.classList.add('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    function toggleModoSeleccion(activo) {
+        if (activo) {
+            barraSeleccion.classList.remove('hidden');
+            colsSeleccion.forEach(col => col.classList.remove('hidden'));
+            btnMenuOpciones.classList.add('hidden'); // Ocultar los 3 puntos
+            dropdownOpciones.classList.add('hidden');
+        } else {
+            barraSeleccion.classList.add('hidden');
+            colsSeleccion.forEach(col => col.classList.add('hidden'));
+            btnMenuOpciones.classList.remove('hidden'); // Mostrar los 3 puntos
+            
+            // Limpiar las selecciones al cancelar
+            checkboxes.forEach(chk => chk.checked = false);
+            rows.forEach(row => row.classList.remove('bg-blue-50/50'));
+            actualizarContador();
+        }
+    }
+
+    // Activar / Cancelar Modo de Selección
+    if(btnActivarSeleccion) btnActivarSeleccion.addEventListener('click', () => toggleModoSeleccion(true));
+    if(btnCancelarSeleccion) btnCancelarSeleccion.addEventListener('click', () => toggleModoSeleccion(false));
+
+    // Lógica del Botón Seleccionar Todo
+    let todoSeleccionado = false;
+    if(btnSeleccionarTodo) {
+        btnSeleccionarTodo.addEventListener('click', () => {
+            todoSeleccionado = !todoSeleccionado;
+            checkboxes.forEach(chk => {
+                chk.checked = todoSeleccionado;
+                const tr = chk.closest('tr');
+                if(todoSeleccionado) {
+                    tr.classList.add('bg-blue-50/50');
+                } else {
+                    tr.classList.remove('bg-blue-50/50');
+                }
+            });
+            btnSeleccionarTodo.textContent = todoSeleccionado ? "Desmarcar Todo" : "Seleccionar Todo";
+            actualizarContador();
+        });
+    }
+
+    // Facilitar la selección al hacer clic en cualquier parte de la fila
+    rows.forEach(row => {
+        row.addEventListener('click', (e) => {
+            if (!barraSeleccion.classList.contains('hidden')) {
+                // Evitar que colisione si se cliquea en botones o inputs internos
+                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                    const chk = row.querySelector('.chk-orden');
+                    if(chk) {
+                        chk.checked = !chk.checked;
+                        if (chk.checked) row.classList.add('bg-blue-50/50');
+                        else row.classList.remove('bg-blue-50/50');
+                        actualizarContador();
+                    }
+                }
+            }
+        });
+    });
+
+    // Detectar si hacen click directo sobre la cajita del checkbox
+    checkboxes.forEach(chk => {
+        chk.addEventListener('change', (e) => {
+            const tr = chk.closest('tr');
+            if (chk.checked) tr.classList.add('bg-blue-50/50');
+            else tr.classList.remove('bg-blue-50/50');
+            actualizarContador();
+        });
+    });
+
+    // --- ACCIÓN DE BORRADO EN MASA ---
+    if(btnEliminarSeleccion) {
+        btnEliminarSeleccion.addEventListener('click', async () => {
+            const seleccionados = Array.from(document.querySelectorAll('.chk-orden:checked')).map(chk => parseInt(chk.value));
+            
+            if (seleccionados.length === 0) return;
+
+            const confirmacion = confirm(`¿Estás seguro de que deseas eliminar ${seleccionados.length} orden(es) de forma permanente?`);
+            
+            if (confirmacion) {
+                btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+                btnEliminarSeleccion.disabled = true;
+
+                try {
+                    const response = await fetch('/ordenes/eliminar_masivo', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ ids: seleccionados })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.status === 'ok') {
+                        window.location.reload(); // Recargamos para ver la lista ya filtrada
+                    } else {
+                        alert("Ocurrió un error al eliminar: " + (data.mensaje || "Desconocido"));
+                        btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
+                        btnEliminarSeleccion.disabled = false;
+                    }
+                } catch (error) {
+                    alert("Fallo de conexión al enviar la petición.");
+                    btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
+                    btnEliminarSeleccion.disabled = false;
+                }
+            }
+        });
+    }
+});
 </script>
 {% endblock %}
