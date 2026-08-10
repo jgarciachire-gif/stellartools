@@ -1,84 +1,194 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-3xl mx-auto space-y-6">
+<div class="max-w-4xl mx-auto space-y-6">
 
+    <!-- Tarjeta del Formulario de Subida Múltiple -->
     <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h2 class="text-xl font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <i class="fa-solid fa-file-pdf text-red-500"></i> Escanear Orden de Compra (PDF)
+        <h2 class="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-pdf text-red-500"></i> Escanear Órdenes de Compra (PDF)
         </h2>
-        <!-- Formulario de Subida -->
-        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" class="flex gap-4">
-            <input type="file" name="archivo_pdf" accept=".pdf" required class="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-            <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shrink-0">
-                Procesar PDF
+        <p class="text-xs text-slate-500 mb-4">
+            Puedes seleccionar uno o varios archivos PDF simultáneamente para procesarlos en lote.
+        </p>
+
+        <!-- Formulario con soporte para múltiples archivos -->
+        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row gap-4">
+            <input type="file" name="archivos_pdf" accept=".pdf" multiple required class="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+            <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shrink-0 flex items-center justify-center gap-2">
+                <i class="fa-solid fa-bolt"></i> Procesar PDF(s)
             </button>
         </form>
     </div>
 
-    {% if datos %}
-    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-6">
-        
-        <!-- ENCABEZADO DE DATOS EXTRAÍDOS -->
-        <div class="border-b border-slate-100 pb-4 flex justify-between items-center">
-            <div>
-                <h3 class="text-lg font-bold text-slate-800">Datos Extraídos Exitosamente</h3>
-                <p class="text-xs text-slate-500">Verifica la información antes de guardar en el diario.</p>
-            </div>
-            <!-- Muestra de Fecha Extraída -->
-            <div class="bg-slate-100 px-4 py-2 rounded-xl text-right">
-                <span class="block text-xs text-slate-500 font-medium">Fecha de Emisión</span>
-                <span class="text-sm font-bold text-slate-800">{{ datos.fecha_emision or 'No detectada' }}</span>
-            </div>
+    <!-- Resultados del Procesamiento -->
+    {% if lista_datos %}
+    <div class="space-y-4">
+        <div class="flex items-center justify-between px-1">
+            <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-list-check text-blue-600"></i>
+                Órdenes Procesadas ({{ lista_datos|length }})
+            </h3>
+            
+            <!-- Botón de Guardar Todo -->
+            <button type="button" id="btn-guardar-todo" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2.5 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm">
+                <i class="fa-solid fa-layer-group"></i> Guardar Todo
+            </button>
         </div>
 
-        <form action="/ordenes/crear" method="POST" class="space-y-5">
-            <!-- Campos Ocultos Extraídos -->
-            <input type="hidden" name="numero_orden" value="{{ datos.numero_orden }}">
-            <input type="hidden" name="proveedor" value="{{ datos.proveedor }}">
-            <input type="hidden" name="tienda_destino" value="{{ datos.tienda_destino }}">
-            <input type="hidden" name="monto_total" value="{{ datos.monto_total }}">
-            <input type="hidden" name="fecha_emision" value="{{ datos.fecha_emision }}">
-            <input type="hidden" name="fecha_envio" value="{{ datos.fecha_envio }}">
-            <input type="hidden" name="productos_json" value="{{ datos.productos | tojson | forceescape }}">
+        {% for datos in lista_datos %}
+        <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-5 transition-opacity duration-300 tarjeta-oc">
             
-            <!-- RESUMEN VISUAL DE LA OC -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100 text-sm">
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Nº Orden</span>
-                    <strong class="text-slate-800">{{ datos.numero_orden }}</strong>
+            <div class="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-2">
+                <div class="flex items-center gap-2">
+                    <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-lg">
+                        <i class="fa-solid fa-file-pdf mr-1"></i> {{ datos.nombre_archivo }}
+                    </span>
                 </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Proveedor</span>
-                    <strong class="text-blue-600">{{ datos.proveedor }}</strong>
-                </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Tienda Destino</span>
-                    <strong class="text-slate-800">{{ datos.tienda_destino }}</strong>
-                </div>
-                <div>
-                    <span class="text-xs text-slate-400 block font-medium">Monto Total</span>
-                    <strong class="text-slate-900">${{ "%.2f"|format(datos.monto_total or 0) }}</strong>
+                <div class="text-right">
+                    <span class="text-xs text-slate-400 font-medium">Fecha Emisión:</span>
+                    <span class="text-xs font-bold text-slate-700 ml-1">{{ datos.fecha_emision or 'No detectada' }}</span>
                 </div>
             </div>
 
-            <!-- CAMPO DÍAS DE INVENTARIO (SEPARADO Y DESTACADO) -->
-            <div class="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-2">
-                <label for="dias_inventario" class="block text-sm font-bold text-blue-900">
-                    Días de Inventario Estimados
-                </label>
-                <p class="text-xs text-blue-700">Número de días proyectados de stock para esta compra (base para alertas de reposición).</p>
-                <input type="number" id="dias_inventario" name="dias_inventario" min="1" value="15" required class="w-full md:w-48 bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs">
-            </div>
+            <!-- Identificador de la clase "orden-form" para el JS -->
+            <form action="/ordenes/crear" method="POST" class="space-y-4 orden-form">
+                <!-- Parámetro oculto para avisar al backend que use AJAX -->
+                <input type="hidden" name="ajax" value="true">
+                <input type="hidden" name="productos_json" value="[]">
 
-            <!-- BOTÓN DE GUARDAR INDEPENDIENTE -->
-            <div class="pt-2 flex justify-end">
-                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-8 py-3 rounded-xl shadow-sm transition-all flex items-center gap-2">
-                    <i class="fa-solid fa-floppy-disk"></i> Guardar
-                </button>
-            </div>
-        </form>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nº Orden</label>
+                        <input type="text" name="numero_orden" value="{{ datos.numero_orden }}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Proveedor</label>
+                        <input type="text" name="proveedor" value="{{ datos.proveedor }}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tienda Destino</label>
+                        <input type="text" name="tienda_destino" value="{{ datos.tienda_destino }}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Monto Total ($)</label>
+                        <input type="number" step="0.01" name="monto_total" value="{{ datos.monto_total or 0.0 }}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha Emisión / Envío</label>
+                        <input type="date" name="fecha_emision" value="{{ datos.fecha_emision }}" required class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <input type="hidden" name="fecha_envio" value="{{ datos.fecha_envio }}">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-blue-900 uppercase mb-1">Días Inventario</label>
+                        <input type="number" name="dias_inventario" min="1" value="15" required class="w-full px-3 py-2 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <div class="pt-2 flex justify-end">
+                    <!-- Clase especial btn-guardar-individual -->
+                    <button type="submit" class="btn-guardar-individual bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm">
+                        <i class="fa-solid fa-floppy-disk"></i> Guardar en Diario
+                    </button>
+                </div>
+            </form>
+        </div>
+        {% endfor %}
     </div>
     {% endif %}
 
 </div>
+
+<!-- SCRIPT PARA GUARDADO ASÍNCRONO (AJAX) -->
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const forms = document.querySelectorAll('.orden-form');
+    const btnGuardarTodo = document.getElementById('btn-guardar-todo');
+
+    // Función principal que envía 1 solo formulario
+    async function guardarOrden(form) {
+        const btnSubmit = form.querySelector('.btn-guardar-individual');
+        const formData = new FormData(form);
+        const tarjeta = form.closest('.tarjeta-oc');
+
+        try {
+            // Cambiar estado del botón mientras carga
+            btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+            btnSubmit.disabled = true;
+
+            const response = await fetch('/ordenes/crear', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'ok') {
+                // Éxito: Desactivar la tarjeta visualmente para no volver a editar
+                btnSubmit.innerHTML = '<i class="fa-solid fa-check"></i> Guardado';
+                btnSubmit.classList.replace('bg-emerald-600', 'bg-slate-400');
+                btnSubmit.classList.replace('hover:bg-emerald-700', 'hover:bg-slate-500');
+                
+                // Deshabilitar toda la tarjeta para evitar doble envío
+                tarjeta.classList.add('opacity-50', 'pointer-events-none');
+                form.classList.add('guardado-exito'); 
+                return true;
+            } else {
+                // Error (ej: Orden Duplicada)
+                alert('Atención: ' + data.mensaje);
+                btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Diario';
+                btnSubmit.disabled = false;
+                return false;
+            }
+        } catch (error) {
+            alert('Error de conexión al guardar.');
+            btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Diario';
+            btnSubmit.disabled = false;
+            return false;
+        }
+    }
+
+    // Comportamiento al presionar el botón de "Guardar en Diario" (Individual)
+    forms.forEach(form => {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault(); // Evita que la pantalla parpadee o recargue
+            await guardarOrden(form);
+        });
+    });
+
+    // Comportamiento al presionar el botón de "Guardar Todo"
+    if (btnGuardarTodo) {
+        btnGuardarTodo.addEventListener('click', async () => {
+            btnGuardarTodo.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando Todo...';
+            btnGuardarTodo.disabled = true;
+
+            let todosExitosos = true;
+            
+            // Recorre todas las órdenes y las envía si aún no se han guardado
+            for (const form of forms) {
+                if (!form.classList.contains('guardado-exito')) {
+                    const exito = await guardarOrden(form);
+                    if (!exito) {
+                        todosExitosos = false;
+                    }
+                }
+            }
+
+            // Si todo salió bien, te envía de vuelta a tu diario general luego de 1.5 seg
+            if (todosExitosos) {
+                btnGuardarTodo.innerHTML = '<i class="fa-solid fa-check-double"></i> Todo Listo';
+                btnGuardarTodo.classList.replace('bg-blue-600', 'bg-emerald-600');
+                btnGuardarTodo.classList.replace('hover:bg-blue-700', 'hover:bg-emerald-700');
+                
+                setTimeout(() => {
+                    window.location.href = '/ordenes';
+                }, 1500);
+            } else {
+                btnGuardarTodo.innerHTML = '<i class="fa-solid fa-layer-group"></i> Guardar Todo';
+                btnGuardarTodo.disabled = false;
+                alert('Hubo problemas guardando algunas órdenes. Revisa los mensajes.');
+            }
+        });
+    }
+});
+</script>
 {% endblock %}

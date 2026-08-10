@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException
+from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Response, Cookie, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from typing import List
 import pandas as pd
 from datetime import datetime, timedelta, date
 from pdf_processor import extraer_datos_oc
@@ -9,9 +10,7 @@ import os
 import io
 import xml.etree.ElementTree as ET
 import json
-from fastapi import Response, Cookie, Depends
 from supabase import create_client, Client
-from fastapi.responses import RedirectResponse
 
 SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
 SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
@@ -64,7 +63,6 @@ def cerrar_sesion():
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie("access_token")
     return response
-
 
 # Configuración de plantillas
 templates = Jinja2Templates(directory="templates")
@@ -175,7 +173,7 @@ def listar_ordenes(request: Request):
             o['vencimiento_factura_str'] = ""
             o['alerta_text'] = ""
             o['alerta_color'] = "transparent"
-            o['pagada'] = o.get('pagada', False) # Obtenemos el valor de la base de datos
+            o['pagada'] = o.get('pagada', False)
             
             if tiene_fecha_rec and dias_credito:
                 try:
@@ -196,7 +194,6 @@ def listar_ordenes(request: Request):
                 except ValueError:
                     pass
             
-            # Agrupación por Mes y Año
             fecha_agrupar_raw = str(o.get('fecha_envio') or "").strip()
             if fecha_agrupar_raw and fecha_agrupar_raw.lower() not in ['none', 'nan', 'nat', 'null']:
                 try:
@@ -235,6 +232,7 @@ def actualizar_orden(
     }).eq("id", orden_id).eq("usuario_id", user.id).execute()
     
     return RedirectResponse(url="/ordenes", status_code=303)
+
 @app.post("/ordenes/pagar/{orden_id}")
 async def actualizar_pago(orden_id: int, request: Request, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
@@ -244,7 +242,6 @@ async def actualizar_pago(orden_id: int, request: Request, access_token: str = C
     data = await request.json()
     estado_pagada = data.get("pagada", False)
     
-    # Actualizamos el valor en Supabase
     supabase.table("ordenes_compra").update({"pagada": estado_pagada}).eq("id", orden_id).eq("usuario_id", user.id).execute()
     return {"status": "ok"}
 
@@ -287,7 +284,6 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
     contenido = await archivo_xml.read()
     try:
         arbol = ET.fromstring(contenido)
-        # Apuntamos a 'Registro', 'Descripcion' y 'Codigo' según la estructura de tu XML
         for prov in arbol.findall('.//Registro'):
             nombre = prov.findtext('Descripcion')
             codigo = prov.findtext('Codigo', default="")
@@ -317,11 +313,9 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Definimos la redirección por defecto
     redirect_url = "/proveedores"
 
     if id:
-        # Modo Edición: Actualizamos y redirigimos al ID editado
         supabase.table("proveedores").update({
             "codigo": codigo,
             "nombre": nombre,
@@ -331,7 +325,6 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
         
         redirect_url = f"/proveedores?select={id}"
     else:
-        # Modo Creación: Insertamos e intentamos redirigir al ID recién creado
         try:
             res = supabase.table("proveedores").insert({
                 "codigo": codigo,
@@ -342,7 +335,6 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
                 "dias_inventario": 15
             }).execute()
             
-            # Extraemos el ID del nuevo proveedor generado por Supabase
             if res.data and len(res.data) > 0:
                 nuevo_id = res.data[0]['id']
                 redirect_url = f"/proveedores?select={nuevo_id}"
@@ -369,31 +361,44 @@ def vista_escanear(request: Request, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse(request, "escanear.html", {"datos": None})
+    return templates.TemplateResponse(request, "escanear.html", {"lista_datos": None})
 
 @app.post("/escanear/procesar")
-async def procesar_pdf(request: Request, archivo_pdf: UploadFile = File(...), access_token: str = Cookie(None)):
+async def procesar_pdf(
+    request: Request, 
+    archivos_pdf: List[UploadFile] = File(...), 
+    access_token: str = Cookie(None)
+):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    contenido_bytes = await archivo_pdf.read()
-    pdf_en_memoria = io.BytesIO(contenido_bytes)
-    datos_extraidos = extraer_datos_oc(pdf_en_memoria)
-    
-    if not datos_extraidos:
-        datos_extraidos = {
-            "numero_orden": "",
-            "proveedor": "",
-            "tienda_destino": "",
-            "fecha_emision": "",
-            "monto_total": 0.0
-        }
-    
+    lista_datos = []
+    for archivo in archivos_pdf:
+        if not archivo.filename:
+            continue
+        contenido_bytes = await archivo.read()
+        pdf_en_memoria = io.BytesIO(contenido_bytes)
+        datos_extraidos = extraer_datos_oc(pdf_en_memoria)
+        
+        if not datos_extraidos:
+            datos_extraidos = {
+                "numero_orden": "",
+                "proveedor": "",
+                "tienda_destino": "",
+                "fecha_emision": "",
+                "fecha_envio": "",
+                "monto_total": 0.0
+            }
+        
+        datos_extraidos["nombre_archivo"] = archivo.filename
+        lista_datos.append(datos_extraidos)
+
     return templates.TemplateResponse(request, "escanear.html", {
-        "datos": datos_extraidos
+        "lista_datos": lista_datos
     })
 
+# --- ESTA FUNCIÓN SE MODIFICÓ PARA SOPORTAR AJAX ---
 @app.post("/ordenes/crear")
 def crear_orden_manual(
     numero_orden: str = Form(...),
@@ -402,16 +407,21 @@ def crear_orden_manual(
     monto_total: float = Form(0.0),
     fecha_emision: str = Form(...),
     dias_inventario: int = Form(...),
-    fecha_envio: str = Form(""),       # <-- Nuevo
-    productos_json: str = Form("[]"),  # <-- Nuevo
+    fecha_envio: str = Form(""),
+    productos_json: str = Form("[]"),
+    ajax: bool = Form(False), # Variable que permite saber si viene de 'Guardar Todo' o guardado rápido
     access_token: str = Cookie(None)
 ):
     user = obtener_usuario_actual(access_token)
     if not user:
+        if ajax: return {"status": "error", "mensaje": "No autorizado"}
         return RedirectResponse(url="/login", status_code=303)
 
+    # Revisar si la OC ya existe
     res_existe = supabase.table("ordenes_compra").select("id").eq("numero_orden", numero_orden).eq("usuario_id", user.id).execute()
     if res_existe.data and len(res_existe.data) > 0:
+        if ajax:
+            return {"status": "error", "mensaje": f"La Orden N° {numero_orden} ya está registrada."}
         alerta_js = f"<script>alert('Cuidado: La Orden de Compra N° {numero_orden} ya fue registrada.'); window.history.back();</script>"
         return HTMLResponse(content=alerta_js)
 
@@ -453,7 +463,9 @@ def crear_orden_manual(
                     "precio_unitario": p.get("precio_unitario")
                 }).execute()
         except Exception:
-            pass # Ignorar si la cadena JSON falla
+            pass
             
+    if ajax:
+        return {"status": "ok", "mensaje": "Orden guardada con éxito"}
+        
     return RedirectResponse(url="/ordenes", status_code=303)
-    

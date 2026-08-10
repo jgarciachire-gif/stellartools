@@ -8,8 +8,7 @@ def extraer_datos_oc(pdf_file):
         "tienda_destino": "",
         "monto_total": 0.0,
         "fecha_emision": "",
-        "fecha_envio": "",
-        "productos": []
+        "fecha_envio": ""
     }
 
     try:
@@ -39,12 +38,8 @@ def extraer_datos_oc(pdf_file):
                     line_text = " ".join(w['text'] for w in sorted_words)
                     lines_data.append({'top': r['top'], 'text': line_text, 'words': sorted_words})
 
-                producto_pendiente = None
-
                 for idx, ld in enumerate(lines_data):
                     txt_upper = ld['text'].upper()
-                    txt = ld['text']
-                    palabras_limpias = [w['text'] for w in ld['words'] if w['text'] not in ['|', '-']]
 
                     # --- 1. NÚMERO DE ORDEN ---
                     if not datos_extraidos["numero_orden"]:
@@ -92,58 +87,6 @@ def extraer_datos_oc(pdf_file):
                                 datos_extraidos["monto_total"] = float(m_tot.group(1).replace(',', ''))
                             except ValueError:
                                 pass
-
-                    # --- 6. EXTRACCIÓN DE PRODUCTOS MULTIPÁGINA ---
-                    if not palabras_limpias:
-                        continue
-
-                    # Si hay un producto en espera, esta línea contiene estrictamente los números del producto
-                    if producto_pendiente:
-                        numeros_linea = []
-                        for t in palabras_limpias:
-                            try:
-                                numeros_linea.append(float(t.replace(',', '')))
-                            except ValueError:
-                                pass
-                        
-                        if len(numeros_linea) >= 2:
-                            # Formato: PRE. | EMP. | UNI. (Cantidad) | COSTO UNI. | SUBTOTAL
-                            producto_pendiente["cantidad"] = numeros_linea[-3] if len(numeros_linea) >= 3 else numeros_linea[0]
-                            producto_pendiente["precio_unitario"] = numeros_linea[-2] if len(numeros_linea) >= 2 else numeros_linea[-1]
-                            datos_extraidos["productos"].append(producto_pendiente)
-                        
-                        producto_pendiente = None
-                        continue
-
-                    first_word = palabras_limpias[0]
-                    if first_word.isdigit() and len(first_word) <= 2 and len(palabras_limpias) > 1:
-                        first_word = palabras_limpias[1]
-                        palabras_limpias = palabras_limpias[1:]
-
-                    # Identificar código de producto estándar de Stellar (ej: 000117)[cite: 34, 38]
-                    if re.match(r'^\d{4,6}$', first_word) and first_word.upper() not in ["0000", "TOTAL", "SUBTOTAL"]:
-                        codigo = first_word
-                        desc_words = []
-                        for t in palabras_limpias[1:]:
-                            try:
-                                float(t.replace(',', ''))
-                                break
-                            except ValueError:
-                                desc_words.append(t)
-                        
-                        descripcion = " ".join(desc_words).strip()
-                        if not descripcion and '|' in txt:
-                            partes = [p.strip() for p in txt.split('|') if p.strip()]
-                            if len(partes) >= 2:
-                                descripcion = partes[1]
-
-                        # Guardar temporalmente para que la siguiente iteración procese sus números
-                        producto_pendiente = {
-                            "codigo": codigo,
-                            "descripcion": descripcion,
-                            "cantidad": 0.0,
-                            "precio_unitario": 0.0
-                        }
 
     except Exception as e:
         print(f"Error al procesar el PDF: {e}")
