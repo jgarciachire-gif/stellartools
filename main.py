@@ -211,14 +211,17 @@ def listar_ordenes(request: Request):
     return templates.TemplateResponse(request, "ordenes.html", {"ordenes_agrupadas": ordenes_agrupadas})
 
 @app.post("/ordenes/actualizar/{orden_id}")
-def actualizar_orden(
+async def actualizar_orden(
     orden_id: int, 
+    request: Request,
     fecha_envio: str = Form(None), 
     fecha_recepcion: str = Form(None),
     access_token: str = Cookie(None)
 ):
     user = obtener_usuario_actual(access_token)
     if not user:
+        if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
+            return Response(status_code=401)
         return RedirectResponse(url="/login", status_code=303)
 
     f_rec = fecha_recepcion if fecha_recepcion else None
@@ -231,6 +234,10 @@ def actualizar_orden(
         "fecha_recepcion": f_rec
     }).eq("id", orden_id).eq("usuario_id", user.id).execute()
     
+    # Respuesta asíncrona para evitar recargar la página y mantener el filtro activo
+    if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
+        return {"status": "ok", "estatus": estatus}
+
     return RedirectResponse(url="/ordenes", status_code=303)
 
 @app.post("/ordenes/pagar/{orden_id}")
@@ -264,7 +271,6 @@ async def eliminar_ordenes_masivo(request: Request, access_token: str = Cookie(N
     ids = data.get("ids", [])
     
     if ids:
-        # Eliminar todos los IDs que coincidan y pertenezcan al usuario
         supabase.table("ordenes_compra").delete().in_("id", ids).eq("usuario_id", user.id).execute()
         
     return {"status": "ok"}
@@ -323,7 +329,15 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
         return HTMLResponse("<script>alert('Error: El archivo XML no tiene un formato válido.'); window.location.href='/proveedores';</script>")
 
 @app.post("/proveedores/guardar")
-def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str = Form(...), dias_credito: int = Form(30), contacto: str = Form(""), access_token: str = Cookie(None)):
+def guardar_proveedor(
+    id: int = Form(None), 
+    codigo: str = Form(""), 
+    nombre: str = Form(...), 
+    dias_credito: int = Form(30), 
+    dias_despacho: int = Form(3), 
+    contacto: str = Form(""), 
+    access_token: str = Cookie(None)
+):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
@@ -335,6 +349,7 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
             "codigo": codigo,
             "nombre": nombre,
             "dias_credito": dias_credito,
+            "dias_despacho": dias_despacho,
             "contacto": contacto
         }).eq("id", id).execute()
         
@@ -345,8 +360,8 @@ def guardar_proveedor(id: int = Form(None), codigo: str = Form(""), nombre: str 
                 "codigo": codigo,
                 "nombre": nombre,
                 "dias_credito": dias_credito,
+                "dias_despacho": dias_despacho,
                 "contacto": contacto,
-                "dias_despacho": 3,
                 "dias_inventario": 15
             }).execute()
             
@@ -406,6 +421,18 @@ async def procesar_pdf(
                 "monto_total": 0.0
             }
         
+        # Buscar la Frecuencia de Despacho registrada del proveedor en Supabase
+        prov_nombre = (datos_extraidos.get("proveedor") or "").strip()
+        frecuencia_sugerida = 15
+        if prov_nombre:
+            try:
+                res_p = supabase.table("proveedores").select("dias_despacho").ilike("nombre", prov_nombre).execute()
+                if res_p.data and len(res_p.data) > 0 and res_p.data[0].get("dias_despacho") is not None:
+                    frecuencia_sugerida = res_p.data[0]["dias_despacho"]
+            except Exception:
+                pass
+
+        datos_extraidos["dias_despacho"] = frecuencia_sugerida
         datos_extraidos["nombre_archivo"] = archivo.filename
         lista_datos.append(datos_extraidos)
 
@@ -413,7 +440,6 @@ async def procesar_pdf(
         "lista_datos": lista_datos
     })
 
-# --- ESTA FUNCIÓN SE MODIFICÓ PARA SOPORTAR AJAX ---
 @app.post("/ordenes/crear")
 def crear_orden_manual(
     numero_orden: str = Form(...),
@@ -424,7 +450,7 @@ def crear_orden_manual(
     dias_inventario: int = Form(...),
     fecha_envio: str = Form(""),
     productos_json: str = Form("[]"),
-    ajax: bool = Form(False), # Variable que permite saber si viene de 'Guardar Todo' o guardado rápido
+    ajax: bool = Form(False),
     access_token: str = Cookie(None)
 ):
     user = obtener_usuario_actual(access_token)
@@ -432,7 +458,6 @@ def crear_orden_manual(
         if ajax: return {"status": "error", "mensaje": "No autorizado"}
         return RedirectResponse(url="/login", status_code=303)
 
-    # Revisar si la OC ya existe
     res_existe = supabase.table("ordenes_compra").select("id").eq("numero_orden", numero_orden).eq("usuario_id", user.id).execute()
     if res_existe.data and len(res_existe.data) > 0:
         if ajax:

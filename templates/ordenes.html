@@ -11,7 +11,6 @@
                 <input type="text" id="buscador-ordenes" placeholder="Buscar por OC, Proveedor o Tienda..." class="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white shadow-sm">
                 <i class="fa-solid fa-search absolute left-3.5 top-3 text-slate-400"></i>
                 
-                <!-- Icono de calendario e input oculto dentro del mismo contenedor -->
                 <div class="absolute right-3 top-2.5 flex items-center gap-1.5">
                     <button type="button" id="btn-limpiar-fecha" class="text-slate-400 hover:text-rose-500 hidden" title="Limpiar filtro de fecha">
                         <i class="fa-solid fa-xmark text-sm"></i>
@@ -29,7 +28,6 @@
                     <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
                 </button>
                 
-                <!-- Dropdown -->
                 <div id="dropdown-opciones" class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
                     <button id="btn-activar-seleccion" class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
                         <i class="fa-solid fa-list-check"></i> Selección Múltiple
@@ -39,7 +37,7 @@
         </div>
     </div>
 
-    <!-- Barra de Acciones de Selección (Oculta por defecto) -->
+    <!-- Barra de Acciones de Selección -->
     <div id="barra-seleccion" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4 shadow-sm transition-all mb-4">
         <div class="flex items-center gap-4">
             <span id="contador-seleccion" class="font-bold text-blue-800 bg-blue-100 px-3 py-1 rounded-lg text-sm">0 seleccionados</span>
@@ -55,7 +53,6 @@
 
     {% for mes, lista_ordenes in ordenes_agrupadas.items() %}
     <details class="group bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-4" open>
-        <!-- Encabezado del Mes -->
         <summary class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
             <div class="flex items-center gap-3">
                 <i class="fa-solid fa-chevron-right text-sm text-slate-400 group-open:rotate-90 transition-transform"></i>
@@ -66,16 +63,13 @@
             </div>
         </summary>
 
-        <!-- Tabla de Órdenes -->
         <div class="overflow-x-auto border-t border-slate-100">
             <table class="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
                     <tr class="border-b border-slate-200 text-xs font-bold text-slate-500 bg-white">
-                        <!-- Columna Checkbox -->
                         <th class="col-seleccion hidden p-4 w-10 text-center">
                             <i class="fa-solid fa-check-double text-slate-300"></i>
                         </th>
-                        <th class="p-4 w-10"></th>
                         <th class="p-4">Nº OC</th>
                         <th class="p-4">Proveedor</th>
                         <th class="p-4">Tienda Destino</th>
@@ -90,35 +84,27 @@
                 <tbody class="divide-y divide-slate-100 text-sm">
                     {% for o in lista_ordenes %}
                     <tr class="hover:bg-slate-50/80 transition-colors row-orden cursor-default" data-id="{{ o.id }}">
-                        <!-- Checkbox Oculto -->
                         <td class="col-seleccion hidden p-4 text-center" onclick="event.stopPropagation();">
                             <input type="checkbox" class="chk-orden w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer" value="{{ o.id }}">
                         </td>
                         
-                        <!-- Botón desplegable y formulario oculto dentro de la primera celda -->
-                        <td class="p-4 text-center">
-                            <form id="form_oc_{{ o.id }}" action="/ordenes/actualizar/{{ o.id }}" method="POST" class="hidden"></form>
-                            <button type="button" onclick="toggleDetalles('detalles-{{ o.id }}')" class="text-slate-400 hover:text-blue-600 transition-colors w-6 h-6 flex justify-center items-center rounded bg-slate-100 hover:bg-blue-100">
-                                <i class="fa-solid fa-chevron-down text-xs"></i>
-                            </button>
-                        </td>                  
                         <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
                         <td class="p-4 font-medium text-blue-700">{{ o.proveedor }}</td>
                         <td class="p-4 font-medium text-slate-700">{{ o.tienda_destino }}</td>
                         
                         <td class="p-4">
-                            <input type="date" name="fecha_envio" form="form_oc_{{ o.id }}" value="{{ o.fecha_envio or '' }}" onchange="document.getElementById('form_oc_{{ o.id }}').submit()" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
+                            <input type="date" name="fecha_envio" value="{{ o.fecha_envio or '' }}" onchange="actualizarFechasAsync('{{ o.id }}')" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
                         </td>
                         
                         <td class="p-4">
-                            <input type="date" name="fecha_recepcion" form="form_oc_{{ o.id }}" value="{{ o.fecha_recepcion or '' }}" onchange="document.getElementById('form_oc_{{ o.id }}').submit()" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
+                            <input type="date" name="fecha_recepcion" value="{{ o.fecha_recepcion or '' }}" onchange="actualizarFechasAsync('{{ o.id }}')" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
                         </td>
                         
                         <td class="p-4 font-semibold text-slate-800">{{ o.vencimiento_factura_str }}</td>
                         <td class="p-4 font-bold text-slate-900">${{ "%.2f"|format(o.monto_total or 0) }}</td>
                         
                         <td class="p-4">
-                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
+                            <span class="badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
                                 {{ o.estatus }}
                             </span>
                         </td>
@@ -140,39 +126,6 @@
                             </div>
                         </td>
                     </tr>
-
-                    <!-- FILA DESPLEGABLE DE PRODUCTOS -->
-                    <tr id="detalles-{{ o.id }}" class="hidden bg-slate-50 border-b border-slate-200">
-                        <td colspan="11" class="p-0">
-                            <div class="px-14 py-4">
-                                <h4 class="text-xs font-bold text-slate-500 uppercase mb-2">Detalle de Productos Extraídos</h4>
-                                {% if o.detalles_productos %}
-                                <table class="w-full text-xs text-left bg-white border border-slate-200 rounded-lg overflow-hidden shadow-sm">
-                                    <thead class="bg-slate-100 text-slate-600">
-                                        <tr>
-                                            <th class="px-4 py-2 font-semibold">Código</th>
-                                            <th class="px-4 py-2 font-semibold">Descripción</th>
-                                            <th class="px-4 py-2 font-semibold text-center">Cant.</th>
-                                            <th class="px-4 py-2 font-semibold text-right">Costo Unit.</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-slate-100">
-                                        {% for p in o.detalles_productos %}
-                                        <tr class="hover:bg-slate-50">
-                                            <td class="px-4 py-2 text-slate-600 font-mono">{{ p.codigo }}</td>
-                                            <td class="px-4 py-2 font-medium text-slate-800">{{ p.descripcion }}</td>
-                                            <td class="px-4 py-2 text-center text-slate-700">{{ p.cantidad }}</td>
-                                            <td class="px-4 py-2 text-right font-semibold text-slate-900">${{ "%.2f"|format(p.precio_unitario or 0) }}</td>
-                                        </tr>
-                                        {% endfor %}
-                                    </tbody>
-                                </table>
-                                {% else %}
-                                <p class="text-xs text-slate-500 italic">No se extrajeron detalles de productos para esta orden.</p>
-                                {% endif %}
-                            </div>
-                        </td>
-                    </tr>
                     {% endfor %}
                 </tbody>
             </table>
@@ -186,24 +139,61 @@
 </div>
 
 <script>
-// Función asíncrona para guardar el estado en la base de datos sin recargar la página
+// Función para actualizar la fecha de recepción / envío asíncronamente sin recargar la página ni perder el filtro
+async function actualizarFechasAsync(ordenId) {
+    const tr = document.querySelector(`tr[data-id="${ordenId}"]`);
+    if (!tr) return;
+    
+    const inputEnvio = tr.querySelector('input[name="fecha_envio"]');
+    const inputRecepcion = tr.querySelector('input[name="fecha_recepcion"]');
+    
+    const formData = new FormData();
+    formData.append('fecha_envio', inputEnvio ? inputEnvio.value : '');
+    formData.append('fecha_recepcion', inputRecepcion ? inputRecepcion.value : '');
+
+    try {
+        const response = await fetch(`/ordenes/actualizar/${ordenId}`, {
+            method: 'POST',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Accept': 'application/json'
+            },
+            body: formData
+        });
+
+        const data = await response.json();
+        if (data.status === 'ok') {
+            const badge = tr.querySelector('.badge-estatus');
+            if (badge) {
+                badge.textContent = data.estatus;
+                if (data.estatus === 'Recibido') {
+                    badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800';
+                } else {
+                    badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800';
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Error al actualizar la fecha:", error);
+    }
+}
+
+// Función asíncrona para guardar el estado de pago
 async function cambiarEstadoPago(checkbox, idOrden, textoOriginal, colorOriginal) {
     const textoEstado = document.getElementById('texto-estado-' + idOrden);
     const puntoColor = document.getElementById('punto-' + idOrden);
     const isChecked = checkbox.checked;
     
-    // 1. Cambiamos la apariencia de inmediato
     if (isChecked) {
         textoEstado.textContent = "Pagada";
-        textoEstado.style.color = "#16a34a"; // Verde
+        textoEstado.style.color = "#16a34a";
         puntoColor.className = "w-2.5 h-2.5 rounded-full bg-green-500";
     } else {
         textoEstado.textContent = textoOriginal;
-        textoEstado.style.color = ""; // Color por defecto
+        textoEstado.style.color = "";
         puntoColor.className = "w-2.5 h-2.5 rounded-full " + colorOriginal;
     }
 
-    // 2. Enviamos el dato al servidor silenciosamente
     try {
         await fetch(`/ordenes/pagar/${idOrden}`, {
             method: 'POST',
@@ -215,13 +205,6 @@ async function cambiarEstadoPago(checkbox, idOrden, textoOriginal, colorOriginal
     }
 }
 
-function toggleDetalles(idFila) {
-    const fila = document.getElementById(idFila);
-    if (fila) {
-        fila.classList.toggle('hidden');
-    }
-}
-
 // Script de Búsqueda y Filtrado
 document.addEventListener('DOMContentLoaded', () => {
     const buscadorOrdenes = document.getElementById('buscador-ordenes');
@@ -229,7 +212,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const btnActivarFecha = document.getElementById('btn-activar-fecha');
     const btnLimpiarFecha = document.getElementById('btn-limpiar-fecha');
 
-    // Abrir el selector de fecha nativo al pulsar el icono del calendario
     if (btnActivarFecha && filtroFecha) {
         btnActivarFecha.addEventListener('click', () => {
             if (typeof filtroFecha.showPicker === 'function') {
@@ -262,14 +244,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
             rows.forEach(row => {
                 const celdas = row.querySelectorAll('td');
-                if (celdas.length < 7) return; 
+                if (celdas.length < 6) return; 
 
-                const oc = celdas[2].textContent.toLowerCase();
-                const proveedor = celdas[3].textContent.toLowerCase();
-                const tienda = celdas[4].textContent.toLowerCase();
+                const oc = celdas[1].textContent.toLowerCase();
+                const proveedor = celdas[2].textContent.toLowerCase();
+                const tienda = celdas[3].textContent.toLowerCase();
                 
-                const inputEnvio = celdas[5].querySelector('input[type="date"]');
-                const inputRecepcion = celdas[6].querySelector('input[type="date"]');
+                const inputEnvio = celdas[4].querySelector('input[type="date"]');
+                const inputRecepcion = celdas[5].querySelector('input[type="date"]');
                 
                 const fechaEnvio = inputEnvio ? inputEnvio.value : '';
                 const fechaRecepcion = inputRecepcion ? inputRecepcion.value : '';
@@ -282,14 +264,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     mostrarMes = true;
                 } else {
                     row.style.display = 'none';
-                    // Ocultar también la fila desplegable si está abierta
-                    const idOrden = row.getAttribute('data-id');
-                    const filaDetalles = document.getElementById('detalles-' + idOrden);
-                    if (filaDetalles) filaDetalles.classList.add('hidden');
                 }
             });
 
-            // Ocultar el mes entero si no hay coincidencias dentro de él
             details.style.display = mostrarMes ? '' : 'none';
         });
     }
@@ -306,7 +283,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 // Script de Control de Selección Múltiple
 document.addEventListener('DOMContentLoaded', () => {
-    // Elementos de la Interfaz
     const btnMenuOpciones = document.getElementById('btn-menu-opciones');
     const dropdownOpciones = document.getElementById('dropdown-opciones');
     const btnActivarSeleccion = document.getElementById('btn-activar-seleccion');
@@ -321,7 +297,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const checkboxes = document.querySelectorAll('.chk-orden');
     const rows = document.querySelectorAll('.row-orden');
 
-    // Manejo del Menú de 3 Puntos
     if(btnMenuOpciones) {
         btnMenuOpciones.addEventListener('click', (e) => {
             e.stopPropagation();
@@ -329,12 +304,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Cerrar el menú al clickear fuera
     document.addEventListener('click', () => {
         if(dropdownOpciones) dropdownOpciones.classList.add('hidden');
     });
 
-    // --- FUNCIONES DE SELECCIÓN ---
     function actualizarContador() {
         const seleccionados = document.querySelectorAll('.chk-orden:checked').length;
         contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
@@ -352,31 +325,27 @@ document.addEventListener('DOMContentLoaded', () => {
         if (activo) {
             barraSeleccion.classList.remove('hidden');
             colsSeleccion.forEach(col => col.classList.remove('hidden'));
-            btnMenuOpciones.classList.add('hidden'); // Ocultar los 3 puntos
+            btnMenuOpciones.classList.add('hidden');
             dropdownOpciones.classList.add('hidden');
         } else {
             barraSeleccion.classList.add('hidden');
             colsSeleccion.forEach(col => col.classList.add('hidden'));
-            btnMenuOpciones.classList.remove('hidden'); // Mostrar los 3 puntos
+            btnMenuOpciones.classList.remove('hidden');
             
-            // Limpiar las selecciones al cancelar
             checkboxes.forEach(chk => chk.checked = false);
             rows.forEach(row => row.classList.remove('bg-blue-50/50'));
             actualizarContador();
         }
     }
 
-    // Activar / Cancelar Modo de Selección
     if(btnActivarSeleccion) btnActivarSeleccion.addEventListener('click', () => toggleModoSeleccion(true));
     if(btnCancelarSeleccion) btnCancelarSeleccion.addEventListener('click', () => toggleModoSeleccion(false));
 
-    // Lógica del Botón Seleccionar Todo
     let todoSeleccionado = false;
     if(btnSeleccionarTodo) {
         btnSeleccionarTodo.addEventListener('click', () => {
             todoSeleccionado = !todoSeleccionado;
             checkboxes.forEach(chk => {
-                // Solo seleccionar si la fila está visible (para que funcione bien con los filtros)
                 const tr = chk.closest('tr');
                 if (tr.style.display !== 'none') {
                     chk.checked = todoSeleccionado;
@@ -392,11 +361,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Facilitar la selección al hacer clic en cualquier parte de la fila
     rows.forEach(row => {
         row.addEventListener('click', (e) => {
             if (!barraSeleccion.classList.contains('hidden')) {
-                // Evitar que colisione si se cliquea en botones o inputs internos
                 if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
                     const chk = row.querySelector('.chk-orden');
                     if(chk) {
@@ -410,9 +377,8 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // Detectar si hacen click directo sobre la cajita del checkbox
     checkboxes.forEach(chk => {
-        chk.addEventListener('change', (e) => {
+        chk.addEventListener('change', () => {
             const tr = chk.closest('tr');
             if (chk.checked) tr.classList.add('bg-blue-50/50');
             else tr.classList.remove('bg-blue-50/50');
@@ -420,7 +386,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // --- ACCIÓN DE BORRADO EN MASA ---
     if(btnEliminarSeleccion) {
         btnEliminarSeleccion.addEventListener('click', async () => {
             const seleccionados = Array.from(document.querySelectorAll('.chk-orden:checked')).map(chk => parseInt(chk.value));
@@ -436,16 +401,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 try {
                     const response = await fetch('/ordenes/eliminar_masivo', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ ids: seleccionados })
                     });
                     
                     const data = await response.json();
                     
                     if (data.status === 'ok') {
-                        window.location.reload(); // Recargamos para ver la lista ya filtrada
+                        window.location.reload();
                     } else {
                         alert("Ocurrió un error al eliminar: " + (data.mensaje || "Desconocido"));
                         btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
