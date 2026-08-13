@@ -12,11 +12,40 @@
             Selecciona uno o varios archivos PDF para extraer datos de las órdenes.
         </p>
 
-        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
-            <input type="file" name="archivos_pdf" accept=".pdf" multiple required class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-            <button type="submit" class="bg-blue-600 text-white font-semibold px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors text-sm flex items-center justify-center gap-2">
-                <i class="fa-solid fa-bolt"></i> Procesar PDF(s)
+        <!-- Formulario con indicador de carga dinámico para PDF -->
+        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" id="form-pdf" onsubmit="mostrarCargandoPDF(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Seleccionar archivo(s) PDF de Órdenes</label>
+                <input type="file" name="archivos_pdf" accept=".pdf" multiple required class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1"/>
+            </div>
+
+            <!-- Botón con loader integrado -->
+            <button type="submit" id="btn-procesar-pdf" class="w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200">
+                <span id="btn-texto-pdf">Procesar PDF(s)</span>
+                <!-- Spinner SVG oculto por defecto -->
+                <svg id="btn-spinner-pdf" class="hidden animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
             </button>
+        </form>
+
+        <script>
+        function mostrarCargandoPDF(e) {
+            const btn = document.getElementById('btn-procesar-pdf');
+            const texto = document.getElementById('btn-texto-pdf');
+            const spinner = document.getElementById('btn-spinner-pdf');
+
+            // Cambiar estado visual del botón durante la carga de PDFs
+            texto.innerText = "Procesando archivo(s) PDF...";
+            spinner.classList.remove('hidden');
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            btn.disabled = true;
+            
+            // Permitir el envío del formulario
+            e.target.submit();
+        }
+        </script>
         </form>
     </div>
 
@@ -67,10 +96,10 @@ function mostrarCargandoXML(e) {
 
 </div>
 
-    <!-- Resultados del Procesamiento -->
+    
     {% if lista_datos %}
-    <div class="space-y-4">
-        <div class="flex items-center justify-between px-1">
+    <div class="space-y-4 mt-6"> 
+        <div class="flex items-center justify-between px-1 pt-4"> 
             <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
                 <i class="fa-solid fa-list-check text-blue-600"></i>
                 Órdenes Procesadas ({{ lista_datos|length }})
