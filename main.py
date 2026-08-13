@@ -11,6 +11,7 @@ import io
 import xml.etree.ElementTree as ET
 import json
 from supabase import create_client, Client
+import traceback
 
 SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
 SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
@@ -505,6 +506,7 @@ def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
 
 @app.post("/recepciones/procesar-xml")
 async def procesar_recepciones_xml(
+    request: Request,
     archivo_xml: UploadFile = File(...), 
     access_token: str = Cookie(None)
 ):
@@ -516,61 +518,92 @@ async def procesar_recepciones_xml(
     contenido = await archivo_xml.read()
     
     try:
-        arbol = ET.fromstring(contenido) # Parsear contenido del XML enviado
-        actualizados = 0
-        no_encontrados = 0
+        arbol = ET.fromstring(contenido) # Parsear XML
+        procesados_exito = [] # Lista de diccionarios procesados
+        no_encontrados = []   # Lista de strings
 
-        # Obtener todos los nodos de registro de compras
         registros = arbol.findall('.//Registro')
         if not registros:
             registros = arbol.findall('.//*')
 
         for reg in registros:
-            # Extraer número de orden de compra
             nro_oc_raw = (reg.findtext('Nro_OrdenDeCompra') or reg.findtext('nro_ordendecompra') or "").strip()
-            
-            # Buscar el tag FechaREC dentro del subnodo <Detalles>
             fechas_nodos = reg.findall('.//FechaREC') or reg.findall('.//fecharec')
             fecha_rec_raw = (fechas_nodos[-1].text or "").strip() if fechas_nodos else ""
 
-            # Eliminar ceros a la izquierda para emparejar formatos (ej. 000006497 -> 6497)
-            nro_oc_limpio = nro_oc_raw.lstrip('0')
+            nro_oc_limpio = str(nro_oc_raw.lstrip('0'))
 
             if nro_oc_limpio and fecha_rec_raw:
-                # Normalizar fecha en formato ISO YYYY-MM-DD para la base de datos Supabase
-                fecha_formateada = fecha_rec_raw
+                # Normalizar fecha YYYY-MM-DD
+                fecha_formateada = str(fecha_rec_raw)
+                dia, mes, anio = "", "", ""
                 if "/" in fecha_rec_raw:
                     partes = fecha_rec_raw.split("/")
                     if len(partes) == 3:
-                        dia = partes[0].zfill(2)   # Asegura 2 dígitos (ej: 7 -> 07)
-                        mes = partes[1].zfill(2)   # Asegura 2 dígitos (ej: 8 -> 08)
+                        dia = partes[0].zfill(2)
+                        mes = partes[1].zfill(2)
                         anio = partes[2] if len(partes[2]) == 4 else f"20{partes[2]}"
                         fecha_formateada = f"{anio}-{mes}-{dia}"
 
-                # Consultar la orden correspondiente en Supabase
-                res_oc = supabase.table("ordenes_compra").select("id").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
+                # Consultar en Supabase
+                res_oc = supabase.table("ordenes_compra").select("id, numero_orden, proveedor").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
 
                 if res_oc.data and len(res_oc.data) > 0:
-                    orden_id = res_oc.data[0]["id"]
-                    # Inyectar fecha de recepción y cambiar estatus a 'Recibido'
+                    orden = res_oc.data[0]
+                    orden_id = orden["id"]
+                    num_orden_str = str(orden.get("numero_orden", ""))
+                    prov_str = str(orden.get("proveedor", "N/A"))
+
+                    # Actualizar fecha de recepción y estatus en Supabase
                     supabase.table("ordenes_compra").update({
                         "fecha_recepcion": fecha_formateada,
                         "estatus": "Recibido"
                     }).eq("id", orden_id).execute()
-                    actualizados += 1
+                    
+                    # Formato de presentación para la tabla
+                    fecha_mostrar = f"{dia}/{mes}/{anio}" if (dia and mes and anio) else fecha_formateada
+
+                    # Insertar un diccionario estricto con valores de cadena
+                    procesados_exito.append({
+                        "numero_orden": num_orden_str,
+                        "proveedor": prov_str,
+                        "fecha_recepcion": str(fecha_mostrar)
+                    })
                 else:
-                    no_encontrados += 1
+                    no_encontrados.append(nro_oc_limpio)
 
-        mensaje = f"Proceso finalizado. {actualizados} ordenes actualizadas a estatus Recibido."
-        if no_encontrados > 0:
-            mensaje += f" {no_encontrados} ordenes no fueron localizadas."
+        contexto = {
+            "request": request,
+            "procesados": procesados_exito,
+            "no_encontrados": no_encontrados,
+            "total_procesados": int(len(procesados_exito)),
+            "total_no_encontrados": int(len(no_encontrados))
+        }
 
-        return script_alerta_error(mensaje, redireccionar="/ordenes")
+        
+        # Retornar vista HTML indicando explicitamente el nombre de la plantilla y el contexto
+        return templates.TemplateResponse(
+            request,
+            "resumen_xml.html",
+            {
+                "procesados": procesados_exito,
+                "no_encontrados": no_encontrados,
+                "total_procesados": len(procesados_exito),
+                "total_no_encontrados": len(no_encontrados)
+            }
+        )
 
     except ET.ParseError:
         return script_alerta_error("El archivo XML subido no tiene un formato correcto.", redireccionar="/escanear")
     except Exception as e:
-        return script_alerta_error(f"Error procesando el archivo XML: {str(e)}", redireccionar="/escanear")
+        # Captura y muestra el error detallado en la terminal de VS Code
+        error_trace = traceback.format_exc()
+        print("\n" + "="*40)
+        print("⚠️ ERROR EXACTO PROCESANDO XML:")
+        print(error_trace)
+        print("="*40 + "\n")
+        
+        return script_alerta_error("Error interno. Revisa la terminal de VS Code para ver la línea exacta.", redireccionar="/escanear")
     
 @app.get("/escanear")
 def vista_escanear(request: Request, access_token: str = Cookie(None)):
