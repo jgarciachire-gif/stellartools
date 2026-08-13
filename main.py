@@ -534,16 +534,33 @@ async def procesar_recepciones_xml(
             nro_oc_limpio = str(nro_oc_raw.lstrip('0'))
 
             if nro_oc_limpio and fecha_rec_raw:
-                # Normalizar fecha YYYY-MM-DD
-                fecha_formateada = str(fecha_rec_raw)
+                import re  # Importación rápida para saneamiento de texto
+                
+                # Normalizar fecha YYYY-MM-DD limpiando textos extraños como horas o sufijos
+                fecha_formateada = None
                 dia, mes, anio = "", "", ""
-                if "/" in fecha_rec_raw:
-                    partes = fecha_rec_raw.split("/")
-                    if len(partes) == 3:
-                        dia = partes[0].zfill(2)
-                        mes = partes[1].zfill(2)
-                        anio = partes[2] if len(partes[2]) == 4 else f"20{partes[2]}"
+                
+                # Busca un patrón tipo DD/MM/YYYY o DD/MM/YY al inicio de la cadena
+                coincidencia = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', str(fecha_rec_raw))
+                if coincidencia:
+                    dia = coincidencia.group(1).zfill(2)
+                    mes = coincidencia.group(2).zfill(2)
+                    anio_raw = coincidencia.group(3)
+                    anio = anio_raw if len(anio_raw) == 4 else f"20{anio_raw}"
+                    fecha_formateada = f"{anio}-{mes}-{dia}"
+                else:
+                    # Si no viene con barras, intenta extraer el formato YYYY-MM-DD
+                    coincidencia_iso = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', str(fecha_rec_raw))
+                    if coincidencia_iso:
+                        anio = coincidencia_iso.group(1)
+                        mes = coincidencia_iso.group(2).zfill(2)
+                        dia = coincidencia_iso.group(3).zfill(2)
                         fecha_formateada = f"{anio}-{mes}-{dia}"
+
+                # Si no se pudo sanitizar una fecha válida, se omite este registro para evitar romper la BD
+                if not fecha_formateada:
+                    no_encontrados.append(nro_oc_limpio)
+                    continue
 
                 # Consultar en Supabase
                 res_oc = supabase.table("ordenes_compra").select("id, numero_orden, proveedor").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
