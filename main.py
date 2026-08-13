@@ -27,6 +27,15 @@ def obtener_usuario_actual(access_token: str = Cookie(None)):
     except Exception:
         return None
 
+def script_alerta_error(mensaje: str, redireccionar: str = None) -> HTMLResponse:
+    
+    msj_limpio = mensaje.replace("'", "\\'").replace("\n", " ")
+    if redireccionar:
+        js = f"<script>alert('{msj_limpio}'); window.location.href='{redireccionar}';</script>"
+    else:
+        js = f"<script>alert('{msj_limpio}'); window.history.back();</script>"
+    return HTMLResponse(content=js)
+
 @app.get("/login")
 def vista_login(request: Request):
     token = request.cookies.get("access_token")
@@ -37,14 +46,18 @@ def vista_login(request: Request):
 @app.post("/registro")
 def procesar_registro(email: str = Form(...), password: str = Form(...)):
     try:
+        
         supabase.auth.sign_up({"email": email, "password": password})
-        return HTMLResponse("<script>alert('¡Registro exitoso! Ya puedes iniciar sesión con tu correo.'); window.location.href='/login';</script>")
+        
+        return script_alerta_error("¡Registro exitoso! Ya puedes iniciar sesión con tu correo.", redireccionar="/login")
     except Exception as e:
-        return HTMLResponse(f"<script>alert('Error al registrar: {str(e)}'); window.history.back();</script>")
+        
+        return script_alerta_error(f"Error al registrar: {str(e)}")
 
 @app.post("/login")
 def procesar_login(email: str = Form(...), password: str = Form(...)):
     try:
+        # Autentica al usuario contra Supabase
         auth_res = supabase.auth.sign_in_with_password({"email": email, "password": password})
         
         response = RedirectResponse(url="/", status_code=303)
@@ -56,7 +69,8 @@ def procesar_login(email: str = Form(...), password: str = Form(...)):
         )
         return response
     except Exception as e:
-        return HTMLResponse(f"<script>alert('Credenciales incorrectas o error en el servidor.'); window.history.back();</script>")
+        # Sanitiza la alerta en caso de credenciales incorrectas o fallo de conexión
+        return script_alerta_error("Credenciales incorrectas o error en el servidor.")
 
 @app.get("/logout")
 def cerrar_sesion():
@@ -327,6 +341,106 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
         return RedirectResponse(url="/proveedores", status_code=303)
     except ET.ParseError:
         return HTMLResponse("<script>alert('Error: El archivo XML no tiene un formato válido.'); window.location.href='/proveedores';</script>")
+# --- MÓDULO DE PERFIL DE COMPRADOR Y CATEGORÍAS ---
+
+@app.get("/perfil")
+def vista_perfil(request: Request, access_token: str = Cookie(None)):
+    # Valida la sesión activa del usuario
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Consulta el perfil usando el método .maybe_single() para evitar errores si no existe el registro
+    res_perfil = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+    perfil = res_perfil.data if res_perfil and res_perfil.data else {"nombre_comprador": "", "cargo": ""}
+
+    # Consulta las categorías asignadas
+    res_cats = supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
+    categorias = res_cats.data if res_cats and res_cats.data else []
+
+    return templates.TemplateResponse(request, "perfil.html", {
+        "user": user,
+        "perfil": perfil,
+        "categorias": categorias
+    })
+
+@app.post("/perfil/guardar")
+def guardar_perfil(
+    nombre_comprador: str = Form(""),
+    cargo: str = Form(""),
+    access_token: str = Cookie(None)
+):
+    # Valida la sesión
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Verifica si el perfil ya existe para actualizarlo o crearlo
+    res = supabase.table("perfiles").select("id").eq("usuario_id", user.id).execute()
+    
+    if res.data:
+        supabase.table("perfiles").update({
+            "nombre_comprador": nombre_comprador,
+            "cargo": cargo
+        }).eq("usuario_id", user.id).execute()
+    else:
+        supabase.table("perfiles").insert({
+            "usuario_id": user.id,
+            "nombre_comprador": nombre_comprador,
+            "cargo": cargo
+        }).execute()
+
+    return RedirectResponse(url="/perfil", status_code=303)
+@app.post("/perfil/cambiar-clave")
+def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(None)):
+    # Valida la sesión activa del usuario
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    try:
+        # Actualiza la clave del usuario autenticado directamente en Supabase Auth
+        supabase.auth.update_user({"password": nueva_password})
+        return script_alerta_error("¡Contraseña actualizada con éxito!", redireccionar="/perfil")
+    except Exception as e:
+        return script_alerta_error(f"Error al cambiar contraseña: {str(e)}")
+    
+@app.post("/perfil/categorias/crear")
+def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(None)):
+    # Valida la sesión
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Inserta nueva etiqueta si el nombre no está vacío
+    if nombre.strip():
+        supabase.table("categorias").insert({
+            "usuario_id": user.id,
+            "nombre": nombre.strip()
+        }).execute()
+
+    return RedirectResponse(url="/perfil", status_code=303)
+@app.post("/perfil/categorias/actualizar/{cat_id}") # Ruta POST para modificar una categoría específica
+def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_token: str = Cookie(None)): # Recibe ID de la categoría y nuevo nombre
+    user = obtener_usuario_actual(access_token) # Verifica la sesión del usuario
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    if nombre.strip(): # Valida que el texto no esté vacío
+        supabase.table("categorias").update({"nombre": nombre.strip()}).eq("id", cat_id).eq("usuario_id", user.id).execute() # Actualiza el nombre asegurando propiedad del usuario
+
+    return RedirectResponse(url="/perfil", status_code=303) # Redirige de vuelta a la vista de perfil
+
+@app.post("/perfil/categorias/eliminar/{cat_id}")
+def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
+    # Valida la sesión y restringe eliminación solo a registros propios
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    supabase.table("categorias").delete().eq("id", cat_id).eq("usuario_id", user.id).execute()
+
+    return RedirectResponse(url="/perfil", status_code=303)
 
 @app.post("/proveedores/guardar")
 def guardar_proveedor(
