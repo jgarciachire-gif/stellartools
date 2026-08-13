@@ -596,14 +596,11 @@ async def procesar_recepciones_xml(
     except ET.ParseError:
         return script_alerta_error("El archivo XML subido no tiene un formato correcto.", redireccionar="/escanear")
     except Exception as e:
-        # Captura y muestra el error detallado en la terminal de VS Code
-        error_trace = traceback.format_exc()
-        print("\n" + "="*40)
-        print("⚠️ ERROR EXACTO PROCESANDO XML:")
-        print(error_trace)
-        print("="*40 + "\n")
+        # Extrae la última línea del error para mostrarla directamente en el alert
+        error_msg = str(e).replace("'", "").replace('"', '').replace("\n", " ")
+        print(f"⚠️ ERROR XML VERCEL: {traceback.format_exc()}")
         
-        return script_alerta_error("Error interno. Revisa la terminal de VS Code para ver la línea exacta.", redireccionar="/escanear")
+        return script_alerta_error(f"Error procesando XML en servidor: {error_msg}", redireccionar="/escanear")
     
 @app.get("/escanear")
 def vista_escanear(request: Request, access_token: str = Cookie(None)):
