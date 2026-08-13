@@ -1,23 +1,43 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="max-w-4xl mx-auto space-y-6">
 
-    <!-- Tarjeta del Formulario de Subida Múltiple -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Tarjeta 1: Cargar Órdenes de Compra (PDF) -->
     <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-        <h2 class="text-xl font-bold text-slate-800 mb-2 flex items-center gap-2">
-            <i class="fa-solid fa-file-pdf text-red-500"></i> Escanear Órdenes de Compra (PDF)
+        <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF) <!-- Título actualizado -->
         </h2>
         <p class="text-xs text-slate-500 mb-4">
-            Puedes seleccionar uno o varios archivos PDF simultáneamente para procesarlos en lote.
+            Selecciona uno o varios archivos PDF para extraer datos de las órdenes.
         </p>
 
-        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" class="flex flex-col sm:flex-row gap-4">
-            <input type="file" name="archivos_pdf" accept=".pdf" multiple required class="block w-full text-sm text-slate-500 file:mr-4 file:py-2.5 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-            <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2.5 rounded-xl hover:bg-blue-700 transition-colors shrink-0 flex items-center justify-center gap-2">
+        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
+            <input type="file" name="archivos_pdf" accept=".pdf" multiple required class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+            <button type="submit" class="bg-blue-600 text-white font-semibold px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors text-sm flex items-center justify-center gap-2">
                 <i class="fa-solid fa-bolt"></i> Procesar PDF(s)
             </button>
         </form>
     </div>
+
+    <!-- Tarjeta 2: Cargar Recepciones (XML) -->
+    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML) <!-- Nuevo módulo XML -->
+        </h2>
+        <p class="text-xs text-slate-500 mb-4">
+            Subir archivo XML con datos de recepción para actualizar la FechaREC en las órdenes.
+        </p>
+
+        <form action="/recepciones/procesar-xml" method="POST" enctype="multipart/form-data" class="flex flex-col gap-3">
+            <input type="file" name="archivo_xml" accept=".xml" required class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-emerald-50 file:text-emerald-700 hover:file:bg-emerald-100 cursor-pointer">
+            <button type="submit" class="bg-emerald-600 text-white font-semibold px-4 py-2 rounded-xl hover:bg-emerald-700 transition-colors text-sm flex items-center justify-center gap-2">
+                <i class="fa-solid fa-arrows-rotate"></i> Actualizar Recepciones
+            </button>
+        </form>
+    </div>
+
+</div>
 
     <!-- Resultados del Procesamiento -->
     {% if lista_datos %}

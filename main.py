@@ -119,6 +119,7 @@ def dashboard(request: Request):
                 if tiene_fecha_rec:
                     try:
                         f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
+                        f_rec_str = f_rec.strftime("%d/%m/%Y") # Formato dd/mm/aaaa para la vista
                         fecha_agotamiento = f_rec + timedelta(days=dias_inv_totales)
                         dias_restantes = (fecha_agotamiento - hoy).days
                         
@@ -135,17 +136,19 @@ def dashboard(request: Request):
                             color_inv = "text-emerald-700 bg-emerald-100"
                             dias_mostrar = f"Quedan {dias_restantes}d"
                     except ValueError:
+                        f_rec_str = f_rec_raw
                         estatus_inv = "Error de Fecha"
                         color_inv = "text-slate-600 bg-slate-100"
                         dias_mostrar = f"{dias_inv_totales} totales"
                 else:
+                    f_rec_str = "-"
                     estatus_inv = "Esperando Recepción"
                     color_inv = "text-blue-700 bg-blue-100"
                     dias_mostrar = "Sin iniciar"
 
                 proveedores_desglose[prov][tienda] = {
                     "ultima_oc": row.get('numero_orden'),
-                    "fecha_recepcion": row.get('fecha_recepcion') or "-",
+                    "fecha_recepcion": f_rec_str, # Asigna la fecha formateada dd/mm/aaaa
                     "estatus_oc": estatus_oc,
                     "dias_inventario": dias_mostrar,
                     "estatus_inv": estatus_inv,
@@ -500,6 +503,75 @@ def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
         pass
     return RedirectResponse(url="/proveedores", status_code=303)
 
+@app.post("/recepciones/procesar-xml")
+async def procesar_recepciones_xml(
+    archivo_xml: UploadFile = File(...), 
+    access_token: str = Cookie(None)
+):
+    # Validar sesión activa del usuario
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    contenido = await archivo_xml.read()
+    
+    try:
+        arbol = ET.fromstring(contenido) # Parsear contenido del XML enviado
+        actualizados = 0
+        no_encontrados = 0
+
+        # Obtener todos los nodos de registro de compras
+        registros = arbol.findall('.//Registro')
+        if not registros:
+            registros = arbol.findall('.//*')
+
+        for reg in registros:
+            # Extraer número de orden de compra
+            nro_oc_raw = (reg.findtext('Nro_OrdenDeCompra') or reg.findtext('nro_ordendecompra') or "").strip()
+            
+            # Buscar el tag FechaREC dentro del subnodo <Detalles>
+            fechas_nodos = reg.findall('.//FechaREC') or reg.findall('.//fecharec')
+            fecha_rec_raw = (fechas_nodos[-1].text or "").strip() if fechas_nodos else ""
+
+            # Eliminar ceros a la izquierda para emparejar formatos (ej. 000006497 -> 6497)
+            nro_oc_limpio = nro_oc_raw.lstrip('0')
+
+            if nro_oc_limpio and fecha_rec_raw:
+                # Normalizar fecha en formato ISO YYYY-MM-DD para la base de datos Supabase
+                fecha_formateada = fecha_rec_raw
+                if "/" in fecha_rec_raw:
+                    partes = fecha_rec_raw.split("/")
+                    if len(partes) == 3:
+                        dia = partes[0].zfill(2)   # Asegura 2 dígitos (ej: 7 -> 07)
+                        mes = partes[1].zfill(2)   # Asegura 2 dígitos (ej: 8 -> 08)
+                        anio = partes[2] if len(partes[2]) == 4 else f"20{partes[2]}"
+                        fecha_formateada = f"{anio}-{mes}-{dia}"
+
+                # Consultar la orden correspondiente en Supabase
+                res_oc = supabase.table("ordenes_compra").select("id").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
+
+                if res_oc.data and len(res_oc.data) > 0:
+                    orden_id = res_oc.data[0]["id"]
+                    # Inyectar fecha de recepción y cambiar estatus a 'Recibido'
+                    supabase.table("ordenes_compra").update({
+                        "fecha_recepcion": fecha_formateada,
+                        "estatus": "Recibido"
+                    }).eq("id", orden_id).execute()
+                    actualizados += 1
+                else:
+                    no_encontrados += 1
+
+        mensaje = f"Proceso finalizado. {actualizados} ordenes actualizadas a estatus Recibido."
+        if no_encontrados > 0:
+            mensaje += f" {no_encontrados} ordenes no fueron localizadas."
+
+        return script_alerta_error(mensaje, redireccionar="/ordenes")
+
+    except ET.ParseError:
+        return script_alerta_error("El archivo XML subido no tiene un formato correcto.", redireccionar="/escanear")
+    except Exception as e:
+        return script_alerta_error(f"Error procesando el archivo XML: {str(e)}", redireccionar="/escanear")
+    
 @app.get("/escanear")
 def vista_escanear(request: Request, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
