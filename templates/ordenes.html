@@ -423,7 +423,7 @@
             buscadorOrdenes.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter' && buscadorOrdenes.value.trim() !== '') {
                     e.preventDefault();
-                    agregarEtiqueta('texto', buscadorOrdenes.value.trim());
+                    agregarEtiqueta('Buscar', buscadorOrdenes.value.trim());
                     buscadorOrdenes.value = '';
                 } else if (e.key === 'Backspace' && buscadorOrdenes.value === '' && etiquetasFiltro.length > 0) {
                     removerEtiqueta(etiquetasFiltro.length - 1);

@@ -1,26 +1,69 @@
 {% extends "base.html" %}
 {% block content %}
 <style>
-    .tabla-dashboard { table-layout: fixed; width: 100%; border-collapse: collapse; }
-    .tabla-dashboard th, .tabla-dashboard td { width: 16.66%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tabla-dashboard {
+        table-layout: fixed;
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .tabla-dashboard th,
+    .tabla-dashboard td {
+        width: 16.66%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
 </style>
 <div class="space-y-6">
 
-    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <!-- Encabezado con título y buscador unificado estilo Odoo -->
+    <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-10">
         <h2 class="text-2xl font-bold text-slate-800">Dashboard General</h2>
-        
-        <!-- NUEVO: Controles de búsqueda y filtrado -->
-        <div class="flex gap-2 w-full md:w-auto">
-            <div class="relative w-full md:w-64">
-                <input type="text" id="busqueda_dashboard" onkeyup="filtrarDashboard()" placeholder="Buscar proveedor o tienda..." class="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                <i class="fa-solid fa-search absolute left-3.5 top-3 text-slate-400"></i>
+
+        <div class="flex items-center gap-3 w-full sm:w-auto">
+            <!-- Contenedor del Buscador Estilo Odoo (Badges + Input) -->
+            <div class="relative w-full sm:w-80 md:w-96">
+                <div id="contenedor-buscador"
+                    class="w-full pl-9 pr-12 py-1.5 border border-slate-300 rounded-xl bg-white shadow-sm flex flex-wrap items-center gap-1.5 min-h-[42px] focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all cursor-text">
+                    <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
+
+                    <!-- Renderizado dinámico de badges/etiquetas -->
+                    <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
+
+                    <input type="text" id="busqueda_dashboard" placeholder="Buscar por Proveedor, Tienda..."
+                        class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
+                </div>
+
+                <!-- Botón de Menú de Filtros por Estatus de Inventario -->
+                <div class="absolute right-2 top-2 flex items-center gap-1">
+                    <div class="relative">
+                        <button type="button" id="btn-menu-estatus"
+                            class="p-1 text-slate-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-slate-100"
+                            title="Filtrar por estatus de inventario">
+                            <i class="fa-solid fa-filter text-xs"></i>
+                        </button>
+
+                        <div id="dropdown-estatus"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 text-xs">
+                            <div class="px-3 py-1 font-bold text-slate-400 uppercase tracking-wider text-[10px]">Estatus
+                                Inventario</div>
+                            <button type="button" onclick="agregarEtiqueta('estatus', 'Stock OK')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Stock OK
+                            </button>
+                            <button type="button" onclick="agregarEtiqueta('estatus', 'Próximo a Agotar')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Próximo a Agotar
+                            </button>
+                            <button type="button" onclick="agregarEtiqueta('estatus', 'Reponer inventario')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-rose-500"></span> Reponer inventario
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <select id="filtro_estatus" onchange="filtrarDashboard()" class="px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white">
-                <option value="Todos">Todos</option>
-                <option value="Stock OK">Stock OK</option>
-                <option value="Próximo a Agotar">Próximo a Agotar</option>
-                <option value="Reponer inventario">Reponer inventario</option>
-            </select>
         </div>
     </div>
 
@@ -35,9 +78,11 @@
         <div class="divide-y divide-slate-100" id="contenedor_proveedores">
             {% for prov_nombre, tiendas in proveedores_desglose.items() %}
             <details class="group prov-group" data-prov="{{ prov_nombre }}">
-                <summary class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
+                <summary
+                    class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
                     <div class="flex items-center gap-3">
-                        <i class="fa-solid fa-chevron-right text-xs text-slate-400 group-open:rotate-90 transition-transform"></i>
+                        <i
+                            class="fa-solid fa-chevron-right text-xs text-slate-400 group-open:rotate-90 transition-transform"></i>
                         <span class="font-bold text-blue-900 text-base">{{ prov_nombre }}</span>
                     </div>
                 </summary>
@@ -55,13 +100,19 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100 font-medium">
                             {% for tienda_nombre, t_info in tiendas.items() %}
-                            <tr class="hover:bg-slate-50 tienda-row" data-tienda="{{ tienda_nombre }}" data-estatus-inv="{{ t_info.estatus_inv }}">
+                            <tr class="hover:bg-slate-50 tienda-row" data-tienda="{{ tienda_nombre }}"
+                                data-estatus-inv="{{ t_info.estatus_inv }}">
                                 <td class="py-3 px-3 font-bold text-slate-800">{{ tienda_nombre }}</td>
                                 <td class="py-3 px-3 text-slate-700">{{ t_info.ultima_oc }}</td>
                                 <td class="py-3 px-3 text-slate-600">{{ t_info.fecha_recepcion }}</td>
-                                <td class="py-3 px-3"><span class="px-2 py-0.5 rounded font-semibold {{ 'bg-emerald-100 text-emerald-800' if t_info.estatus_oc == 'Recibido' else 'bg-blue-100 text-blue-800' }}">{{ t_info.estatus_oc }}</span></td>
-                                <td class="py-3 px-3 text-center font-bold text-slate-800">{{ t_info.dias_inventario }}</td>
-                                <td class="py-3 px-3"><span class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">{{ t_info.estatus_inv }}</span></td>
+                                <td class="py-3 px-3"><span
+                                        class="px-2 py-0.5 rounded font-semibold {{ 'bg-emerald-100 text-emerald-800' if t_info.estatus_oc == 'Recibido' else 'bg-blue-100 text-blue-800' }}">{{
+                                        t_info.estatus_oc }}</span></td>
+                                <td class="py-3 px-3 text-center font-bold text-slate-800">{{ t_info.dias_inventario }}
+                                </td>
+                                <td class="py-3 px-3"><span
+                                        class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">{{
+                                        t_info.estatus_inv }}</span></td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -76,30 +127,131 @@
 </div>
 
 <script>
-function filtrarDashboard() {
-    const texto = document.getElementById('busqueda_dashboard').value.toLowerCase();
-    const estatus = document.getElementById('filtro_estatus').value;
-    
-    document.querySelectorAll('.prov-group').forEach(group => {
-        let mostrarGrupo = false;
-        group.querySelectorAll('.tienda-row').forEach(row => {
-            const tienda = row.getAttribute('data-tienda').toLowerCase();
-            const inv = row.getAttribute('data-estatus-inv');
-            const prov = group.getAttribute('data-prov').toLowerCase();
-            
-            const matchTexto = tienda.includes(texto) || prov.includes(texto);
-            const matchEstatus = (estatus === 'Todos' || inv === estatus);
-            
-            if (matchTexto && matchEstatus) {
-                row.style.display = '';
-                mostrarGrupo = true;
-            } else {
-                row.style.display = 'none';
+    // Array global para almacenar etiquetas activas estilo Odoo
+    let etiquetasFiltro = [];
+
+    // Función para agregar etiquetas dinámicas
+    function agregarEtiqueta(tipo, valor) {
+        const existe = etiquetasFiltro.some(f => f.tipo === tipo && f.valor.toLowerCase() === valor.toLowerCase());
+        if (!existe) {
+            etiquetasFiltro.push({ tipo, valor });
+            renderizarEtiquetas();
+            filtrarDashboard();
+        }
+        const dropdown = document.getElementById('dropdown-estatus');
+        if (dropdown) dropdown.classList.add('hidden');
+    }
+
+    // Función para remover etiquetas
+    function removerEtiqueta(index) {
+        etiquetasFiltro.splice(index, 1);
+        renderizarEtiquetas();
+        filtrarDashboard();
+    }
+
+    // Renderiza los badges dentro del contenedor del buscador
+    function renderizarEtiquetas() {
+        const contenedor = document.getElementById('lista-etiquetas');
+        if (!contenedor) return;
+
+        contenedor.innerHTML = '';
+        etiquetasFiltro.forEach((f, idx) => {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
+            badge.innerHTML = `
+                <span class="text-[10px] text-blue-500 uppercase font-bold">${f.tipo}:</span>
+                <span>${f.valor}</span>
+                <button type="button" onclick="removerEtiqueta(${idx})" class="hover:text-rose-600 ml-0.5 focus:outline-none">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            `;
+            contenedor.appendChild(badge);
+        });
+    }
+
+    // Función principal de filtrado de Dashboard
+    function filtrarDashboard() {
+        const busquedaInput = document.getElementById('busqueda_dashboard');
+        const textoInput = busquedaInput ? busquedaInput.value.toLowerCase().trim() : '';
+
+        document.querySelectorAll('.prov-group').forEach(group => {
+            let mostrarGrupo = false;
+
+            group.querySelectorAll('.tienda-row').forEach(row => {
+                const tienda = row.getAttribute('data-tienda').toLowerCase();
+                const inv = row.getAttribute('data-estatus-inv').toLowerCase();
+                const prov = group.getAttribute('data-prov').toLowerCase();
+                const contenidoFila = row.textContent.toLowerCase();
+
+                // 1. Coincidencia por texto ingresado en el input
+                const matchTexto = textoInput === '' || tienda.includes(textoInput) || prov.includes(textoInput);
+
+                // 2. Coincidencia con todas las etiquetas activas
+                const matchEtiquetas = etiquetasFiltro.every(f => {
+                    const val = f.valor.toLowerCase();
+                    if (f.tipo === 'estatus') {
+                        return inv === val;
+                    }
+                    return tienda.includes(val) || prov.includes(val) || contenidoFila.includes(val);
+                });
+
+                if (matchTexto && matchEtiquetas) {
+                    row.style.display = '';
+                    mostrarGrupo = true;
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+
+            group.style.display = mostrarGrupo ? '' : 'none';
+            if (mostrarGrupo && (textoInput !== '' || etiquetasFiltro.length > 0)) {
+                group.open = true;
             }
         });
-        group.style.display = mostrarGrupo ? '' : 'none';
-        if(mostrarGrupo && (texto !== '' || estatus !== 'Todos')) group.open = true;
+    }
+
+    // Event Listeners
+    document.addEventListener('DOMContentLoaded', () => {
+        const busquedaInput = document.getElementById('busqueda_dashboard');
+        const contenedorBuscador = document.getElementById('contenedor-buscador');
+        const btnMenuEstatus = document.getElementById('btn-menu-estatus');
+        const dropdownEstatus = document.getElementById('dropdown-estatus');
+
+        // Mantiene el foco en el input al hacer clic sobre el contenedor
+        if (contenedorBuscador && busquedaInput) {
+            contenedorBuscador.addEventListener('click', (e) => {
+                if (e.target !== busquedaInput && !e.target.closest('button')) {
+                    busquedaInput.focus();
+                }
+            });
+        }
+
+        // Convertir búsqueda con Enter en una etiqueta estilo Odoo
+        if (busquedaInput) {
+            busquedaInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && busquedaInput.value.trim() !== '') {
+                    e.preventDefault();
+                    agregarEtiqueta('Buscar', busquedaInput.value.trim());
+                    busquedaInput.value = '';
+                } else if (e.key === 'Backspace' && busquedaInput.value === '' && etiquetasFiltro.length > 0) {
+                    removerEtiqueta(etiquetasFiltro.length - 1);
+                }
+            });
+            busquedaInput.addEventListener('input', filtrarDashboard);
+        }
+
+        // Control desplegable de estatus de inventario
+        if (btnMenuEstatus && dropdownEstatus) {
+            btnMenuEstatus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownEstatus.classList.toggle('hidden');
+            });
+        }
+
+        // Cierra desplegables al hacer clic fuera
+        document.addEventListener('click', () => {
+            if (dropdownEstatus) dropdownEstatus.classList.add('hidden');
+        });
     });
-}
 </script>
 {% endblock %}
