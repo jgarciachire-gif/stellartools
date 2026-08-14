@@ -162,7 +162,7 @@
                         <td class="p-4 font-medium text-blue-700 max-w-[180px] truncate" title="{{ o.proveedor }}">
                             {{ o.proveedor }}
                         </td>
-                        <td class="p-4 font-medium text-slate-700">{{ o.tienda_destino }}</td>
+                        <td class="p-4 font-semibold text-slate-800">{{ o.tienda_destino }}</td>
 
                         <td class="p-4">
                             <input type="date" name="fecha_envio" value="{{ o.fecha_envio or '' }}"
@@ -177,7 +177,9 @@
                         </td>
 
                         <td class="p-4 font-semibold text-slate-800">{{ o.vencimiento_factura_str }}</td>
-                        <td class="p-4 font-bold text-slate-900">${{ "%.2f"|format(o.monto_total or 0) }}</td>
+                        <td class="p-4 font-semibold text-slate-800">${{ "{:,.2f}".format(o.monto_total or
+                            0).replace(",", "X").replace(".", ",").replace("X", ".") }}
+                        </td>
 
                         <td class="p-4">
                             <span
