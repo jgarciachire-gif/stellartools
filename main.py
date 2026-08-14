@@ -133,7 +133,7 @@ def dashboard(request: Request):
                             estatus_inv = "Reponer inventario"
                             color_inv = "text-red-700 bg-red-100"
                             dias_mostrar = f"Vencido hace {abs(dias_restantes)}d"
-                        elif dias_restantes <= 5:
+                        elif dias_restantes <= 3:
                             estatus_inv = "Próximo a Agotar"
                             color_inv = "text-amber-700 bg-amber-100"
                             dias_mostrar = f"Quedan {dias_restantes}d"
