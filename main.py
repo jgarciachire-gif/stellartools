@@ -1,3 +1,7 @@
+import sys
+import os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Response, Cookie, Depends
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +16,7 @@ import xml.etree.ElementTree as ET
 import json
 from supabase import create_client, Client
 import traceback
+
 
 SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
 SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"

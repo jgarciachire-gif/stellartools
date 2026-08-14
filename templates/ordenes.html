@@ -1,22 +1,79 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="space-y-6">
-    <!-- Encabezado con título, buscador unificado y menú de opciones -->
+    <!-- Encabezado con título, buscador unificado estilo Odoo y menú de opciones -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-10">
         <h2 class="text-2xl font-bold text-slate-800">Diario de Órdenes de Compra</h2>
-        
+
         <div class="flex items-center gap-3 w-full sm:w-auto">
-            <!-- Barra de búsqueda unificada con filtro de fecha integrado -->
-            <div class="relative w-full sm:w-72 md:w-80">
-                <input type="text" id="buscador-ordenes" placeholder="Buscar por OC, Proveedor o Tienda..." class="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-white shadow-sm">
-                <i class="fa-solid fa-search absolute left-3.5 top-3 text-slate-400"></i>
-                
-                <div class="absolute right-3 top-2.5 flex items-center gap-1.5">
-                    <button type="button" id="btn-limpiar-fecha" class="text-slate-400 hover:text-rose-500 hidden" title="Limpiar filtro de fecha">
-                        <i class="fa-solid fa-xmark text-sm"></i>
+            <!-- Contenedor del Buscador Estilo Odoo (Badges + Input) -->
+            <div class="relative w-full sm:w-80 md:w-96">
+                <div id="contenedor-buscador"
+                    class="w-full pl-9 pr-16 py-1.5 border border-slate-300 rounded-xl bg-white shadow-sm flex flex-wrap items-center gap-1.5 min-h-[42px] focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all cursor-text">
+                    <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
+
+                    <!-- Aquí se renderizan dinámicamente los badges/etiquetas de filtros -->
+                    <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
+
+                    <input type="text" id="buscador-ordenes" placeholder="Buscar por OC, Proveedor, Tienda..."
+                        class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
+                </div>
+
+                <!-- Botones de Acción Internos (Filtros y Fecha) -->
+                <div class="absolute right-2 top-2 flex items-center gap-1">
+                    <!-- Menú Filtro por Estatus -->
+                    <div class="relative">
+                        <button type="button" id="btn-menu-estatus"
+                            class="p-1 text-slate-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-slate-100"
+                            title="Filtrar por estatus">
+                            <i class="fa-solid fa-filter text-xs"></i>
+                        </button>
+
+                        <div id="dropdown-estatus"
+                            class="hidden absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50 py-1 text-xs">
+                            <div class="px-3 py-1 font-bold text-slate-400 uppercase tracking-wider text-[10px]">Estatus
+                                Orden</div>
+                            <button type="button" onclick="agregarEtiqueta('estatus', 'Enviada')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-blue-500"></span> Enviada
+                            </button>
+                            <button type="button" onclick="agregarEtiqueta('estatus', 'Recibido')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Recibido
+                            </button>
+
+                            <div class="border-t border-slate-100 my-1"></div>
+
+                            <div class="px-3 py-1 font-bold text-slate-400 uppercase tracking-wider text-[10px]">Alerta
+                                de Pago</div>
+                            <button type="button" onclick="agregarEtiqueta('alerta', 'Vigente')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Vigente
+                            </button>
+                            <button type="button" onclick="agregarEtiqueta('alerta', 'Por Vencer')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Por Vencer
+                            </button>
+                            <button type="button" onclick="agregarEtiqueta('alerta', 'Vencido')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-rose-500"></span> Vencido
+                            </button>
+                            <button type="button" onclick="agregarEtiqueta('alerta', 'Pagada')"
+                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full bg-green-500"></span> Pagada
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filtro por Fecha -->
+                    <button type="button" id="btn-limpiar-fecha" class="text-slate-400 hover:text-rose-500 hidden p-1"
+                        title="Limpiar filtro de fecha">
+                        <i class="fa-solid fa-xmark text-xs"></i>
                     </button>
-                    <button type="button" id="btn-activar-fecha" class="text-slate-400 hover:text-blue-600 transition-colors focus:outline-none" title="Filtrar por fecha">
-                        <i class="fa-solid fa-calendar-days text-base"></i>
+                    <button type="button" id="btn-activar-fecha"
+                        class="p-1 text-slate-400 hover:text-blue-600 transition-colors rounded-lg hover:bg-slate-100"
+                        title="Filtrar por fecha">
+                        <i class="fa-solid fa-calendar-days text-xs"></i>
                     </button>
                     <input type="date" id="filtro-fecha" class="sr-only">
                 </div>
@@ -24,12 +81,15 @@
 
             <!-- Botón Menú 3 Puntos -->
             <div class="relative">
-                <button id="btn-menu-opciones" class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
+                <button id="btn-menu-opciones"
+                    class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
                     <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
                 </button>
-                
-                <div id="dropdown-opciones" class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
-                    <button id="btn-activar-seleccion" class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
+
+                <div id="dropdown-opciones"
+                    class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                    <button id="btn-activar-seleccion"
+                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
                         <i class="fa-solid fa-list-check"></i> Selección Múltiple
                     </button>
                 </div>
@@ -38,14 +98,20 @@
     </div>
 
     <!-- Barra de Acciones de Selección -->
-    <div id="barra-seleccion" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4 shadow-sm transition-all mb-4">
+    <div id="barra-seleccion"
+        class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4 shadow-sm transition-all mb-4">
         <div class="flex items-center gap-4">
-            <span id="contador-seleccion" class="font-bold text-blue-800 bg-blue-100 px-3 py-1 rounded-lg text-sm">0 seleccionados</span>
-            <button id="btn-seleccionar-todo" class="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">Seleccionar Todo</button>
+            <span id="contador-seleccion" class="font-bold text-blue-800 bg-blue-100 px-3 py-1 rounded-lg text-sm">0
+                seleccionados</span>
+            <button id="btn-seleccionar-todo"
+                class="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">Seleccionar Todo</button>
         </div>
         <div class="flex items-center gap-3">
-            <button id="btn-cancelar-seleccion" class="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
-            <button id="btn-eliminar-seleccion" class="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-50 cursor-not-allowed transition-all shadow-sm flex items-center gap-2" disabled>
+            <button id="btn-cancelar-seleccion"
+                class="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
+            <button id="btn-eliminar-seleccion"
+                class="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-50 cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
+                disabled>
                 <i class="fa-solid fa-trash-can"></i> Eliminar
             </button>
         </div>
@@ -53,9 +119,11 @@
 
     {% for mes, lista_ordenes in ordenes_agrupadas.items() %}
     <details class="group bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-4" open>
-        <summary class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
+        <summary
+            class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
             <div class="flex items-center gap-3">
-                <i class="fa-solid fa-chevron-right text-sm text-slate-400 group-open:rotate-90 transition-transform"></i>
+                <i
+                    class="fa-solid fa-chevron-right text-sm text-slate-400 group-open:rotate-90 transition-transform"></i>
                 <span class="font-bold text-slate-800 text-lg">{{ mes }}</span>
                 <span class="text-xs bg-blue-100 text-blue-800 px-2.5 py-0.5 rounded-full font-semibold">
                     {{ lista_ordenes|length }} Órdenes
@@ -85,42 +153,58 @@
                     {% for o in lista_ordenes %}
                     <tr class="hover:bg-slate-50/80 transition-colors row-orden cursor-default" data-id="{{ o.id }}">
                         <td class="col-seleccion hidden p-4 text-center" onclick="event.stopPropagation();">
-                            <input type="checkbox" class="chk-orden w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer" value="{{ o.id }}">
+                            <input type="checkbox"
+                                class="chk-orden w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
+                                value="{{ o.id }}">
                         </td>
-                        
+
                         <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
-                        <td class="p-4 font-medium text-blue-700">{{ o.proveedor }}</td>
+                        <td class="p-4 font-medium text-blue-700 max-w-[180px] truncate" title="{{ o.proveedor }}">
+                            {{ o.proveedor }}
+                        </td>
                         <td class="p-4 font-medium text-slate-700">{{ o.tienda_destino }}</td>
-                        
+
                         <td class="p-4">
-                            <input type="date" name="fecha_envio" value="{{ o.fecha_envio or '' }}" onchange="actualizarFechasAsync('{{ o.id }}')" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
+                            <input type="date" name="fecha_envio" value="{{ o.fecha_envio or '' }}"
+                                onchange="actualizarFechasAsync('{{ o.id }}')"
+                                class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
                         </td>
-                        
+
                         <td class="p-4">
-                            <input type="date" name="fecha_recepcion" value="{{ o.fecha_recepcion or '' }}" onchange="actualizarFechasAsync('{{ o.id }}')" class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
+                            <input type="date" name="fecha_recepcion" value="{{ o.fecha_recepcion or '' }}"
+                                onchange="actualizarFechasAsync('{{ o.id }}')"
+                                class="bg-transparent border border-slate-200 rounded px-2 py-1 text-slate-700 text-xs font-medium cursor-pointer">
                         </td>
-                        
+
                         <td class="p-4 font-semibold text-slate-800">{{ o.vencimiento_factura_str }}</td>
                         <td class="p-4 font-bold text-slate-900">${{ "%.2f"|format(o.monto_total or 0) }}</td>
-                        
+
                         <td class="p-4">
-                            <span class="badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
+                            <span
+                                class="badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
                                 {{ o.estatus }}
                             </span>
                         </td>
-                        
+
                         <td class="p-4 font-semibold text-slate-900">
                             <div class="flex flex-col gap-1.5">
                                 <div class="flex items-center gap-2">
                                     {% if o.alerta_text %}
-                                        <span class="w-2.5 h-2.5 rounded-full {{ 'bg-green-500' if o.pagada else o.alerta_color }}" id="punto-{{ o.id }}"></span> 
-                                        <span id="texto-estado-{{ o.id }}" {% if o.pagada %}style="color: #16a34a;"{% endif %}>
-                                            {{ 'Pagada' if o.pagada else o.alerta_text }}
-                                        </span>
+                                    <span
+                                        class="w-2.5 h-2.5 rounded-full {{ 'bg-green-500' if o.pagada else o.alerta_color }}"
+                                        id="punto-{{ o.id }}"></span>
+                                    <span id="texto-estado-{{ o.id }}" class="texto-pago" {% if o.pagada
+                                        %}style="color: #16a34a;" {% endif %}>
+                                        {{ 'Pagada' if o.pagada else o.alerta_text }}
+                                    </span>
                                     {% endif %}
                                 </div>
-                                <label class="text-[11px] text-slate-500 flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors" onclick="event.stopPropagation();">
-                                    <input type="checkbox" {{ 'checked' if o.pagada else '' }} onchange="cambiarEstadoPago(this, '{{ o.id }}', '{{ o.alerta_text }}', '{{ o.alerta_color }}')" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"> 
+                                <label
+                                    class="text-[11px] text-slate-500 flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors"
+                                    onclick="event.stopPropagation();">
+                                    <input type="checkbox" {{ 'checked' if o.pagada else '' }}
+                                        onchange="cambiarEstadoPago(this, '{{ o.id }}', '{{ o.alerta_text }}', '{{ o.alerta_color }}')"
+                                        class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                                     Marcar como Pagada
                                 </label>
                             </div>
@@ -139,101 +223,68 @@
 </div>
 
 <script>
-// Función para actualizar la fecha de recepción / envío asíncronamente sin recargar la página ni perder el filtro
-async function actualizarFechasAsync(ordenId) {
-    const tr = document.querySelector(`tr[data-id="${ordenId}"]`);
-    if (!tr) return;
-    
-    const inputEnvio = tr.querySelector('input[name="fecha_envio"]');
-    const inputRecepcion = tr.querySelector('input[name="fecha_recepcion"]');
-    
-    const formData = new FormData();
-    formData.append('fecha_envio', inputEnvio ? inputEnvio.value : '');
-    formData.append('fecha_recepcion', inputRecepcion ? inputRecepcion.value : '');
+    // Array global para almacenar etiquetas activas estilo Odoo
+    let etiquetasFiltro = [];
 
-    try {
-        const response = await fetch(`/ordenes/actualizar/${ordenId}`, {
-            method: 'POST',
-            headers: {
-                'X-Requested-With': 'XMLHttpRequest',
-                'Accept': 'application/json'
-            },
-            body: formData
-        });
-
-        const data = await response.json();
-        if (data.status === 'ok') {
-            const badge = tr.querySelector('.badge-estatus');
-            if (badge) {
-                badge.textContent = data.estatus;
-                if (data.estatus === 'Recibido') {
-                    badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800';
-                } else {
-                    badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800';
-                }
-            }
+    // Función para agregar etiquetas dinámicas (Odoo Style)
+    function agregarEtiqueta(tipo, valor) {
+        const existe = etiquetasFiltro.some(f => f.tipo === tipo && f.valor.toLowerCase() === valor.toLowerCase());
+        if (!existe) {
+            etiquetasFiltro.push({ tipo, valor });
+            renderizarEtiquetas();
+            filtrarOrdenes();
         }
-    } catch (error) {
-        console.error("Error al actualizar la fecha:", error);
-    }
-}
-
-// Función asíncrona para guardar el estado de pago
-async function cambiarEstadoPago(checkbox, idOrden, textoOriginal, colorOriginal) {
-    const textoEstado = document.getElementById('texto-estado-' + idOrden);
-    const puntoColor = document.getElementById('punto-' + idOrden);
-    const isChecked = checkbox.checked;
-    
-    if (isChecked) {
-        textoEstado.textContent = "Pagada";
-        textoEstado.style.color = "#16a34a";
-        puntoColor.className = "w-2.5 h-2.5 rounded-full bg-green-500";
-    } else {
-        textoEstado.textContent = textoOriginal;
-        textoEstado.style.color = "";
-        puntoColor.className = "w-2.5 h-2.5 rounded-full " + colorOriginal;
+        const dropdown = document.getElementById('dropdown-estatus');
+        if (dropdown) dropdown.classList.add('hidden');
     }
 
-    try {
-        await fetch(`/ordenes/pagar/${idOrden}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ pagada: isChecked })
-        });
-    } catch (error) {
-        console.error("Error al guardar estado de pago", error);
+    // Función para remover etiquetas
+    function removerEtiqueta(index) {
+        etiquetasFiltro.splice(index, 1);
+        renderizarEtiquetas();
+        filtrarOrdenes();
     }
-}
 
-// Script de Búsqueda y Filtrado
-document.addEventListener('DOMContentLoaded', () => {
-    const buscadorOrdenes = document.getElementById('buscador-ordenes');
-    const filtroFecha = document.getElementById('filtro-fecha');
-    const btnActivarFecha = document.getElementById('btn-activar-fecha');
-    const btnLimpiarFecha = document.getElementById('btn-limpiar-fecha');
+    // Renderiza los badges dentro del contenedor del buscador
+    function renderizarEtiquetas() {
+        const contenedor = document.getElementById('lista-etiquetas');
+        if (!contenedor) return;
 
-    if (btnActivarFecha && filtroFecha) {
-        btnActivarFecha.addEventListener('click', () => {
-            if (typeof filtroFecha.showPicker === 'function') {
-                filtroFecha.showPicker();
-            } else {
-                filtroFecha.focus();
-            }
+        contenedor.innerHTML = '';
+        etiquetasFiltro.forEach((f, idx) => {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
+            badge.innerHTML = `
+            <span class="text-[10px] text-blue-500 uppercase font-bold">${f.tipo}:</span>
+            <span>${f.valor}</span>
+            <button type="button" onclick="removerEtiqueta(${idx})" class="hover:text-rose-600 ml-0.5 focus:outline-none">
+                <i class="fa-solid fa-xmark text-xs"></i>
+            </button>
+        `;
+            contenedor.appendChild(badge);
         });
     }
 
+    // Función principal de filtrado con rango ampliado de búsqueda
     function filtrarOrdenes() {
-        const texto = buscadorOrdenes.value.toLowerCase();
-        const fecha = filtroFecha.value;
+        const buscadorOrdenes = document.getElementById('buscador-ordenes');
+        const filtroFecha = document.getElementById('filtro-fecha');
+        const btnLimpiarFecha = document.getElementById('btn-limpiar-fecha');
+        const btnActivarFecha = document.getElementById('btn-activar-fecha');
 
-        if (fecha) {
-            btnLimpiarFecha.classList.remove('hidden');
-            btnActivarFecha.classList.add('text-blue-600');
-            btnActivarFecha.classList.remove('text-slate-400');
-        } else {
-            btnLimpiarFecha.classList.add('hidden');
-            btnActivarFecha.classList.remove('text-blue-600');
-            btnActivarFecha.classList.add('text-slate-400');
+        const textoInput = buscadorOrdenes ? buscadorOrdenes.value.toLowerCase().trim() : '';
+        const fecha = filtroFecha ? filtroFecha.value : '';
+
+        if (btnLimpiarFecha && btnActivarFecha) {
+            if (fecha) {
+                btnLimpiarFecha.classList.remove('hidden');
+                btnActivarFecha.classList.add('text-blue-600');
+                btnActivarFecha.classList.remove('text-slate-400');
+            } else {
+                btnLimpiarFecha.classList.add('hidden');
+                btnActivarFecha.classList.remove('text-blue-600');
+                btnActivarFecha.classList.add('text-slate-400');
+            }
         }
 
         const detailsElements = document.querySelectorAll('details.group');
@@ -243,23 +294,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const rows = details.querySelectorAll('.row-orden');
 
             rows.forEach(row => {
-                const celdas = row.querySelectorAll('td');
-                if (celdas.length < 6) return; 
+                // Extrae todo el texto visible de la fila completa para búsqueda global
+                const contenidoCompletoFila = row.textContent.toLowerCase();
 
-                const oc = celdas[1].textContent.toLowerCase();
-                const proveedor = celdas[2].textContent.toLowerCase();
-                const tienda = celdas[3].textContent.toLowerCase();
-                
+                const celdas = row.querySelectorAll('td');
+                if (celdas.length < 9) return;
+
                 const inputEnvio = celdas[4].querySelector('input[type="date"]');
                 const inputRecepcion = celdas[5].querySelector('input[type="date"]');
-                
+
                 const fechaEnvio = inputEnvio ? inputEnvio.value : '';
                 const fechaRecepcion = inputRecepcion ? inputRecepcion.value : '';
 
-                const coincideTexto = oc.includes(texto) || proveedor.includes(texto) || tienda.includes(texto);
+                // 1. Búsqueda por texto libre en cualquier celda o columna
+                const coincideTexto = textoInput === '' || contenidoCompletoFila.includes(textoInput);
+
+                // 2. Coincidencia estricta con las etiquetas Odoo aplicadas
+                const coincideEtiquetas = etiquetasFiltro.every(f => {
+                    const val = f.valor.toLowerCase();
+                    return contenidoCompletoFila.includes(val);
+                });
+
+                // 3. Coincidencia con el selector de fecha
                 const coincideFecha = fecha === "" || fechaEnvio === fecha || fechaRecepcion === fecha;
 
-                if (coincideTexto && coincideFecha) {
+                if (coincideTexto && coincideEtiquetas && coincideFecha) {
                     row.style.display = '';
                     mostrarMes = true;
                 } else {
@@ -271,157 +330,283 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (buscadorOrdenes) buscadorOrdenes.addEventListener('input', filtrarOrdenes);
-    if (filtroFecha) filtroFecha.addEventListener('change', filtrarOrdenes);
-    if (btnLimpiarFecha) {
-        btnLimpiarFecha.addEventListener('click', () => {
-            filtroFecha.value = '';
+
+    // Función para actualizar la fecha de recepción / envío asíncronamente
+    async function actualizarFechasAsync(ordenId) {
+        const tr = document.querySelector(`tr[data-id="${ordenId}"]`);
+        if (!tr) return;
+
+        const inputEnvio = tr.querySelector('input[name="fecha_envio"]');
+        const inputRecepcion = tr.querySelector('input[name="fecha_recepcion"]');
+
+        const formData = new FormData();
+        formData.append('fecha_envio', inputEnvio ? inputEnvio.value : '');
+        formData.append('fecha_recepcion', inputRecepcion ? inputRecepcion.value : '');
+
+        try {
+            const response = await fetch(`/ordenes/actualizar/${ordenId}`, {
+                method: 'POST',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Accept': 'application/json'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+            if (data.status === 'ok') {
+                const badge = tr.querySelector('.badge-estatus');
+                if (badge) {
+                    badge.textContent = data.estatus;
+                    if (data.estatus === 'Recibido') {
+                        badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800';
+                    } else {
+                        badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800';
+                    }
+                }
+                filtrarOrdenes();
+            }
+        } catch (error) {
+            console.error("Error al actualizar la fecha:", error);
+        }
+    }
+
+    // Función asíncrona para guardar el estado de pago
+    async function cambiarEstadoPago(checkbox, idOrden, textoOriginal, colorOriginal) {
+        const textoEstado = document.getElementById('texto-estado-' + idOrden);
+        const puntoColor = document.getElementById('punto-' + idOrden);
+        const isChecked = checkbox.checked;
+
+        if (isChecked) {
+            textoEstado.textContent = "Pagada";
+            textoEstado.style.color = "#16a34a";
+            puntoColor.className = "w-2.5 h-2.5 rounded-full bg-green-500";
+        } else {
+            textoEstado.textContent = textoOriginal;
+            textoEstado.style.color = "";
+            puntoColor.className = "w-2.5 h-2.5 rounded-full " + colorOriginal;
+        }
+
+        try {
+            await fetch(`/ordenes/pagar/${idOrden}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pagada: isChecked })
+            });
             filtrarOrdenes();
-        });
-    }
-});
-
-// Script de Control de Selección Múltiple
-document.addEventListener('DOMContentLoaded', () => {
-    const btnMenuOpciones = document.getElementById('btn-menu-opciones');
-    const dropdownOpciones = document.getElementById('dropdown-opciones');
-    const btnActivarSeleccion = document.getElementById('btn-activar-seleccion');
-    
-    const barraSeleccion = document.getElementById('barra-seleccion');
-    const btnCancelarSeleccion = document.getElementById('btn-cancelar-seleccion');
-    const btnSeleccionarTodo = document.getElementById('btn-seleccionar-todo');
-    const btnEliminarSeleccion = document.getElementById('btn-eliminar-seleccion');
-    const contadorSeleccion = document.getElementById('contador-seleccion');
-    
-    const colsSeleccion = document.querySelectorAll('.col-seleccion');
-    const checkboxes = document.querySelectorAll('.chk-orden');
-    const rows = document.querySelectorAll('.row-orden');
-
-    if(btnMenuOpciones) {
-        btnMenuOpciones.addEventListener('click', (e) => {
-            e.stopPropagation();
-            dropdownOpciones.classList.toggle('hidden');
-        });
+        } catch (error) {
+            console.error("Error al guardar estado de pago", error);
+        }
     }
 
-    document.addEventListener('click', () => {
-        if(dropdownOpciones) dropdownOpciones.classList.add('hidden');
+    // Event Listeners e Inicializaciones
+    document.addEventListener('DOMContentLoaded', () => {
+        const buscadorOrdenes = document.getElementById('buscador-ordenes');
+        const contenedorBuscador = document.getElementById('contenedor-buscador');
+        const filtroFecha = document.getElementById('filtro-fecha');
+        const btnActivarFecha = document.getElementById('btn-activar-fecha');
+        const btnLimpiarFecha = document.getElementById('btn-limpiar-fecha');
+        const btnMenuEstatus = document.getElementById('btn-menu-estatus');
+        const dropdownEstatus = document.getElementById('dropdown-estatus');
+
+        // Mantiene el foco en el input al hacer clic sobre la caja del buscador
+        if (contenedorBuscador && buscadorOrdenes) {
+            contenedorBuscador.addEventListener('click', (e) => {
+                if (e.target !== buscadorOrdenes && !e.target.closest('button')) {
+                    buscadorOrdenes.focus();
+                }
+            });
+        }
+
+        // Convertir búsqueda con Enter en una etiqueta estilo Odoo
+        if (buscadorOrdenes) {
+            buscadorOrdenes.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && buscadorOrdenes.value.trim() !== '') {
+                    e.preventDefault();
+                    agregarEtiqueta('texto', buscadorOrdenes.value.trim());
+                    buscadorOrdenes.value = '';
+                } else if (e.key === 'Backspace' && buscadorOrdenes.value === '' && etiquetasFiltro.length > 0) {
+                    removerEtiqueta(etiquetasFiltro.length - 1);
+                }
+            });
+            buscadorOrdenes.addEventListener('input', filtrarOrdenes);
+        }
+
+        // Control desplegable de estatus
+        if (btnMenuEstatus && dropdownEstatus) {
+            btnMenuEstatus.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownEstatus.classList.toggle('hidden');
+            });
+        }
+
+        // Fechas
+        if (btnActivarFecha && filtroFecha) {
+            btnActivarFecha.addEventListener('click', () => {
+                if (typeof filtroFecha.showPicker === 'function') {
+                    filtroFecha.showPicker();
+                } else {
+                    filtroFecha.focus();
+                }
+            });
+        }
+
+        if (filtroFecha) filtroFecha.addEventListener('change', filtrarOrdenes);
+        if (btnLimpiarFecha) {
+            btnLimpiarFecha.addEventListener('click', () => {
+                filtroFecha.value = '';
+                filtrarOrdenes();
+            });
+        }
+
+        // Cierra desplegables al hacer clic fuera
+        document.addEventListener('click', () => {
+            if (dropdownEstatus) dropdownEstatus.classList.add('hidden');
+        });
     });
 
-    function actualizarContador() {
-        const seleccionados = document.querySelectorAll('.chk-orden:checked').length;
-        contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
-        
-        if (seleccionados > 0) {
-            btnEliminarSeleccion.disabled = false;
-            btnEliminarSeleccion.classList.remove('opacity-50', 'cursor-not-allowed');
-        } else {
-            btnEliminarSeleccion.disabled = true;
-            btnEliminarSeleccion.classList.add('opacity-50', 'cursor-not-allowed');
+    // Control de Selección Múltiple
+    document.addEventListener('DOMContentLoaded', () => {
+        const btnMenuOpciones = document.getElementById('btn-menu-opciones');
+        const dropdownOpciones = document.getElementById('dropdown-opciones');
+        const btnActivarSeleccion = document.getElementById('btn-activar-seleccion');
+
+        const barraSeleccion = document.getElementById('barra-seleccion');
+        const btnCancelarSeleccion = document.getElementById('btn-cancelar-seleccion');
+        const btnSeleccionarTodo = document.getElementById('btn-seleccionar-todo');
+        const btnEliminarSeleccion = document.getElementById('btn-eliminar-seleccion');
+        const contadorSeleccion = document.getElementById('contador-seleccion');
+
+        const colsSeleccion = document.querySelectorAll('.col-seleccion');
+        const checkboxes = document.querySelectorAll('.chk-orden');
+        const rows = document.querySelectorAll('.row-orden');
+
+        if (btnMenuOpciones) {
+            btnMenuOpciones.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownOpciones.classList.toggle('hidden');
+            });
         }
-    }
 
-    function toggleModoSeleccion(activo) {
-        if (activo) {
-            barraSeleccion.classList.remove('hidden');
-            colsSeleccion.forEach(col => col.classList.remove('hidden'));
-            btnMenuOpciones.classList.add('hidden');
-            dropdownOpciones.classList.add('hidden');
-        } else {
-            barraSeleccion.classList.add('hidden');
-            colsSeleccion.forEach(col => col.classList.add('hidden'));
-            btnMenuOpciones.classList.remove('hidden');
-            
-            checkboxes.forEach(chk => chk.checked = false);
-            rows.forEach(row => row.classList.remove('bg-blue-50/50'));
-            actualizarContador();
+        document.addEventListener('click', () => {
+            if (dropdownOpciones) dropdownOpciones.classList.add('hidden');
+        });
+
+        function actualizarContador() {
+            const seleccionados = document.querySelectorAll('.chk-orden:checked').length;
+            contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
+
+            if (seleccionados > 0) {
+                btnEliminarSeleccion.disabled = false;
+                btnEliminarSeleccion.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                btnEliminarSeleccion.disabled = true;
+                btnEliminarSeleccion.classList.add('opacity-50', 'cursor-not-allowed');
+            }
         }
-    }
 
-    if(btnActivarSeleccion) btnActivarSeleccion.addEventListener('click', () => toggleModoSeleccion(true));
-    if(btnCancelarSeleccion) btnCancelarSeleccion.addEventListener('click', () => toggleModoSeleccion(false));
+        function toggleModoSeleccion(activo) {
+            if (activo) {
+                barraSeleccion.classList.remove('hidden');
+                colsSeleccion.forEach(col => col.classList.remove('hidden'));
+                btnMenuOpciones.classList.add('hidden');
+                dropdownOpciones.classList.add('hidden');
+            } else {
+                barraSeleccion.classList.add('hidden');
+                colsSeleccion.forEach(col => col.classList.add('hidden'));
+                btnMenuOpciones.classList.remove('hidden');
 
-    let todoSeleccionado = false;
-    if(btnSeleccionarTodo) {
-        btnSeleccionarTodo.addEventListener('click', () => {
-            todoSeleccionado = !todoSeleccionado;
-            checkboxes.forEach(chk => {
-                const tr = chk.closest('tr');
-                if (tr.style.display !== 'none') {
-                    chk.checked = todoSeleccionado;
-                    if(todoSeleccionado) {
-                        tr.classList.add('bg-blue-50/50');
-                    } else {
-                        tr.classList.remove('bg-blue-50/50');
+                checkboxes.forEach(chk => chk.checked = false);
+                rows.forEach(row => row.classList.remove('bg-blue-50/50'));
+                actualizarContador();
+            }
+        }
+
+        if (btnActivarSeleccion) btnActivarSeleccion.addEventListener('click', () => toggleModoSeleccion(true));
+        if (btnCancelarSeleccion) btnCancelarSeleccion.addEventListener('click', () => toggleModoSeleccion(false));
+
+        let todoSeleccionado = false;
+        if (btnSeleccionarTodo) {
+            btnSeleccionarTodo.addEventListener('click', () => {
+                todoSeleccionado = !todoSeleccionado;
+                checkboxes.forEach(chk => {
+                    const tr = chk.closest('tr');
+                    if (tr.style.display !== 'none') {
+                        chk.checked = todoSeleccionado;
+                        if (todoSeleccionado) {
+                            tr.classList.add('bg-blue-50/50');
+                        } else {
+                            tr.classList.remove('bg-blue-50/50');
+                        }
+                    }
+                });
+                btnSeleccionarTodo.textContent = todoSeleccionado ? "Desmarcar Todo" : "Seleccionar Todo";
+                actualizarContador();
+            });
+        }
+
+        rows.forEach(row => {
+            row.addEventListener('click', (e) => {
+                if (!barraSeleccion.classList.contains('hidden')) {
+                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
+                        const chk = row.querySelector('.chk-orden');
+                        if (chk) {
+                            chk.checked = !chk.checked;
+                            if (chk.checked) row.classList.add('bg-blue-50/50');
+                            else row.classList.remove('bg-blue-50/50');
+                            actualizarContador();
+                        }
                     }
                 }
             });
-            btnSeleccionarTodo.textContent = todoSeleccionado ? "Desmarcar Todo" : "Seleccionar Todo";
-            actualizarContador();
         });
-    }
 
-    rows.forEach(row => {
-        row.addEventListener('click', (e) => {
-            if (!barraSeleccion.classList.contains('hidden')) {
-                if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
-                    const chk = row.querySelector('.chk-orden');
-                    if(chk) {
-                        chk.checked = !chk.checked;
-                        if (chk.checked) row.classList.add('bg-blue-50/50');
-                        else row.classList.remove('bg-blue-50/50');
-                        actualizarContador();
-                    }
-                }
-            }
+        checkboxes.forEach(chk => {
+            chk.addEventListener('change', () => {
+                const tr = chk.closest('tr');
+                if (chk.checked) tr.classList.add('bg-blue-50/50');
+                else tr.classList.remove('bg-blue-50/50');
+                actualizarContador();
+            });
         });
-    });
 
-    checkboxes.forEach(chk => {
-        chk.addEventListener('change', () => {
-            const tr = chk.closest('tr');
-            if (chk.checked) tr.classList.add('bg-blue-50/50');
-            else tr.classList.remove('bg-blue-50/50');
-            actualizarContador();
-        });
-    });
+        if (btnEliminarSeleccion) {
+            btnEliminarSeleccion.addEventListener('click', async () => {
+                const seleccionados = Array.from(document.querySelectorAll('.chk-orden:checked')).map(chk => parseInt(chk.value));
 
-    if(btnEliminarSeleccion) {
-        btnEliminarSeleccion.addEventListener('click', async () => {
-            const seleccionados = Array.from(document.querySelectorAll('.chk-orden:checked')).map(chk => parseInt(chk.value));
-            
-            if (seleccionados.length === 0) return;
+                if (seleccionados.length === 0) return;
 
-            const confirmacion = confirm(`¿Estás seguro de que deseas eliminar ${seleccionados.length} orden(es) de forma permanente?`);
-            
-            if (confirmacion) {
-                btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
-                btnEliminarSeleccion.disabled = true;
+                const confirmacion = confirm(`¿Estás seguro de que deseas eliminar ${seleccionados.length} orden(es) de forma
+permanente?`);
 
-                try {
-                    const response = await fetch('/ordenes/eliminar_masivo', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ ids: seleccionados })
-                    });
-                    
-                    const data = await response.json();
-                    
-                    if (data.status === 'ok') {
-                        window.location.reload();
-                    } else {
-                        alert("Ocurrió un error al eliminar: " + (data.mensaje || "Desconocido"));
+                if (confirmacion) {
+                    btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
+                    btnEliminarSeleccion.disabled = true;
+
+                    try {
+                        const response = await fetch('/ordenes/eliminar_masivo', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ids: seleccionados })
+                        });
+
+                        const data = await response.json();
+
+                        if (data.status === 'ok') {
+                            window.location.reload();
+                        } else {
+                            alert("Ocurrió un error al eliminar: " + (data.mensaje || "Desconocido"));
+                            btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
+                            btnEliminarSeleccion.disabled = false;
+                        }
+                    } catch (error) {
+                        alert("Fallo de conexión al enviar la petición.");
                         btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
                         btnEliminarSeleccion.disabled = false;
                     }
-                } catch (error) {
-                    alert("Fallo de conexión al enviar la petición.");
-                    btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
-                    btnEliminarSeleccion.disabled = false;
                 }
-            }
-        });
-    }
-});
+            });
+        }
+    });
 </script>
 {% endblock %}
