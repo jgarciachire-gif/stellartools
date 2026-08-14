@@ -159,10 +159,10 @@
                         </td>
 
                         <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
-                        <td class="p-4 font-medium text-blue-700 max-w-[180px] truncate" title="{{ o.proveedor }}">
+                        <td class="p-4 font-medium text-blue-800 max-w-[180px] truncate" title="{{ o.proveedor }}">
                             {{ o.proveedor }}
                         </td>
-                        <td class="p-4 font-semibold text-slate-800">{{ o.tienda_destino }}</td>
+                        <td class="p-4 font-semibold text-slate-700">{{ o.tienda_destino }}</td>
 
                         <td class="p-4">
                             <input type="date" name="fecha_envio" value="{{ o.fecha_envio or '' }}"
@@ -207,7 +207,7 @@
                                     <input type="checkbox" {{ 'checked' if o.pagada else '' }}
                                         onchange="cambiarEstadoPago(this, '{{ o.id }}', '{{ o.alerta_text }}', '{{ o.alerta_color }}')"
                                         class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                    Pagada
+                                    Finalizada
                                 </label>
                             </div>
                         </td>
