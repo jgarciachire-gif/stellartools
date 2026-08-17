@@ -83,9 +83,10 @@
         <form action="/recepciones/procesar-xml" method="POST" enctype="multipart/form-data" id="form-xml"
             onsubmit="mostrarCargandoXML(event)">
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">Seleccionar archivo XML de
+                <label class="block text-sm font-medium text-gray-700 mb-2">Seleccionar archivo(s) XML de
                     Recepciones</label>
-                <input type="file" name="archivo_xml" accept=".xml" required
+                <!-- Agregado 'multiple' y cambiado name a 'archivos_xml' -->
+                <input type="file" name="archivos_xml" accept=".xml" multiple required
                     class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
             </div>
 
@@ -93,7 +94,6 @@
             <button type="submit" id="btn-procesar-xml"
                 class="w-full flex justify-center items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200">
                 <span id="btn-texto-xml">Procesar Recepciones XML</span>
-                <!-- Spinner SVG oculto por defecto -->
                 <svg id="btn-spinner-xml" class="hidden animate-spin h-5 w-5 text-white"
                     xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>

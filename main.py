@@ -101,65 +101,107 @@ def dashboard(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res_oc = supabase.table("ordenes_compra").select("*, proveedores(nombre)").eq("usuario_id", user.id).order("id", desc=True).execute()
+    # Obtenemos las OCs ordenadas por ID ascendente para evaluar su orden cronológico de registro
+    res_oc = supabase.table("ordenes_compra").select("*, proveedores(nombre)").eq("usuario_id", user.id).order("id", desc=False).execute()
     
     proveedores_desglose = {}
     hoy = datetime.now().date()
 
     if res_oc.data:
+        # Agrupar todas las órdenes por proveedor y tienda
+        agrupado = {}
         for row in res_oc.data:
             prov_obj = row.get("proveedores")
             prov = prov_obj["nombre"] if prov_obj else (row.get('proveedor') or "Sin Proveedor")
             tienda = row.get('tienda_destino') or "Sin Tienda Asignada"
             
+            key = (prov, tienda)
+            if key not in agrupado:
+                agrupado[key] = []
+            agrupado[key].append(row)
+
+        # Procesar la selección de la OC principal a mostrar por cada (Proveedor, Tienda)
+        for (prov, tienda), lista_ocs in agrupado.items():
             if prov not in proveedores_desglose:
                 proveedores_desglose[prov] = {}
-            
-            if tienda not in proveedores_desglose[prov]:
-                f_rec_raw = str(row.get('fecha_recepcion') or "").strip()
-                tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
-                
-                estatus_oc = "Recibido" if tiene_fecha_rec else "Enviada"
-                dias_inv_totales = int(row.get('dias_inventario') or 15)
-                
-                if tiene_fecha_rec:
-                    try:
-                        f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
-                        f_rec_str = f_rec.strftime("%d/%m/%Y") # Formato dd/mm/aaaa para la vista
-                        fecha_agotamiento = f_rec + timedelta(days=dias_inv_totales)
-                        dias_restantes = (fecha_agotamiento - hoy).days
-                        
-                        if dias_restantes <= 0:
-                            estatus_inv = "Reponer inventario"
-                            color_inv = "text-red-700 bg-red-100"
-                            dias_mostrar = f"Vencido hace {abs(dias_restantes)}d"
-                        elif dias_restantes <= 2:
-                            estatus_inv = "Próximo a Agotar"
-                            color_inv = "text-amber-700 bg-amber-100"
-                            dias_mostrar = f"Quedan {dias_restantes}d"
-                        else:
-                            estatus_inv = "Stock OK"
-                            color_inv = "text-emerald-700 bg-emerald-100"
-                            dias_mostrar = f"Quedan {dias_restantes}d"
-                    except ValueError:
-                        f_rec_str = f_rec_raw
-                        estatus_inv = "Error de Fecha"
-                        color_inv = "text-slate-600 bg-slate-100"
-                        dias_mostrar = f"{dias_inv_totales} totales"
-                else:
-                    f_rec_str = "-"
-                    estatus_inv = "Esperando Recepción"
-                    color_inv = "text-blue-700 bg-blue-100"
-                    dias_mostrar = "Sin iniciar"
 
-                proveedores_desglose[prov][tienda] = {
-                    "ultima_oc": row.get('numero_orden'),
-                    "fecha_recepcion": f_rec_str, # Asigna la fecha formateada dd/mm/aaaa
-                    "estatus_oc": estatus_oc,
-                    "dias_inventario": dias_mostrar,
-                    "estatus_inv": estatus_inv,
-                    "color_inv": color_inv
-                }
+            # 1. Separar OCs con recepción y OCs solo enviadas
+            ocs_recibidas = []
+            ocs_enviadas = []
+            
+            for oc in lista_ocs:
+                f_rec_raw = str(oc.get('fecha_recepcion') or "").strip()
+                tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
+                if tiene_fecha_rec:
+                    ocs_recibidas.append(oc)
+                else:
+                    ocs_enviadas.append(oc)
+
+            # Determinamos la OC activa a mostrar según prioridad:
+            # - Si hay nueva OC enviada, la anterior con recepción cambia su estatus visible a "Nueva OC enviada"
+            # - La última OC recibida se mantiene en pantalla hasta que la nueva OC cambie a "Despacho Recibido"
+            if ocs_recibidas:
+                oc_seleccionada = ocs_recibidas[-1] # La última recibida
+                if ocs_enviadas:
+                    # Existe una nueva OC en estatus "Enviada" posterior a la última recibida
+                    estatus_oc = "Nueva OC enviada"
+                else:
+                    estatus_oc = "Despacho Recibido"
+            else:
+                # No hay recepciones registradas aún para esta tienda/proveedor
+                oc_seleccionada = ocs_enviadas[-1]
+                estatus_oc = "Enviada"
+
+            f_rec_raw = str(oc_seleccionada.get('fecha_recepcion') or "").strip()
+            tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
+            dias_inv_totales = int(oc_seleccionada.get('dias_inventario') or 15)
+
+            if tiene_fecha_rec:
+                try:
+                    f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
+                    f_rec_str = f_rec.strftime("%d/%m/%Y")
+                    fecha_agotamiento = f_rec + timedelta(days=dias_inv_totales)
+                    dias_restantes = (fecha_agotamiento - hoy).days
+                    
+                    if dias_restantes <= 0:
+                        estatus_inv = "Reponer inventario"
+                        color_inv = "text-red-700 bg-red-100"
+                        dias_mostrar = f"Vencido hace {abs(dias_restantes)}d"
+                    elif dias_restantes <= 2:
+                        estatus_inv = "Próximo a Agotar"
+                        color_inv = "text-amber-700 bg-amber-100"
+                        dias_mostrar = f"Quedan {dias_restantes}d"
+                    else:
+                        estatus_inv = "Stock OK"
+                        color_inv = "text-emerald-700 bg-emerald-100"
+                        dias_mostrar = f"Quedan {dias_restantes}d"
+                except ValueError:
+                    f_rec_str = f_rec_raw
+                    estatus_inv = "Error de Fecha"
+                    color_inv = "text-slate-600 bg-slate-100"
+                    dias_mostrar = f"{dias_inv_totales} totales"
+            else:
+                f_rec_str = "-"
+                estatus_inv = "Esperando Recepción"
+                color_inv = "text-blue-700 bg-blue-100"
+                dias_mostrar = "Sin iniciar"
+
+            if estatus_oc in ["Despacho Recibido", "Stock OK"]:
+                color_oc = "text-emerald-700 bg-emerald-100"
+            elif estatus_oc == "Nueva OC enviada":
+                color_oc = "text-blue-700 bg-blue-100"
+            else:
+                color_oc = "text-slate-700 bg-slate-100"
+
+            proveedores_desglose[prov][tienda] = {
+                "ultima_oc": oc_seleccionada.get('numero_orden'),
+                "fecha_recepcion": f_rec_str,
+                "estatus_oc": estatus_oc,
+                "color_oc": color_oc,
+                "dias_inventario": dias_mostrar,
+                "estatus_inv": estatus_inv,
+                "color_inv": color_inv
+            }
 
     return templates.TemplateResponse(request, "dashboard.html", {
         "proveedores_desglose": proveedores_desglose
@@ -192,7 +234,7 @@ def listar_ordenes(request: Request):
             f_rec_raw = str(o.get('fecha_recepcion') or "").strip()
             tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
             
-            o['estatus'] = 'Recibido' if tiene_fecha_rec else 'Enviada'
+            o['estatus'] = 'Despacho Recibido' if tiene_fecha_rec else 'Enviada'
             o['vencimiento_factura_str'] = ""
             o['alerta_text'] = ""
             o['alerta_color'] = "transparent"
@@ -249,7 +291,7 @@ async def actualizar_orden(
 
     f_rec = fecha_recepcion if fecha_recepcion else None
     f_env = fecha_envio if fecha_envio else None
-    estatus = "Recibido" if f_rec else "Enviada"
+    estatus = "Despacho Recibido" if f_rec else "Enviada"
 
     supabase.table("ordenes_compra").update({
         "estatus": estatus,
@@ -512,7 +554,7 @@ def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
 @app.post("/recepciones/procesar-xml")
 async def procesar_recepciones_xml(
     request: Request,
-    archivo_xml: UploadFile = File(...), 
+    archivos_xml: List[UploadFile] = File(...), 
     access_token: str = Cookie(None)
 ):
     # Validar sesión activa del usuario
@@ -520,90 +562,86 @@ async def procesar_recepciones_xml(
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    contenido = await archivo_xml.read()
-    
+    procesados_exito = [] # Lista de diccionarios procesados
+    no_encontrados = []   # Lista de strings
+
     try:
-        arbol = ET.fromstring(contenido) # Parsear XML
-        procesados_exito = [] # Lista de diccionarios procesados
-        no_encontrados = []   # Lista de strings
-
-        registros = arbol.findall('.//Registro')
-        if not registros:
-            registros = arbol.findall('.//*')
-
-        for reg in registros:
-            nro_oc_raw = (reg.findtext('Nro_OrdenDeCompra') or reg.findtext('nro_ordendecompra') or "").strip()
-            fechas_nodos = reg.findall('.//FechaREC') or reg.findall('.//fecharec')
-            fecha_rec_raw = (fechas_nodos[-1].text or "").strip() if fechas_nodos else ""
-
-            nro_oc_limpio = str(nro_oc_raw.lstrip('0'))
-
-            if nro_oc_limpio and fecha_rec_raw:
-                import re  # Importación rápida para saneamiento de texto
+        # Iterar sobre la lista de archivos XML subidos
+        for archivo_xml in archivos_xml:
+            if not archivo_xml.filename:
+                continue
                 
-                # Normalizar fecha YYYY-MM-DD limpiando textos extraños como horas o sufijos
-                fecha_formateada = None
-                dia, mes, anio = "", "", ""
-                
-                # Busca un patrón tipo DD/MM/YYYY o DD/MM/YY al inicio de la cadena
-                coincidencia = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', str(fecha_rec_raw))
-                if coincidencia:
-                    dia = coincidencia.group(1).zfill(2)
-                    mes = coincidencia.group(2).zfill(2)
-                    anio_raw = coincidencia.group(3)
-                    anio = anio_raw if len(anio_raw) == 4 else f"20{anio_raw}"
-                    fecha_formateada = f"{anio}-{mes}-{dia}"
-                else:
-                    # Si no viene con barras, intenta extraer el formato YYYY-MM-DD
-                    coincidencia_iso = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', str(fecha_rec_raw))
-                    if coincidencia_iso:
-                        anio = coincidencia_iso.group(1)
-                        mes = coincidencia_iso.group(2).zfill(2)
-                        dia = coincidencia_iso.group(3).zfill(2)
-                        fecha_formateada = f"{anio}-{mes}-{dia}"
+            contenido = await archivo_xml.read()
+            if not contenido:
+                continue
 
-                # Si no se pudo sanitizar una fecha válida, se omite este registro para evitar romper la BD
-                if not fecha_formateada:
-                    no_encontrados.append(nro_oc_limpio)
-                    continue
+            arbol = ET.fromstring(contenido) # Parsear XML
 
-                # Consultar en Supabase
-                res_oc = supabase.table("ordenes_compra").select("id, numero_orden, proveedor").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
+            registros = arbol.findall('.//Registro')
+            if not registros:
+                registros = arbol.findall('.//*')
 
-                if res_oc.data and len(res_oc.data) > 0:
-                    orden = res_oc.data[0]
-                    orden_id = orden["id"]
-                    num_orden_str = str(orden.get("numero_orden", ""))
-                    prov_str = str(orden.get("proveedor", "N/A"))
+            for reg in registros:
+                nro_oc_raw = (reg.findtext('Nro_OrdenDeCompra') or reg.findtext('nro_ordendecompra') or "").strip()
+                fechas_nodos = reg.findall('.//FechaREC') or reg.findall('.//fecharec')
+                fecha_rec_raw = (fechas_nodos[-1].text or "").strip() if fechas_nodos else ""
 
-                    # Actualizar fecha de recepción y estatus en Supabase
-                    supabase.table("ordenes_compra").update({
-                        "fecha_recepcion": fecha_formateada,
-                        "estatus": "Recibido"
-                    }).eq("id", orden_id).execute()
+                nro_oc_limpio = str(nro_oc_raw.lstrip('0'))
+
+                if nro_oc_limpio and fecha_rec_raw:
+                    import re  # Importación rápida para saneamiento de texto
                     
-                    # Formato de presentación para la tabla
-                    fecha_mostrar = f"{dia}/{mes}/{anio}" if (dia and mes and anio) else fecha_formateada
+                    # Normalizar fecha YYYY-MM-DD limpiando textos extraños
+                    fecha_formateada = None
+                    dia, mes, anio = "", "", ""
+                    
+                    coincidencia = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', str(fecha_rec_raw))
+                    if coincidencia:
+                        dia = coincidencia.group(1).zfill(2)
+                        mes = coincidencia.group(2).zfill(2)
+                        anio_raw = coincidencia.group(3)
+                        anio = anio_raw if len(anio_raw) == 4 else f"20{anio_raw}"
+                        fecha_formateada = f"{anio}-{mes}-{dia}"
+                    else:
+                        coincidencia_iso = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', str(fecha_rec_raw))
+                        if coincidencia_iso:
+                            anio = coincidencia_iso.group(1)
+                            mes = coincidencia_iso.group(2).zfill(2)
+                            dia = coincidencia_iso.group(3).zfill(2)
+                            fecha_formateada = f"{anio}-{mes}-{dia}"
 
-                    # Insertar un diccionario estricto con valores de cadena
-                    procesados_exito.append({
-                        "numero_orden": num_orden_str,
-                        "proveedor": prov_str,
-                        "fecha_recepcion": str(fecha_mostrar)
-                    })
-                else:
-                    no_encontrados.append(nro_oc_limpio)
+                    if not fecha_formateada:
+                        no_encontrados.append(nro_oc_limpio)
+                        continue
 
-        contexto = {
-            "request": request,
-            "procesados": procesados_exito,
-            "no_encontrados": no_encontrados,
-            "total_procesados": int(len(procesados_exito)),
-            "total_no_encontrados": int(len(no_encontrados))
-        }
+                    # Consultar en Supabase incluyendo tienda_destino
+                    res_oc = supabase.table("ordenes_compra").select("id, numero_orden, proveedor, tienda_destino").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
 
-        
-        # Retornar vista HTML indicando explicitamente el nombre de la plantilla y el contexto
+                    if res_oc.data and len(res_oc.data) > 0:
+                        orden = res_oc.data[0]
+                        orden_id = orden["id"]
+                        num_orden_str = str(orden.get("numero_orden", ""))
+                        prov_str = str(orden.get("proveedor", "N/A"))
+                        tienda_str = str(orden.get("tienda_destino", "N/A"))
+
+                        # Actualizar fecha de recepción y estatus en Supabase
+                        supabase.table("ordenes_compra").update({
+                            "fecha_recepcion": fecha_formateada,
+                            "estatus": "Recibido"
+                        }).eq("id", orden_id).execute()
+                        
+                        fecha_mostrar = f"{dia}/{mes}/{anio}" if (dia and mes and anio) else fecha_formateada
+
+                        # Insertar incluyendo tienda_destino
+                        procesados_exito.append({
+                            "numero_orden": num_orden_str,
+                            "proveedor": prov_str,
+                            "tienda_destino": tienda_str,
+                            "fecha_recepcion": str(fecha_mostrar)
+                        })
+                    else:
+                        no_encontrados.append(nro_oc_limpio)
+
         return templates.TemplateResponse(
             request,
             "resumen_xml.html",
@@ -616,12 +654,10 @@ async def procesar_recepciones_xml(
         )
 
     except ET.ParseError:
-        return script_alerta_error("El archivo XML subido no tiene un formato correcto.", redireccionar="/escanear")
+        return script_alerta_error("Uno de los archivos XML subidos no tiene un formato correcto.", redireccionar="/escanear")
     except Exception as e:
-        # Extrae la última línea del error para mostrarla directamente en el alert
         error_msg = str(e).replace("'", "").replace('"', '').replace("\n", " ")
         print(f"⚠️ ERROR XML VERCEL: {traceback.format_exc()}")
-        
         return script_alerta_error(f"Error procesando XML en servidor: {error_msg}", redireccionar="/escanear")
     
 @app.get("/escanear")

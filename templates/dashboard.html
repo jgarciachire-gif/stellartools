@@ -106,8 +106,10 @@
                                 <td class="py-3 px-3 text-slate-700">{{ t_info.ultima_oc }}</td>
                                 <td class="py-3 px-3 text-slate-600">{{ t_info.fecha_recepcion }}</td>
                                 <td class="py-3 px-3"><span
-                                        class="px-2 py-0.5 rounded font-semibold {{ 'bg-emerald-100 text-emerald-800' if t_info.estatus_oc == 'Recibido' else 'bg-blue-100 text-blue-800' }}">{{
-                                        t_info.estatus_oc }}</span></td>
+                                        class="px-2 py-1 rounded text-xs font-medium {{ t_info.color_oc }}">
+                                        {{ t_info.estatus_oc }}
+                                    </span>
+                                </td>
                                 <td class="py-3 px-3 text-center font-bold text-slate-800">{{ t_info.dias_inventario }}
                                 </td>
                                 <td class="py-3 px-3"><span

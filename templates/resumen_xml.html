@@ -31,6 +31,7 @@
                     <tr>
                         <th class="px-4 py-3">N° Orden</th>
                         <th class="px-4 py-3">Proveedor</th>
+                        <th class="px-4 py-3">Tienda</th>
                         <th class="px-4 py-3">Fecha Recepción</th>
                         <th class="px-4 py-3">Estatus</th>
                     </tr>
@@ -40,10 +41,12 @@
                     <tr class="hover:bg-slate-50">
                         <td class="px-4 py-3 font-semibold text-indigo-600">{{ item.numero_orden }}</td>
                         <td class="px-4 py-3">{{ item.proveedor }}</td>
+                        <td class="px-4 py-3 font-medium text-slate-700">{{ item.tienda_destino }}</td>
                         <td class="px-4 py-3">{{ item.fecha_recepcion }}</td>
                         <td class="px-4 py-3">
                             <span
-                                class="bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded">Recibido</span>
+                                class="bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded">Despacho
+                                Recibido</span>
                         </td>
                     </tr>
                     {% endfor %}

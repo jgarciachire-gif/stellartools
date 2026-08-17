@@ -183,7 +183,7 @@
 
                         <td class="p-4">
                             <span
-                                class="badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus == 'Recibido' else 'bg-blue-100 text-blue-800' }}">
+                                class="badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold {{ 'bg-emerald-100 text-emerald-800' if o.estatus in ['Despacho Recibido', 'Stock OK'] else 'bg-blue-100 text-blue-800' }}">
                                 {{ o.estatus }}
                             </span>
                         </td>
