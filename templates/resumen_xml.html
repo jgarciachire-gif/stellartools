@@ -4,18 +4,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Resumen de Procesamiento XML</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="bg-slate-50 min-h-screen p-6">
-    <div class="max-w-4xl mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6">
+    <div class="max-w-5xl mx-auto my-8 p-6 bg-white rounded-xl shadow-lg border border-slate-200">
+        <h2 class="text-2xl font-bold text-slate-800 mb-6 flex items-center gap-2">
+        </h2>
 
         <!-- Encabezado del Resumen -->
         <div class="flex items-center justify-between border-b pb-4 mb-6">
             <div>
                 <h1 class="text-2xl font-bold text-slate-800">Resumen de Recepciones</h1>
-                <p class="text-sm text-slate-500">Procesamiento de ordenes de compra vía XML</p>
+                <p class="text-sm text-slate-500">Procesamiento de órdenes de compra vía XML</p>
             </div>
             <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-3 py-1.5 rounded-full">
                 {{ total_procesados }} Actualizadas
@@ -24,34 +25,56 @@
 
         <!-- Tabla de Ordenes Actualizadas -->
         {% if procesados %}
-        <div class="mb-6 overflow-x-auto">
-            <h2 class="text-base font-semibold text-slate-700 mb-3">Ordenes Actualizadas Exitosamente</h2>
-            <table class="w-full text-sm text-left text-slate-600 border rounded-lg">
-                <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b">
-                    <tr>
-                        <th class="px-4 py-3">N° Orden</th>
-                        <th class="px-4 py-3">Proveedor</th>
-                        <th class="px-4 py-3">Tienda</th>
-                        <th class="px-4 py-3">Fecha Recepción</th>
-                        <th class="px-4 py-3">Estatus</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y">
-                    {% for item in procesados %}
-                    <tr class="hover:bg-slate-50">
-                        <td class="px-4 py-3 font-semibold text-indigo-600">{{ item.numero_orden }}</td>
-                        <td class="px-4 py-3">{{ item.proveedor }}</td>
-                        <td class="px-4 py-3 font-medium text-slate-700">{{ item.tienda_destino }}</td>
-                        <td class="px-4 py-3">{{ item.fecha_recepcion }}</td>
-                        <td class="px-4 py-3">
-                            <span
-                                class="bg-emerald-100 text-emerald-700 text-xs font-medium px-2 py-0.5 rounded">Despacho
-                                Recibido</span>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="mb-8">
+            <h3 class="text-lg font-semibold text-emerald-700 mb-3 flex items-center gap-2">
+                </span> Ordenes Actualizadas Exitosamente ({{ total_procesados }})
+            </h3>
+            <!-- Contenedor con scroll horizontal preventivo -->
+            <div class="mb-6 overflow-x-auto border border-slate-200 rounded-lg">
+                <table class="w-full text-sm text-left text-slate-600" id="tabla-resumen">
+                    <thead class="text-xs text-slate-700 uppercase bg-slate-100 border-b select-none">
+                        <tr>
+                            <th onclick="ordenarTabla(0, 'texto')"
+                                class="px-4 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-200 transition-colors">
+                                N° Orden <span class="icono-orden ml-1 text-slate-400">↕</span>
+                            </th>
+                            <th onclick="ordenarTabla(1, 'texto')"
+                                class="px-6 py-3 cursor-pointer hover:bg-slate-200 transition-colors">
+                                Proveedor <span class="icono-orden ml-1 text-slate-400">↕</span>
+                            </th>
+                            <th onclick="ordenarTabla(2, 'texto')"
+                                class="px-6 py-3 cursor-pointer hover:bg-slate-200 transition-colors">
+                                Tienda <span class="icono-orden ml-1 text-slate-400">↕</span>
+                            </th>
+                            <th onclick="ordenarTabla(3, 'fecha')"
+                                class="px-4 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-200 transition-colors">
+                                Fecha Recepción <span class="icono-orden ml-1 text-slate-400">↕</span>
+                            </th>
+                            <th onclick="ordenarTabla(4, 'texto')"
+                                class="px-4 py-3 whitespace-nowrap cursor-pointer hover:bg-slate-200 transition-colors">
+                                Estatus <span class="icono-orden ml-1 text-slate-400">↕</span>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-200" id="cuerpo-tabla">
+                        {% for item in procesados %}
+                        <tr class="hover:bg-slate-50 transition-colors">
+                            <td class="px-4 py-3 font-semibold text-indigo-600 whitespace-nowrap">{{ item.numero_orden
+                                }}</td>
+                            <td class="px-6 py-3 font-medium text-slate-800 min-w-[220px]">{{ item.proveedor }}</td>
+                            <td class="px-6 py-3 text-slate-700 min-w-[180px]">{{ item.tienda_destino }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap text-slate-600">{{ item.fecha_recepcion }}</td>
+                            <td class="px-4 py-3 whitespace-nowrap">
+                                <span
+                                    class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-full inline-block">
+                                    Despacho Recibido
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
         {% endif %}
 
@@ -59,9 +82,8 @@
         {% if total_no_encontrados > 0 %}
         <div
             class="mb-6 p-3 bg-slate-100 border border-slate-200 rounded-lg flex justify-between items-center text-sm font-medium text-slate-700">
-            <span>Órdenes no encontradas en el sistema</span> <!-- Etiqueta descriptiva -->
+            <span>Órdenes no encontradas en el sistema</span>
             <span class="bg-amber-100 text-amber-800 px-3 py-1 rounded-full font-bold">{{ total_no_encontrados }}</span>
-            <!-- Contador total de faltantes -->
         </div>
         {% endif %}
 
@@ -69,16 +91,68 @@
         <div class="flex justify-end gap-3 pt-4 border-t">
             <a href="/ordenes"
                 class="bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
-                Ir a las Ordenes
+                Ir a las Órdenes
             </a>
-            <!-- Botón para regresar directamente al módulo de carga de datos/archivos -->
             <a href="/escanear"
-                class="bg-indigo-600 hover:bg-indigo-700 text-white border-slate-300 text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
+                class="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-sm font-medium px-5 py-2.5 rounded-lg transition-colors">
                 Cargar más datos
             </a>
         </div>
-
     </div>
+
+    <script>
+        // Guarda la dirección de ordenamiento de cada columna (ascendente/descendente)
+        let direcciones = {};
+
+        function ordenarTabla(columnaIdx, tipo) {
+            const tbody = document.getElementById('cuerpo-tabla');
+            if (!tbody) return;
+
+            const filas = Array.from(tbody.querySelectorAll('tr'));
+            const esAscendente = !direcciones[columnaIdx];
+            direcciones = {}; // Reinicia otras columnas
+            direcciones[columnaIdx] = esAscendente;
+
+            // Limpiar íconos visuales de las cabeceras
+            document.querySelectorAll('.icono-orden').forEach(i => i.textContent = '↕');
+
+            // Actualizar ícono de la columna activa
+            const thActivo = document.querySelectorAll('#tabla-resumen th')[columnaIdx];
+            const iconoActivo = thActivo ? thActivo.querySelector('.icono-orden') : null;
+            if (iconoActivo) {
+                iconoActivo.textContent = esAscendente ? '▲' : '▼';
+            }
+
+            filas.sort((a, b) => {
+                let valA = a.children[columnaIdx].textContent.trim();
+                let valB = b.children[columnaIdx].textContent.trim();
+
+                if (tipo === 'fecha') {
+                    // Convertir fecha de formato DD/MM/YYYY o YYYY-MM-DD a Timestamp
+                    const parseFecha = (str) => {
+                        const partes = str.split('/');
+                        if (partes.length === 3) {
+                            return new Date(`${partes[2]}-${partes[1]}-${partes[0]}`).getTime();
+                        }
+                        return new Date(str).getTime() || 0;
+                    };
+                    valA = parseFecha(valA);
+                    valB = parseFecha(valB);
+                } else {
+                    // Comparación de texto alfanumérico (A-Z, Z-A, números)
+                    valA = valA.toLowerCase();
+                    valB = valB.toLowerCase();
+                }
+
+                if (valA < valB) return esAscendente ? -1 : 1;
+                if (valA > valB) return esAscendente ? 1 : -1;
+                return 0;
+            });
+
+            // Reinsertar filas ordenadas en el DOM
+            filas.forEach(fila => tbody.appendChild(fila));
+        }
+    </script>
 </body>
 
 </html>
