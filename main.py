@@ -493,40 +493,46 @@ def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
 
     return RedirectResponse(url="/perfil", status_code=303)
 
+# Reemplazar la función guardar_proveedor por esta versión estándar usando la API nativa
 @app.post("/proveedores/guardar")
 def guardar_proveedor(
     id: int = Form(None), 
     codigo: str = Form(""), 
     nombre: str = Form(...), 
-    dias_credito: int = Form(30), 
-    dias_despacho: int = Form(3), 
     contacto: str = Form(""), 
+    telefono: str = Form(""), # Recibe el parámetro teléfono enviado desde los formularios
+    dias_credito: int = Form(0), 
+    dias_despacho: int = Form(3), 
     access_token: str = Cookie(None)
 ):
-    user = obtener_usuario_actual(access_token)
+    user = obtener_usuario_actual(access_token) # Autentica la sesión activa
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
     redirect_url = "/proveedores"
 
     if id:
+        # Actualiza el proveedor activo
         supabase.table("proveedores").update({
             "codigo": codigo,
             "nombre": nombre,
+            "contacto": contacto,
+            "telefono": telefono, # Persiste el campo teléfono en Supabase
             "dias_credito": dias_credito,
-            "dias_despacho": dias_despacho,
-            "contacto": contacto
+            "dias_despacho": dias_despacho
         }).eq("id", id).execute()
         
         redirect_url = f"/proveedores?select={id}"
     else:
         try:
+            # Crea un nuevo proveedor
             res = supabase.table("proveedores").insert({
                 "codigo": codigo,
                 "nombre": nombre,
+                "contacto": contacto,
+                "telefono": telefono, # Inserta el campo teléfono
                 "dias_credito": dias_credito,
                 "dias_despacho": dias_despacho,
-                "contacto": contacto,
                 "dias_inventario": 15
             }).execute()
             

@@ -1,25 +1,28 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- ENCABEZADO CON BOTÓN DE IMPORTACIÓN COMPACTO -->
-<div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
-    <h2 class="text-2xl font-bold text-slate-800">
-        Gestión de Proveedores
-    </h2>
-
-    <!-- Módulo de subida alineado a la derecha -->
-    <form action="/proveedores/importar-xml" method="POST" enctype="multipart/form-data"
-        class="flex gap-2 items-center bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-        <label class="text-xs font-bold text-slate-600 hidden lg:block px-2">
-            <i class="fa-solid fa-file-code text-blue-600 mr-1"></i> Actualizar Directorio
-        </label>
-        <input type="file" name="archivo_xml" accept=".xml" required
-            class="block w-48 text-xs text-slate-500 file:mr-2 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
-        <button type="submit"
-            class="bg-blue-600 text-white text-xs font-semibold px-4 py-1.5 rounded-lg hover:bg-blue-700 transition">
-            Subir
+<!-- ENCABEZADO -->
+<div class="flex items-center justify-between mb-4">
+    <h1 class="text-xl font-bold text-slate-800">Gestión de Proveedores</h1>
+    <!-- Menú Desplegable de Opciones (Tres Puntos) -->
+    <div class="relative">
+        <button type="button" onclick="toggleMenuOpciones()"
+            class="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none">
+            <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
         </button>
-    </form>
+        <div id="dropdown-opciones"
+            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20">
+            <button type="button" onclick="abrirModalCrear(); toggleMenuOpciones();"
+                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                <i class="fa-solid fa-plus text-blue-600"></i> Crear nuevo
+            </button>
+            <button type="button"
+                onclick="document.getElementById('modal-xml-menu').classList.remove('hidden'); toggleMenuOpciones();"
+                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
+                <i class="fa-solid fa-file-code text-indigo-600"></i> Cargar Data XML
+            </button>
+        </div>
+    </div>
 </div>
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -98,8 +101,18 @@
                         class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Descripción / Nombre</label>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nombre / Razón Social</label>
                     <input type="text" name="nombre" value="{{ prov_obj.nombre }}" required disabled
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contacto / Atención</label>
+                    <input type="text" name="contacto" value="{{ prov_obj.contacto or '' }}" disabled
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Teléfono</label>
+                    <input type="text" name="telefono" value="{{ prov_obj.telefono or '' }}" disabled
                         class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
                 <div>
@@ -109,15 +122,9 @@
                         class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
                 <div>
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Frecuencia de Despacho
-                        (Días)</label>
+                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Días de Despacho</label>
                     <input type="number" name="dias_despacho" value="{{ prov_obj.dias_despacho or 3 }}" min="0" max="99"
                         oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);" disabled
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
-                </div>
-                <div class="md:col-span-2">
-                    <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contacto</label>
-                    <input type="text" name="contacto" value="{{ prov_obj.contacto or '' }}" disabled
                         class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
             </div>
@@ -157,6 +164,79 @@
         </div>
         {% endif %}
     </div>
+    <!-- Modal para Crear / Editar Proveedor -->
+    <div id="modal-proveedor"
+        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100">
+            <h3 id="titulo-modal-prov" class="text-lg font-bold text-slate-800 mb-4">Crear Nuevo Proveedor</h3>
+            <form id="form-proveedor-crear" action="/proveedores/guardar" method="POST" class="space-y-4">
+                <input type="hidden" id="prov_id" name="id">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Código</label>
+                    <input type="text" id="prov_codigo" name="codigo" required
+                        class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Nombre / Razón Social</label>
+                    <input type="text" id="prov_nombre" name="nombre" required
+                        class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Contacto / Atención</label>
+                        <input type="text" id="prov_contacto" name="contacto"
+                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono</label>
+                        <input type="text" id="prov_telefono" name="telefono"
+                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Días de Crédito</label>
+                        <input type="number" id="prov_dias_credito" name="dias_credito" value="0"
+                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Días de Despacho</label>
+                        <input type="number" id="prov_dias_despacho" name="dias_despacho" value="3"
+                            class="w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                </div>
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="cerrarModalCrear()"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancelar</button>
+                    <button type="submit"
+                        class="px-4 py-2 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700">Guardar
+                        Proveedor</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal para Cargar Data XML desde el Menú -->
+    <div id="modal-xml-menu"
+        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Cargar Data XML</h3>
+            <p class="text-xs text-slate-500 mb-4">Selecciona el archivo XML con el directorio para actualizar la
+                información de proveedores.</p>
+            <form action="/proveedores/cargar-xml" method="POST" enctype="multipart/form-data" class="space-y-4">
+                <input type="file" name="xml_file" accept=".xml" required
+                    class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('modal-xml-menu').classList.add('hidden')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancelar</button>
+                    <button type="submit"
+                        class="px-4 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">Procesar
+                        XML</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script>
         // Array global para almacenar etiquetas activas de búsqueda
         let etiquetasFiltro = [];
@@ -226,7 +306,32 @@
                 }
             });
         }
+        // Alternar visibilidad del menú de tres puntos
+        function toggleMenuOpciones() {
+            const dropdown = document.getElementById('dropdown-opciones');
+            if (dropdown) dropdown.classList.toggle('hidden');
+        }
 
+        // Cerrar menú desplegable al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('dropdown-opciones');
+            if (dropdown && !dropdown.contains(e.target) && !e.target.closest('button[onclick="toggleMenuOpciones()"]')) {
+                dropdown.classList.add('hidden');
+            }
+        });
+
+        // Abrir Modal para crear nuevo proveedor
+        function abrirModalCrear() {
+            document.getElementById('titulo-modal-prov').textContent = 'Crear Nuevo Proveedor';
+            document.getElementById('form-proveedor').reset();
+            document.getElementById('prov_id').value = '';
+            document.getElementById('modal-proveedor').classList.remove('hidden');
+        }
+
+        // Cerrar Modal de Proveedor
+        function cerrarModalCrear() {
+            document.getElementById('modal-proveedor').classList.add('hidden');
+        }
         // Escuchadores de eventos
         document.addEventListener('DOMContentLoaded', () => {
             const busquedaInput = document.getElementById('busqueda_proveedores');
