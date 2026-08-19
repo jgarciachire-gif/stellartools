@@ -169,7 +169,7 @@
         class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100">
             <h3 id="titulo-modal-prov" class="text-lg font-bold text-slate-800 mb-4">Crear Nuevo Proveedor</h3>
-            <form id="form-proveedor-crear" action="/proveedores/guardar" method="POST" class="space-y-4">
+            <form id="form-proveedor-modal" action="/proveedores/guardar" method="POST" class="space-y-4">
                 <input type="hidden" id="prov_id" name="id">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 mb-1">Código</label>
@@ -322,15 +322,23 @@
 
         // Abrir Modal para crear nuevo proveedor
         function abrirModalCrear() {
-            document.getElementById('titulo-modal-prov').textContent = 'Crear Nuevo Proveedor';
-            document.getElementById('form-proveedor').reset();
-            document.getElementById('prov_id').value = '';
-            document.getElementById('modal-proveedor').classList.remove('hidden');
+            const titulo = document.getElementById('titulo-modal-prov');
+            const form = document.getElementById('form-proveedor-modal');
+            const modal = document.getElementById('modal-proveedor');
+
+            if (titulo) titulo.textContent = 'Crear Nuevo Proveedor';
+            if (form) form.reset();
+
+            const provId = document.getElementById('prov_id');
+            if (provId) provId.value = '';
+
+            if (modal) modal.classList.remove('hidden');
         }
 
         // Cerrar Modal de Proveedor
         function cerrarModalCrear() {
-            document.getElementById('modal-proveedor').classList.add('hidden');
+            const modal = document.getElementById('modal-proveedor');
+            if (modal) modal.classList.add('hidden');
         }
         // Escuchadores de eventos
         document.addEventListener('DOMContentLoaded', () => {
