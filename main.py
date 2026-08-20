@@ -23,6 +23,10 @@ SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = FastAPI(title="Control de Compras", version="2.0")
+# Silencia las peticiones automáticas de Chrome DevTools para evitar falsos logs 404
+@app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+async def chrome_devtools_silencer():
+    return Response(status_code=204) # Retorna 204 No Content sin generar alertas en servidor
 
 def obtener_usuario_actual(access_token: str = Cookie(None)):
     if not access_token:
@@ -330,36 +334,25 @@ def eliminar_orden(orden_id: int, access_token: str = Cookie(None)):
 async def eliminar_ordenes_masivo(request: Request, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
     if not user:
-        return {"status": "error", "mensaje": "No autorizado"}
+        print("[DEBUG ELIMINAR] Error: Usuario no autenticado o token expirado.")
+        return JSONResponse(status_code=401, content={"success": False, "message": "No autorizado"})
     
-    data = await request.json()
-    ids = data.get("ids", [])
-    
-    if ids:
-        supabase.table("ordenes_compra").delete().in_("id", ids).eq("usuario_id", user.id).execute()
+    try:
+        data = await request.json()
+        raw_ids = data.get("ids", [])
+        print(f"[DEBUG ELIMINAR] IDs recibidos desde el cliente: {raw_ids} | Usuario ID: {user.id}")
+
+        ids = [int(i) for i in raw_ids if str(i).isdigit()]
         
-    return {"status": "ok"}
-
-@app.get("/proveedores")
-def gestionar_proveedores(request: Request, buscar: str = "", select: int = None, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
-    if not user:
-        return RedirectResponse(url="/login", status_code=303)
-
-    query = supabase.table("proveedores").select("*").order("nombre", desc=False)
-    if buscar:
-        query = query.ilike("nombre", f"%{buscar}%")
-    
-    res = query.execute()
-    proveedores = res.data if res.data else []
-    
-    prov_obj = next((p for p in proveedores if p["id"] == select), None) if select else None
-    
-    return templates.TemplateResponse(request, "proveedores.html", {
-        "proveedores": proveedores, 
-        "busqueda": buscar,
-        "prov_obj": prov_obj
-    })
+        if ids:
+            # Ejecuta la eliminación en Supabase
+            resultado = supabase.table("ordenes_compra").delete().in_("id", ids).eq("usuario_id", user.id).execute()
+            print(f"[DEBUG ELIMINAR] Respuesta de Supabase: {resultado}")
+            
+        return {"success": True, "message": f"{len(ids)} orden(es) eliminada(s)"}
+    except Exception as e:
+        print(f"[DEBUG ELIMINAR ERROR]:\n{traceback.format_exc()}") # Imprime la traza completa del error en la terminal
+        return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
 @app.post("/proveedores/importar-xml")
 async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_token: str = Cookie(None)):

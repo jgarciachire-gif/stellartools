@@ -122,7 +122,7 @@
         <div class="flex items-center gap-3">
             <button id="btn-cancelar-seleccion"
                 class="px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">Cancelar</button>
-            <button id="btn-eliminar-seleccion"
+            <button id="btnEliminarMasivo" onclick="abrirModalEliminar()"
                 class="px-4 py-2 text-sm font-bold bg-red-600 hover:bg-red-700 text-white rounded-lg opacity-50 cursor-not-allowed transition-all shadow-sm flex items-center gap-2"
                 disabled>
                 <i class="fa-solid fa-trash-can"></i> Eliminar
@@ -167,8 +167,8 @@
                     <tr class="hover:bg-slate-50/80 transition-colors row-orden cursor-default" data-id="{{ o.id }}">
                         <td class="col-seleccion hidden p-4 text-center" onclick="event.stopPropagation();">
                             <input type="checkbox"
-                                class="chk-orden w-4 h-4 text-blue-600 bg-slate-100 border-slate-300 rounded focus:ring-blue-500 cursor-pointer"
-                                value="{{ o.id }}">
+                                class="select-row w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                data-id="{{ o.id }}" value="{{ o.id }}" onchange="actualizarEstadoBotonEliminar()">
                         </td>
 
                         <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
@@ -508,15 +508,31 @@
         });
 
         function actualizarContador() {
-            const seleccionados = document.querySelectorAll('.chk-orden:checked').length;
-            contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
+            // Unifica el selector a .select-row
+            const checkboxesSeleccionados = document.querySelectorAll('.select-row:checked');
+            const seleccionados = checkboxesSeleccionados.length;
 
-            if (seleccionados > 0) {
-                btnEliminarSeleccion.disabled = false;
-                btnEliminarSeleccion.classList.remove('opacity-50', 'cursor-not-allowed');
-            } else {
-                btnEliminarSeleccion.disabled = true;
-                btnEliminarSeleccion.classList.add('opacity-50', 'cursor-not-allowed');
+            if (contadorSeleccion) {
+                contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
+            }
+
+            // Sincroniza los IDs globales
+            ordenesAEliminarIds = Array.from(checkboxesSeleccionados)
+                .map(cb => parseInt(cb.getAttribute('data-id') || cb.value))
+                .filter(id => !isNaN(id));
+
+            console.log("[CLIENTE] IDs listos para eliminar:", ordenesAEliminarIds);
+
+            // Controla la habilitación del botón
+            const btnEliminar = document.getElementById('btnEliminarMasivo');
+            if (btnEliminar) {
+                if (seleccionados > 0) {
+                    btnEliminar.disabled = false;
+                    btnEliminar.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+                } else {
+                    btnEliminar.disabled = true;
+                    btnEliminar.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+                }
             }
         }
 
@@ -591,38 +607,143 @@
 
                 if (seleccionados.length === 0) return;
 
-                const confirmacion = confirm(`¿Estás seguro de que deseas eliminar ${seleccionados.length} orden(es) de forma
-permanente?`);
+                // Variable global fuera de la función para guardar la lista de elementos seleccionados
+                let seleccionadosAEliminar = [];
 
-                if (confirmacion) {
-                    btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Eliminando...';
-                    btnEliminarSeleccion.disabled = true;
+                // En el evento click de tu botón principal de "Eliminar Selección":
+                if (seleccionados.length === 0) return; // Si no hay nada seleccionado, no hace nada
 
-                    try {
-                        const response = await fetch('/ordenes/eliminar_masivo', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ ids: seleccionados })
-                        });
+                // Guardamos los seleccionados en la variable global
+                seleccionadosAEliminar = seleccionados;
 
-                        const data = await response.json();
+                // Actualizamos el texto en el modal con la cantidad exacta
+                document.getElementById('textoConfirmacionEliminar').textContent =
+                    `¿Estás seguro de que deseas eliminar ${seleccionados.length} orden(es) de forma permanente?`;
 
-                        if (data.status === 'ok') {
-                            window.location.reload();
-                        } else {
-                            alert("Ocurrió un error al eliminar: " + (data.mensaje || "Desconocido"));
-                            btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
-                            btnEliminarSeleccion.disabled = false;
-                        }
-                    } catch (error) {
-                        alert("Fallo de conexión al enviar la petición.");
-                        btnEliminarSeleccion.innerHTML = '<i class="fa-solid fa-trash-can"></i> Eliminar';
-                        btnEliminarSeleccion.disabled = false;
-                    }
-                }
+                // Mostramos el modal quitando la clase 'hidden'
+                document.getElementById('modalEliminarOrdenes').classList.remove('hidden');
             });
         }
     });
+
+    // Garantiza la apertura del modal con limpieza de clases oscuras
+    function abrirModalEliminar(ids) {
+        // Normaliza la entrada de IDs
+        ordenesAEliminarIds = Array.isArray(ids) ? ids : [ids];
+
+        const cantidad = ordenesAEliminarIds.length;
+        const textoModal = document.getElementById('textoConfirmacionEliminar');
+
+        if (textoModal) {
+            textoModal.textContent = `¿Estás seguro de que deseas eliminar ${cantidad} orden(es) de forma permanente?`;
+        }
+
+        const modal = document.getElementById('modalEliminarOrdenes');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+    // Cierra el modal y limpia el estado
+    function cerrarModalEliminar() {
+        document.getElementById('modalEliminarOrdenes').classList.add('hidden'); // Oculta el modal
+        seleccionadosAEliminar = []; // Limpia el arreglo temporal
+    }
+
+
+    // Procesa la eliminación masiva enviando los IDs por POST al backend
+    async function procesarEliminacionModal() {
+        console.log("[CLIENTE] IDs guardados a eliminar:", ordenesAEliminarIds);
+
+        if (!ordenesAEliminarIds || ordenesAEliminarIds.length === 0) {
+            alert("No hay ordenes seleccionadas para eliminar.");
+            cerrarModalEliminar();
+            return;
+        }
+
+        // Capturar el botón para manipular su estado visual
+        const btnConfirmar = document.getElementById('btnConfirmarEliminar') || document.activeElement;
+        const contenidoOriginal = btnConfirmar ? btnConfirmar.innerHTML : '';
+
+        try {
+            // Activar spinner y deshabilitar interacción
+            if (btnConfirmar) {
+                btnConfirmar.disabled = true;
+                btnConfirmar.classList.add('opacity-75', 'cursor-not-allowed');
+                btnConfirmar.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin"></i><span>Eliminando...</span>`;
+            }
+
+            const response = await fetch('/ordenes/eliminar_masivo', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ ids: ordenesAEliminarIds })
+            });
+
+            console.log("[CLIENTE] Estado de la respuesta HTTP:", response.status);
+            const data = await response.json();
+            console.log("[CLIENTE] Respuesta recibida del servidor:", data);
+
+            if (response.ok && data.success) {
+                window.location.reload(); // Recarga la vista para refrescar la lista
+            } else {
+                alert("Error del servidor: " + (data.message || "No se pudo eliminar"));
+                // Restaurar estado si falla la respuesta
+                if (btnConfirmar) {
+                    btnConfirmar.disabled = false;
+                    btnConfirmar.classList.remove('opacity-75', 'cursor-not-allowed');
+                    btnConfirmar.innerHTML = contenidoOriginal;
+                }
+            }
+        } catch (error) {
+            console.error("[CLIENTE ERROR] Fallo en la peticion Fetch:", error);
+            alert("Error de red o JS: " + error.message);
+            // Restaurar estado si hay excepción
+            if (btnConfirmar) {
+                btnConfirmar.disabled = false;
+                btnConfirmar.classList.remove('opacity-75', 'cursor-not-allowed');
+                btnConfirmar.innerHTML = contenidoOriginal;
+            }
+        }
+    }
+
+    // Captura dinámicamente los IDs marcados en la tabla al abrir el modal
+    function abrirModalEliminar() {
+        // Captura las casillas seleccionadas de la tabla
+        const checkboxes = document.querySelectorAll('input[type="checkbox"][data-id]:checked, input.select-row:checked');
+
+        // Mapea los IDs numéricos
+        ordenesAEliminarIds = Array.from(checkboxes)
+            .map(cb => parseInt(cb.getAttribute('data-id') || cb.value))
+            .filter(id => !isNaN(id));
+
+        console.log("[CLIENTE] IDs capturados para eliminar:", ordenesAEliminarIds);
+
+        if (ordenesAEliminarIds.length === 0) {
+            alert("Por favor, selecciona al menos una orden para eliminar.");
+            return;
+        }
+
+        // Actualiza el texto con la cantidad exacta de registros
+        const textoModal = document.getElementById('textoConfirmacionEliminar');
+        if (textoModal) {
+            textoModal.textContent = `¿Estás seguro de que deseas eliminar ${ordenesAEliminarIds.length} orden(es) de forma permanente?`;
+        }
+
+        // Abre el modal apuntando al ID correcto de tu HTML
+        const modal = document.getElementById('modalEliminarOrdenes');
+        if (modal) {
+            modal.classList.remove('hidden');
+        }
+    }
+
+    // Cierra el modal y limpia la variable global
+    function cerrarModalEliminar() {
+        document.getElementById('modalEliminarOrdenes').classList.add('hidden');
+        ordenesAEliminarIds = [];
+    }
+
     // Controles para Modales de Carga (PDF y XML)
     function abrirModalCargarOC() {
         const dropdown = document.getElementById('dropdown-opciones');
@@ -1035,6 +1156,43 @@ permanente?`);
         // Vuelve a inyectar las filas en el orden correcto
         filas.forEach(fila => tbody.appendChild(fila));
     }
+    // Controla el estado del botón principal de eliminación según las casillas marcadas
+    // Variable global para almacenar los IDs a eliminar
+    let ordenesAEliminarIds = [];
+
+    // Revisa las casillas marcadas y activa/desactiva el botón de eliminación
+    function actualizarEstadoBotonEliminar() {
+        const checkboxes = document.querySelectorAll('.select-row:checked');
+
+        // Captura directamente los IDs marcados
+        ordenesAEliminarIds = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-id') || cb.value)).filter(id => !isNaN(id));
+
+        console.log("[CLIENTE] IDs seleccionados en tiempo real:", ordenesAEliminarIds);
+
+        // Busca el botón de eliminar por ID o por atributo
+        const btnEliminar = document.getElementById('btnEliminarMasivo') || document.querySelector('[data-btn-eliminar]');
+
+        if (btnEliminar) {
+            if (ordenesAEliminarIds.length > 0) {
+                btnEliminar.disabled = false;
+                btnEliminar.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+            } else {
+                btnEliminar.disabled = true;
+                btnEliminar.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
+            }
+        }
+    }
+
+    // Event listener global para capturar clics en checkbox creados dinámicamente
+    document.addEventListener('change', function (e) {
+        if (e.target && (e.target.classList.contains('select-row') || e.target.id === 'selectAll')) {
+            if (e.target.id === 'selectAll') {
+                const filas = document.querySelectorAll('.select-row');
+                filas.forEach(cb => cb.checked = e.target.checked);
+            }
+            actualizarEstadoBotonEliminar();
+        }
+    });
 </script>
 
 <!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
@@ -1252,6 +1410,39 @@ permanente?`);
             <button type="button" onclick="location.reload()"
                 class="px-5 py-3 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all rounded-xl flex items-center gap-3 shadow-sm">
                 <i class="fa-solid fa-rotate-right"></i> Actualizar Órdenes
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Confirmar Eliminación (Fondo Blanco Claro Único) -->
+<div id="modalEliminarOrdenes"
+    class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 text-slate-800">
+
+        <!-- Icono de Advertencia -->
+        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 text-red-600 mb-4">
+            <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+        </div>
+
+        <!-- Encabezado y Texto -->
+        <div class="text-center">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Eliminar Registro(s)</h3>
+            <p id="textoConfirmacionEliminar" class="text-sm text-slate-500">
+                <!-- El mensaje dinámico se inserta desde JS -->
+            </p>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="mt-6 flex justify-end gap-3">
+            <button type="button" onclick="cerrarModalEliminar()"
+                class="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-xmark"></i> Cancelar
+            </button>
+            <button type="button" id="btnConfirmarEliminar" onclick="procesarEliminacionModal()"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-trash-can"></i> Eliminar
             </button>
         </div>
 
