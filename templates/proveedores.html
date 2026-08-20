@@ -224,8 +224,8 @@
             <h3 class="text-lg font-bold text-slate-800 mb-2">Cargar Data XML</h3>
             <p class="text-xs text-slate-500 mb-4">Selecciona el archivo XML con el directorio para actualizar la
                 información de proveedores.</p>
-            <form action="/proveedores/cargar-xml" method="POST" enctype="multipart/form-data" class="space-y-4">
-                <input type="file" name="xml_file" accept=".xml" required
+            <form action="/proveedores/importar-xml" method="POST" enctype="multipart/form-data" class="space-y-4">
+                <input type="file" name="archivo_xml" accept=".xml" required
                     class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" onclick="document.getElementById('modal-xml-menu').classList.add('hidden')"
