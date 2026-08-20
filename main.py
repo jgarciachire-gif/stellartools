@@ -3,7 +3,7 @@ import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Response, Cookie, Depends
-from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from typing import List
@@ -563,16 +563,18 @@ async def procesar_recepciones_xml(
     archivos_xml: List[UploadFile] = File(...), 
     access_token: str = Cookie(None)
 ):
-    # Validar sesión activa del usuario
+    es_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
     user = obtener_usuario_actual(access_token)
+    
     if not user:
+        if es_ajax:
+            return JSONResponse(status_code=401, content={"success": False, "mensaje": "No autorizado"})
         return RedirectResponse(url="/login", status_code=303)
 
-    procesados_exito = [] # Lista de diccionarios procesados
-    no_encontrados = []   # Lista de strings
+    procesados_exito = []
+    no_encontrados = []
 
     try:
-        # Iterar sobre la lista de archivos XML subidos
         for archivo_xml in archivos_xml:
             if not archivo_xml.filename:
                 continue
@@ -581,8 +583,7 @@ async def procesar_recepciones_xml(
             if not contenido:
                 continue
 
-            arbol = ET.fromstring(contenido) # Parsear XML
-
+            arbol = ET.fromstring(contenido)
             registros = arbol.findall('.//Registro')
             if not registros:
                 registros = arbol.findall('.//*')
@@ -595,9 +596,7 @@ async def procesar_recepciones_xml(
                 nro_oc_limpio = str(nro_oc_raw.lstrip('0'))
 
                 if nro_oc_limpio and fecha_rec_raw:
-                    import re  # Importación rápida para saneamiento de texto
-                    
-                    # Normalizar fecha YYYY-MM-DD limpiando textos extraños
+                    import re
                     fecha_formateada = None
                     dia, mes, anio = "", "", ""
                     
@@ -620,7 +619,6 @@ async def procesar_recepciones_xml(
                         no_encontrados.append(nro_oc_limpio)
                         continue
 
-                    # Consultar en Supabase incluyendo tienda_destino
                     res_oc = supabase.table("ordenes_compra").select("id, numero_orden, proveedor, tienda_destino").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
 
                     if res_oc.data and len(res_oc.data) > 0:
@@ -630,15 +628,13 @@ async def procesar_recepciones_xml(
                         prov_str = str(orden.get("proveedor", "N/A"))
                         tienda_str = str(orden.get("tienda_destino", "N/A"))
 
-                        # Actualizar fecha de recepción y estatus en Supabase
                         supabase.table("ordenes_compra").update({
                             "fecha_recepcion": fecha_formateada,
-                            "estatus": "Recibido"
+                            "estatus": "Despacho Recibido"
                         }).eq("id", orden_id).execute()
                         
                         fecha_mostrar = f"{dia}/{mes}/{anio}" if (dia and mes and anio) else fecha_formateada
 
-                        # Insertar incluyendo tienda_destino
                         procesados_exito.append({
                             "numero_orden": num_orden_str,
                             "proveedor": prov_str,
@@ -647,6 +643,15 @@ async def procesar_recepciones_xml(
                         })
                     else:
                         no_encontrados.append(nro_oc_limpio)
+
+        if es_ajax:
+            return JSONResponse(content={
+                "success": True,
+                "procesados": procesados_exito,
+                "no_encontrados": no_encontrados,
+                "total_procesados": len(procesados_exito),
+                "total_no_encontrados": len(no_encontrados)
+            })
 
         return templates.TemplateResponse(
             request,
@@ -660,10 +665,13 @@ async def procesar_recepciones_xml(
         )
 
     except ET.ParseError:
+        if es_ajax:
+            return JSONResponse(status_code=400, content={"success": False, "mensaje": "Uno de los archivos XML no tiene un formato válido."})
         return script_alerta_error("Uno de los archivos XML subidos no tiene un formato correcto.", redireccionar="/escanear")
     except Exception as e:
         error_msg = str(e).replace("'", "").replace('"', '').replace("\n", " ")
-        print(f"⚠️ ERROR XML VERCEL: {traceback.format_exc()}")
+        if es_ajax:
+            return JSONResponse(status_code=500, content={"success": False, "mensaje": f"Error: {error_msg}"})
         return script_alerta_error(f"Error procesando XML en servidor: {error_msg}", redireccionar="/escanear")
     
 @app.get("/escanear")
@@ -679,8 +687,12 @@ async def procesar_pdf(
     archivos_pdf: List[UploadFile] = File(...), 
     access_token: str = Cookie(None)
 ):
+    es_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
+    
     user = obtener_usuario_actual(access_token)
     if not user:
+        if es_ajax:
+            return JSONResponse(status_code=401, content={"success": False, "mensaje": "Sesión expirada. Por favor, inicia sesión nuevamente."})
         return RedirectResponse(url="/login", status_code=303)
 
     lista_datos = []
@@ -701,7 +713,6 @@ async def procesar_pdf(
                 "monto_total": 0.0
             }
         
-        # Buscar la Frecuencia de Despacho registrada del proveedor en Supabase
         prov_nombre = (datos_extraidos.get("proveedor") or "").strip()
         frecuencia_sugerida = 15
         if prov_nombre:
@@ -715,6 +726,9 @@ async def procesar_pdf(
         datos_extraidos["dias_despacho"] = frecuencia_sugerida
         datos_extraidos["nombre_archivo"] = archivo.filename
         lista_datos.append(datos_extraidos)
+
+    if es_ajax:
+        return JSONResponse(content={"success": True, "ordenes": lista_datos})
 
     return templates.TemplateResponse(request, "escanear.html", {
         "lista_datos": lista_datos

@@ -88,6 +88,19 @@
 
                 <div id="dropdown-opciones"
                     class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                    <!-- Opción para Cargar Órdenes (PDF) -->
+                    <button type="button" onclick="abrirModalCargarOC();"
+                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                        <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes (PDF)
+                    </button>
+
+                    <!-- Opción para Cargar Recepciones (XML) -->
+                    <button type="button" onclick="abrirModalCargarXML();"
+                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2 transition-colors">
+                        <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML)
+                    </button>
+
+                    <div class="border-t border-slate-100 my-1"></div>
                     <button id="btn-activar-seleccion"
                         class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
                         <i class="fa-solid fa-list-check"></i> Selección Múltiple
@@ -610,5 +623,638 @@ permanente?`);
             });
         }
     });
+    // Controles para Modales de Carga (PDF y XML)
+    function abrirModalCargarOC() {
+        const dropdown = document.getElementById('dropdown-opciones');
+        if (dropdown) dropdown.classList.add('hidden'); // Cierra el menú desplegable
+        document.getElementById('modal-cargar-oc').classList.remove('hidden'); // Muestra el modal
+    }
+
+    function cerrarModalCargarOC() {
+        document.getElementById('modal-cargar-oc').classList.add('hidden'); // Oculta el modal
+    }
+
+    function abrirModalCargarXML() {
+        const dropdown = document.getElementById('dropdown-opciones');
+        if (dropdown) dropdown.classList.add('hidden'); // Cierra el menú desplegable
+        document.getElementById('modal-cargar-xml').classList.remove('hidden'); // Muestra el modal
+    }
+
+    function cerrarModalCargarXML() {
+        document.getElementById('modal-cargar-xml').classList.add('hidden'); // Oculta el modal
+    }
+
+    async function validarYProcesarPDFModal(e) {
+        e.preventDefault();
+
+        const input = document.getElementById('input-pdf-modal');
+        let pesoTotal = 0;
+
+        for (let i = 0; i < input.files.length; i++) {
+            pesoTotal += input.files[i].size;
+        }
+
+        if (pesoTotal > 4 * 1024 * 1024) {
+            alert('El peso total de los archivos supera los 4 MB permitidos.');
+            return;
+        }
+
+        const btn = document.getElementById('btn-procesar-pdf-modal');
+        const texto = document.getElementById('btn-texto-pdf-modal');
+        const spinner = document.getElementById('btn-spinner-pdf-modal');
+
+        texto.innerText = "Extrayendo...";
+        spinner.classList.remove('hidden');
+        btn.classList.add('opacity-75', 'cursor-not-allowed');
+        btn.disabled = true;
+
+        const formData = new FormData();
+        for (let i = 0; i < input.files.length; i++) {
+            formData.append('archivos_pdf', input.files[i]);
+        }
+
+        try {
+            const response = await fetch('/escanear/procesar', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest' // Indica a FastAPI que es una petición AJAX
+                },
+                credentials: 'same-origin', // Asegura el envío de cookies de autenticación
+                body: formData
+            });
+
+            // Si FastAPI redirigió a /login (código 401 u otro HTML)
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("La sesión ha expirado o el servidor devolvió una respuesta HTML en lugar de JSON.");
+            }
+
+            const data = await response.json();
+
+            if (data.success) {
+                cerrarModalCargarOC();
+                renderizarTablaDetalleOC(data.ordenes);
+                document.getElementById('modal-detalle-extraido-oc').classList.remove('hidden');
+            } else {
+                alert('Error al procesar el archivo: ' + (data.mensaje || 'Respuesta no válida'));
+            }
+        } catch (error) {
+            console.error('Error en la extracción:', error);
+            alert('Ocurrió un error al procesar la solicitud: ' + error.message);
+        } finally {
+            texto.innerText = "Procesar PDF(s)";
+            spinner.classList.add('hidden');
+            btn.classList.remove('opacity-75', 'cursor-not-allowed');
+            btn.disabled = false;
+        }
+    }
+
+    // Renderiza dinámicamente cada orden extraída en formato de tarjeta editable
+    function renderizarTablaDetalleOC(ordenes) {
+        const contenedor = document.getElementById('contenedor-tarjetas-oc');
+        const contador = document.getElementById('total-ordenes-count');
+
+        contenedor.innerHTML = '';
+        contador.innerText = ordenes.length;
+
+        ordenes.forEach((datos) => {
+            const diasInventarioSugerido = datos.dias_despacho !== null && datos.dias_despacho !== undefined ? datos.dias_despacho : 15;
+
+            const tarjetaHtml = `
+            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 transition-opacity duration-300 tarjeta-oc">
+                
+                <div class="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
+                            <i class="fa-solid fa-file-pdf"></i> ${datos.nombre_archivo || 'Archivo PDF'}
+                        </span>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-xs text-slate-400 font-medium">Fecha Emisión:</span>
+                        <span class="text-xs font-bold text-slate-700 ml-1">${datos.fecha_emision || 'No detectada'}</span>
+                    </div>
+                </div>
+
+                <form action="/ordenes/crear" method="POST" class="space-y-4 orden-form-modal">
+                    <input type="hidden" name="ajax" value="true">
+                    <input type="hidden" name="productos_json" value="[]">
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nº Orden</label>
+                            <input type="text" name="numero_orden" value="${datos.numero_orden || ''}" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Proveedor</label>
+                            <input type="text" name="proveedor" value="${datos.proveedor || ''}" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tienda Destino</label>
+                            <input type="text" name="tienda_destino" value="${datos.tienda_destino || ''}" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Monto Total ($)</label>
+                            <input type="number" step="0.01" name="monto_total" value="${datos.monto_total || 0.0}" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha Emisión / Envío</label>
+                            <input type="date" name="fecha_emision" value="${datos.fecha_emision || ''}" required
+                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                            <input type="hidden" name="fecha_envio" value="${datos.fecha_envio || ''}">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-blue-900 uppercase mb-1">Días Inventario</label>
+                            <input type="number" name="dias_inventario" min="1" max="99" value="${diasInventarioSugerido}" required
+                                class="w-full px-3 py-2 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        </div>
+                    </div>
+
+                    <div class="pt-2 flex justify-end">
+                        <button type="submit"
+                            class="btn-guardar-individual bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm">
+                            <i class="fa-solid fa-floppy-disk"></i> Guardar en Diario
+                        </button>
+                    </div>
+                </form>
+            </div>
+        `;
+            contenedor.innerHTML += tarjetaHtml;
+        });
+
+        // Asignar los eventos submit a las tarjetas recién creadas
+        activarEventosFormulariosModal();
+    }
+
+    // Función para guardar individualmente una orden mediante AJAX
+    async function guardarOrdenModal(form) {
+        const btnSubmit = form.querySelector('.btn-guardar-individual');
+        const formData = new FormData(form);
+        const tarjeta = form.closest('.tarjeta-oc');
+
+        try {
+            btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+            btnSubmit.disabled = true;
+
+            const response = await fetch('/ordenes/crear', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.status === 'ok') {
+                btnSubmit.innerHTML = '<i class="fa-solid fa-check"></i> Guardado';
+                btnSubmit.classList.replace('bg-emerald-600', 'bg-slate-400');
+                btnSubmit.classList.replace('hover:bg-emerald-700', 'hover:bg-slate-500');
+
+                tarjeta.classList.add('opacity-50', 'pointer-events-none');
+                form.classList.add('guardado-exito');
+                return true;
+            } else {
+                alert('Atención: ' + data.mensaje);
+                btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Diario';
+                btnSubmit.disabled = false;
+                return false;
+            }
+        } catch (error) {
+            alert('Error de conexión al guardar.');
+            btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Diario';
+            btnSubmit.disabled = false;
+            return false;
+        }
+    }
+
+    // Asigna event listeners dinámicos a cada formulario y al botón "Guardar Todo"
+    function activarEventosFormulariosModal() {
+        const forms = document.querySelectorAll('.orden-form-modal');
+        const btnGuardarTodo = document.getElementById('btn-guardar-todo-modal');
+
+        forms.forEach(form => {
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                await guardarOrdenModal(form);
+            });
+        });
+
+        if (btnGuardarTodo) {
+            // Remover handlers previos para evitar ejecuciones duplicadas
+            const nuevoBtn = btnGuardarTodo.cloneNode(true);
+            btnGuardarTodo.parentNode.replaceChild(nuevoBtn, btnGuardarTodo);
+
+            nuevoBtn.addEventListener('click', async () => {
+                nuevoBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando Todo...';
+                nuevoBtn.disabled = true;
+
+                let todosExitosos = true;
+
+                for (const form of forms) {
+                    if (!form.classList.contains('guardado-exito')) {
+                        const exito = await guardarOrdenModal(form);
+                        if (!exito) {
+                            todosExitosos = false;
+                        }
+                    }
+                }
+
+                if (todosExitosos) {
+                    nuevoBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> Todo Listo';
+                    nuevoBtn.classList.replace('bg-blue-600', 'bg-emerald-600');
+                    nuevoBtn.classList.replace('hover:bg-blue-700', 'hover:bg-emerald-700');
+
+                    setTimeout(() => {
+                        window.location.reload(); // Recargar la página para actualizar la lista de Órdenes de Compra
+                    }, 1200);
+                } else {
+                    nuevoBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Guardar Todo';
+                    nuevoBtn.disabled = false;
+                    alert('Hubo problemas guardando algunas órdenes. Revisa los mensajes.');
+                }
+            });
+        }
+    }
+    // Procesa asíncronamente el formulario de XML y renderiza la respuesta
+    async function procesarXMLModal(e) {
+        e.preventDefault();
+
+        // Referencias a elementos
+        const input = document.getElementById('input-xml-modal');
+        const btn = document.getElementById('btn-procesar-xml-modal');
+        const texto = document.getElementById('btn-texto-xml-modal');
+        const spinner = document.getElementById('btn-spinner-xml-modal');
+        const modalDetalle = document.getElementById('modal-detalle-xml-oc');
+
+        // Validación básica de archivos
+        if (!input || !input.files || input.files.length === 0) return;
+
+        // Estado visual de carga (con verificación para evitar errores null)
+        if (texto) texto.innerText = "Procesando...";
+        if (spinner) spinner.classList.remove('hidden');
+        if (btn) {
+            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            btn.disabled = true;
+        }
+
+        const formData = new FormData();
+        for (let i = 0; i < input.files.length; i++) {
+            formData.append('archivos_xml', input.files[i]);
+        }
+
+        try {
+            const response = await fetch('/recepciones/procesar-xml', {
+                method: 'POST',
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                // Cierra el modal de selección de archivo si la función existe
+                if (typeof cerrarModalCargarXML === 'function') cerrarModalCargarXML();
+
+                // Renderiza los datos procesados
+                renderizarResumenXML(data);
+
+                // Muestra el modal de resumen
+                if (modalDetalle) modalDetalle.classList.remove('hidden');
+            } else {
+                alert('Error: ' + (data.mensaje || 'Respuesta no válida del servidor.'));
+            }
+        } catch (error) {
+            console.error('Error procesando XML:', error);
+            alert('Ocurrió un error al procesar los archivos XML.');
+        } finally {
+            // Restaurar estado original del botón
+            if (texto) texto.innerText = "Procesar Recepciones";
+            if (spinner) spinner.classList.add('hidden');
+            if (btn) {
+                btn.classList.remove('opacity-75', 'cursor-not-allowed');
+                btn.disabled = false;
+            }
+        }
+    }
+
+    // Función auxiliar para desinfectar texto y prevenir ataques XSS
+    function escaparHTML(str) {
+        if (!str) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // Renderizado corregido con estilos idénticos al módulo "escanear"
+    function renderizarResumenXML(data) {
+        const bloqueExito = document.getElementById('bloque-xml-exito');
+        const tablaExito = document.getElementById('tabla-xml-exito-body');
+        const countExito = document.getElementById('count-xml-exito');
+
+        const alertaNoEncontrados = document.getElementById('alerta-xml-no-encontradas');
+        const countNoEncontrados = document.getElementById('count-xml-no-encontradas');
+
+        if (alertaNoEncontrados && countNoEncontrados) {
+            if (data.total_no_encontrados && data.total_no_encontrados > 0) {
+                countNoEncontrados.innerText = `${data.total_no_encontrados} orden(es)`;
+                alertaNoEncontrados.classList.remove('hidden');
+            } else {
+                alertaNoEncontrados.classList.add('hidden');
+            }
+        }
+
+        if (tablaExito) {
+            tablaExito.innerHTML = '';
+
+            if (data.procesados && data.procesados.length > 0) {
+                if (countExito) countExito.innerText = data.procesados.length;
+
+                data.procesados.forEach(row => {
+                    tablaExito.innerHTML += `
+                    <tr class="hover:bg-slate-50/50 transition-colors text-slate-700">
+                        <td class="px-4 py-2.5 font-bold text-slate-800">${escaparHTML(row.numero_orden)}</td>
+                        <td class="px-4 py-2.5 font-medium text-blue-800">${escaparHTML(row.proveedor || 'N/A')}</td>
+                        <td class="px-4 py-2.5 font-semibold text-slate-700">${escaparHTML(row.tienda_destino || 'N/A')}</td>
+                        <td class="px-4 py-2.5 font-medium text-slate-700">${escaparHTML(row.fecha_recepcion)}</td>
+                        <td class="px-4 py-2.5 text-center">
+                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
+                                Recibido
+                            </span>
+                        </td>
+                    </tr>
+                `;
+                });
+                if (bloqueExito) bloqueExito.classList.remove('hidden');
+            } else {
+                if (bloqueExito) bloqueExito.classList.add('hidden');
+            }
+        }
+    }
+
+    function cerrarModalDetalleXML() {
+        const modal = document.getElementById('modal-detalle-xml-oc');
+        if (modal) modal.classList.add('hidden');
+    }
 </script>
+<script>
+    // Función faltante para cerrar el modal de detalle extraído de PDF
+    function cerrarModalDetalleOC() {
+        const modal = document.getElementById('modal-detalle-extraido-oc');
+        if (modal) modal.classList.add('hidden'); // Oculta el modal de detalle de PDF
+    }
+    // Función de ordenamiento bidireccional por columna
+    const estadoOrden = {};
+
+    function ordenarTablaXML(colIndex) {
+        const tbody = document.getElementById('tabla-xml-exito-body');
+        if (!tbody) return;
+
+        const filas = Array.from(tbody.querySelectorAll('tr'));
+
+        // Alterna entre ascendente (true) y descendente (false) para cada columna individual
+        estadoOrden[colIndex] = !estadoOrden[colIndex];
+        const esAscendente = estadoOrden[colIndex];
+
+        filas.sort((a, b) => {
+            const valA = a.children[colIndex]?.textContent.trim() || '';
+            const valB = b.children[colIndex]?.textContent.trim() || '';
+
+            return esAscendente
+                ? valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' })
+                : valB.localeCompare(valA, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        // Vuelve a inyectar las filas en el orden correcto
+        filas.forEach(fila => tbody.appendChild(fila));
+    }
+</script>
+
+<!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
+<div id="modal-cargar-oc"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+        <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF)
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">
+            Selecciona uno o varios archivos PDF para extraer datos de las órdenes (Máx. 4 MB total).
+        </p>
+
+        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" id="form-pdf-modal"
+            onsubmit="validarYProcesarPDFModal(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Seleccionar archivo(s) PDF de Órdenes (Máx. 4 MB total)
+                </label>
+                <input type="file" id="input-pdf-modal" name="archivos_pdf" accept=".pdf" multiple required
+                    class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
+            </div>
+
+            <!-- Botones alineados de lado a lado -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
+                <button type="button" onclick="cerrarModalCargarOC()"
+                    class="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+                    Cancelar
+                </button>
+                <button type="submit" id="btn-procesar-pdf-modal"
+                    class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 text-xs shadow-sm">
+                    <span id="btn-texto-pdf-modal">Procesar</span>
+                    <svg id="btn-spinner-pdf-modal" class="hidden animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 2: Cargar Recepciones (XML) -->
+<div id="modal-cargar-xml"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+        <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML)
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">
+            Subir archivo(s) XML con datos de recepción para actualizar el estado de las órdenes.
+        </p>
+
+        <!-- Formulario con procesamiento AJAX dinámico -->
+        <form action="/recepciones/procesar-xml" method="POST" enctype="multipart/form-data" id="form-xml-modal"
+            onsubmit="procesarXMLModal(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Seleccionar archivo(s) XML de Recepciones
+                </label>
+                <input type="file" id="input-xml-modal" name="archivos_xml" accept=".xml" multiple required
+                    class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
+            </div>
+
+            <!-- Botones alineados de lado a lado -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
+                <button type="button" onclick="cerrarModalCargarXML()"
+                    class="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+                    Cancelar
+                </button>
+                <button type="submit" id="btn-procesar-xml-modal"
+                    class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 text-xs shadow-sm">
+                    <span id="btn-texto-xml-modal">Procesar</span>
+                    <svg id="btn-spinner-xml-modal" class="hidden animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 3: Resultado de Órdenes Extraídas de PDF -->
+<div id="modal-detalle-extraido-oc"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div
+        class="bg-slate-50 rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
+
+        <!-- Cabecera -->
+        <div
+            class="flex justify-between items-center pb-4 border-b border-slate-200 bg-white -mx-6 -mt-6 p-6 rounded-t-2xl">
+            <div>
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-blue-600"></i>
+                    Órdenes Procesadas (<span id="total-ordenes-count">0</span>)
+                </h3>
+                <p class="text-xs text-slate-500">Revisa, edita si es necesario y guarda las órdenes extraídas en el
+                    diario.</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button type="button" id="btn-guardar-todo-modal"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs">
+                    <i class="fa-solid fa-layer-group"></i> Guardar Todo
+                </button>
+                <button type="button" onclick="cerrarModalDetalleOC()"
+                    class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Contenedor dinámico con scroll para las tarjetas de órdenes -->
+        <div id="contenedor-tarjetas-oc" class="overflow-y-auto my-4 space-y-4 pr-1 flex-1">
+            <!-- Las tarjetas editables se renderizan aquí mediante JS -->
+        </div>
+
+        <!-- Pie del Modal Cargar PDF -->
+        <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-100 mt-4">
+            <button type="button" onclick="cerrarModalDetalleOC()"
+                class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+                Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 4: Resultado del Procesamiento de Recepciones XML -->
+<div id="modal-detalle-xml-oc"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[85vh]">
+
+        <!-- Cabecera -->
+        <div class="flex justify-between items-center pb-4 border-b border-slate-100">
+            <div>
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-file-code text-blue-600"></i> Resumen del Procesamiento XML
+                </h3>
+                <p class="text-xs text-slate-500">Resultado de la actualización automática de fechas de recepción.
+                </p>
+            </div>
+            <button type="button" onclick="cerrarModalDetalleXML()"
+                class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Contenedor principal -->
+        <div class="overflow-y-auto my-4 space-y-4 pr-1 flex-1">
+
+            <!-- Tabla de Órdenes Actualizadas -->
+            <div id="bloque-xml-exito" class="hidden">
+                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Órdenes Actualizadas Con Éxito (<span id="count-xml-exito">0</span>)
+                </h4>
+                <div class="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                    <table class="w-full text-left border-collapse">
+                        <!-- Encabezados interactivos para ordenar la tabla -->
+                        <thead
+                            class="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">
+                            <tr>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(0)">
+                                    <div class="flex items-center gap-1">N° Orden <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(1)">
+                                    <div class="flex items-center gap-1">Proveedor <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(2)">
+                                    <div class="flex items-center gap-1">Tienda Destino <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(3)">
+                                    <div class="flex items-center gap-1">Fecha Recepción <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 text-center">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-xml-exito-body" class="divide-y divide-slate-100 text-xs">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Resumen Informativo: No Encontradas -->
+            <div id="alerta-xml-no-encontradas"
+                class="hidden bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between text-xs text-amber-900">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm"></i>
+                    <span>Órdenes no encontradas en la base de datos:</span>
+                </div>
+                <span id="count-xml-no-encontradas"
+                    class="font-bold bg-amber-200/60 text-amber-900 px-2.5 py-0.5 rounded-lg">0</span>
+            </div>
+        </div>
+
+        <!-- Pie -->
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button type="button" onclick="location.reload()"
+                class="px-5 py-3 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all rounded-xl flex items-center gap-3 shadow-sm">
+                <i class="fa-solid fa-rotate-right"></i> Actualizar Órdenes
+            </button>
+        </div>
+
+    </div>
+</div>
 {% endblock %}
