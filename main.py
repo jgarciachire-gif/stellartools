@@ -353,7 +353,28 @@ async def eliminar_ordenes_masivo(request: Request, access_token: str = Cookie(N
     except Exception as e:
         print(f"[DEBUG ELIMINAR ERROR]:\n{traceback.format_exc()}") # Imprime la traza completa del error en la terminal
         return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
+@app.get("/proveedores")
+def vista_proveedores(request: Request, select: int = None, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
 
+    # Consultar la lista de proveedores
+    res = supabase.table("proveedores").select("*").order("nombre").execute()
+    proveedores = res.data if res and res.data else []
+
+    # Consultar proveedor seleccionado si existe el parámetro ?select=ID
+    prov_obj = None
+    if select:
+        res_sel = supabase.table("proveedores").select("*").eq("id", select).maybe_single().execute()
+        if res_sel and res_sel.data:
+            prov_obj = res_sel.data
+
+    return templates.TemplateResponse(request, "proveedores.html", {
+        "proveedores": proveedores,
+        "prov_obj": prov_obj
+    })
+    
 @app.post("/proveedores/importar-xml")
 async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
