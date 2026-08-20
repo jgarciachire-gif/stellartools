@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,8 +8,57 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
+
 <body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
 
+    <!-- Modal de Alertas (Éxito, Error, Info) -->
+    <div id="modal-alerta"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center transform transition-all scale-100">
+            <div id="modal-icono" class="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                <!-- Se inyecta dinámicamente -->
+            </div>
+            <h3 id="modal-titulo" class="text-xl font-bold text-slate-800 mb-2"></h3>
+            <p id="modal-mensaje" class="text-sm text-slate-600 mb-6"></p>
+            <button onclick="cerrarModalAlerta()"
+                class="w-full py-2.5 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl shadow transition">
+                Entendido
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal Recuperar Contraseña -->
+    <div id="modal-reset"
+        class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
+            <button onclick="toggleModalReset(false)"
+                class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-lg">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="text-center mb-6">
+                <div
+                    class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <i class="fa-solid fa-key text-xl"></i>
+                </div>
+                <h3 class="text-xl font-bold text-slate-800">Recuperar Contraseña</h3>
+                <p class="text-xs text-slate-500 mt-1">Ingresa tu correo para recibir un enlace de restablecimiento.</p>
+            </div>
+            <form action="/recuperar-password" method="POST" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-slate-600 mb-1">Correo Electrónico</label>
+                    <input type="email" name="email" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        placeholder="tu@correo.com">
+                </div>
+                <button type="submit"
+                    class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition">
+                    Enviar Enlace
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tarjeta Principal -->
     <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
         <div class="text-center mb-8">
             <i class="fa-solid fa-boxes-packing text-blue-600 text-5xl mb-3"></i>
@@ -16,41 +66,91 @@
             <p class="text-sm text-slate-500">Control de Compras ERP</p>
         </div>
 
-        <!-- Pestañas para cambiar entre Login y Registro -->
+        <!-- Tabs Login / Registro -->
         <div class="flex border-b border-slate-200 mb-6">
-            <button onclick="mostrarFormulario('login')" id="btn-login" class="flex-1 py-2 font-bold text-blue-600 border-b-2 border-blue-600 transition">Ingresar</button>
-            <button onclick="mostrarFormulario('registro')" id="btn-registro" class="flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition">Crear Cuenta</button>
+            <button onclick="mostrarFormulario('login')" id="btn-login"
+                class="flex-1 py-2 font-bold text-blue-600 border-b-2 border-blue-600 transition">Ingresar</button>
+            <button onclick="mostrarFormulario('registro')" id="btn-registro"
+                class="flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition">Crear Cuenta</button>
         </div>
-
-        <!-- Formulario de Inicio de Sesión -->
+        <!-- Formulario Restablecer Contraseña (se activa desde el enlace enviado al correo) -->
+        {% if reset_mode %}
+        <form id="form-reset-pass" action="/reset-password" method="POST" class="space-y-4">
+            <div class="text-center mb-4">
+                <h2 class="text-lg font-bold text-slate-800">Nueva Contraseña</h2>
+                <p class="text-xs text-slate-500">Ingresa la nueva clave para tu cuenta</p>
+            </div>
+            <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nueva Contraseña (Mín. 6
+                    caracteres)</label>
+                <div class="relative">
+                    <input type="password" id="reset-new-pass" name="nueva_password" minlength="6" required
+                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <button type="button" onclick="togglePassword('reset-new-pass', 'eye-reset-new')"
+                        class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                        <i id="eye-reset-new" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
+            </div>
+            <button type="submit"
+                class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition mt-2">
+                Actualizar Contraseña
+            </button>
+        </form>
+        {% else %}
+        <!-- Formulario Login -->
         <form id="form-login" action="/login" method="POST" class="space-y-4 block">
             <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico</label>
-                <input type="email" name="email" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <label class="block text-xs font-bold text-slate-600 mb-1">Correo Electrónico</label>
+                <input type="email" name="email" required
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Contraseña</label>
-                <input type="password" name="password" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                <div class="flex justify-between items-center mb-1">
+                    <label class="block text-xs font-bold text-slate-600 ">Contraseña</label>
+                    <button type="button" onclick="toggleModalReset(true)"
+                        class="text-xs text-blue-600 hover:underline font-semibold">¿Olvidaste tu contraseña?</button>
+                </div>
+                <div class="relative">
+                    <input type="password" id="login-pass" name="password" required
+                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    <button type="button" onclick="togglePassword('login-pass', 'eye-login')"
+                        class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                        <i id="eye-login" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
             </div>
-            <button type="submit" class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition mt-2">
+            <button type="submit"
+                class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition mt-2">
                 Iniciar Sesión
             </button>
         </form>
 
-        <!-- Formulario de Registro (Oculto por defecto) -->
+        <!-- Formulario Registro -->
         <form id="form-registro" action="/registro" method="POST" class="space-y-4 hidden">
             <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Correo Electrónico</label>
-                <input type="email" name="email" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <label class="block text-xs font-bold text-slate-600 mb-1">Correo Electrónico</label>
+                <input type="email" name="email" required
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
             </div>
             <div>
-                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Crea una Contraseña (Mín. 6 caracteres)</label>
-                <input type="password" name="password" minlength="6" required class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                <label class="block text-xs font-bold text-slate-600 mb-1">Crea una Contraseña (Mín. 6
+                    caracteres)</label>
+                <div class="relative">
+                    <input type="password" id="reg-pass" name="password" minlength="6" required
+                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    <button type="button" onclick="togglePassword('reg-pass', 'eye-reg')"
+                        class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
+                        <i id="eye-reg" class="fa-solid fa-eye"></i>
+                    </button>
+                </div>
             </div>
-            <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition mt-2">
+            <button type="submit"
+                class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition mt-2">
                 Registrarse
             </button>
         </form>
+        {% endif %}
     </div>
 
     <script>
@@ -70,6 +170,80 @@
                 bLogin.className = "flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition";
             }
         }
+
+        // Alternar visualización de la contraseña
+        function togglePassword(inputId, eyeId) {
+            const input = document.getElementById(inputId);
+            const eye = document.getElementById(eyeId);
+            if (input.type === 'password') {
+                input.type = 'text';
+                eye.classList.remove('fa-eye');
+                eye.classList.add('fa-eye-slash');
+            } else {
+                input.type = 'password';
+                eye.classList.remove('fa-eye-slash');
+                eye.classList.add('fa-eye');
+            }
+        }
+
+        // Modal para pedir el correo de recuperar contraseña
+        function toggleModalReset(show) {
+            const modal = document.getElementById('modal-reset');
+            show ? modal.classList.remove('hidden') : modal.classList.add('hidden');
+        }
+
+        // Lógica para mostrar la alerta Modal devuelta desde FastAPI
+        function mostrarModalAlerta(tipo, titulo, mensaje) {
+            const modal = document.getElementById('modal-alerta');
+            const icoBox = document.getElementById('modal-icono');
+            document.getElementById('modal-titulo').innerText = titulo;
+            document.getElementById('modal-mensaje').innerText = mensaje;
+
+            if (tipo === 'exito') {
+                icoBox.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl bg-emerald-100 text-emerald-600";
+                icoBox.innerHTML = '<i class="fa-solid fa-envelope-circle-check"></i>';
+            } else if (tipo === 'error') {
+                icoBox.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl bg-red-100 text-red-600";
+                icoBox.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+            } else {
+                icoBox.className = "w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl bg-blue-100 text-blue-600";
+                icoBox.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
+            }
+            modal.classList.remove('hidden');
+        }
+
+        function cerrarModalAlerta() {
+            document.getElementById('modal-alerta').classList.add('hidden');
+            // Limpia los parámetros URL si los hay
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
+
+        // Reemplazar la sección window.addEventListener('DOMContentLoaded', ...) antigua por esta:
+        window.addEventListener('DOMContentLoaded', () => {
+            // Captura el token hash devuelto por Supabase cuando el usuario abre el enlace del correo
+            const hash = window.location.hash;
+            if (hash && hash.includes('access_token=')) {
+                const params = new URLSearchParams(hash.replace('#', '?'));
+                const token = params.get('access_token');
+                if (token) {
+                    // Setea el token en las cookies y redirige al modo de reseteo
+                    document.cookie = `access_token=${token}; path=/; max-age=3600`;
+                    window.location.href = '/reset-password';
+                    return;
+                }
+            }
+
+            // Muestra el modal de alerta si existen parámetros de notificación en la URL
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('msg_tipo')) {
+                mostrarModalAlerta(
+                    params.get('msg_tipo'),
+                    params.get('msg_titulo') || 'Notificación',
+                    params.get('msg_texto') || ''
+                );
+            }
+        });
     </script>
 </body>
+
 </html>

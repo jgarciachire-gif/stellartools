@@ -46,6 +46,12 @@ def script_alerta_error(mensaje: str, redireccionar: str = None) -> HTMLResponse
         js = f"<script>alert('{msj_limpio}'); window.history.back();</script>"
     return HTMLResponse(content=js)
 
+def script_alerta_modal(tipo: str, titulo: str, mensaje: str, redireccionar: str = "/login") -> RedirectResponse:
+    import urllib.parse
+    msj_enc = urllib.parse.quote(mensaje)
+    tit_enc = urllib.parse.quote(titulo)
+    return RedirectResponse(url=f"{redireccionar}?msg_tipo={tipo}&msg_titulo={tit_enc}&msg_texto={msj_enc}", status_code=303)
+
 @app.get("/login")
 def vista_login(request: Request):
     token = request.cookies.get("access_token")
@@ -56,20 +62,24 @@ def vista_login(request: Request):
 @app.post("/registro")
 def procesar_registro(email: str = Form(...), password: str = Form(...)):
     try:
-        
+        # Supabase envía automáticamente el correo de confirmación
         supabase.auth.sign_up({"email": email, "password": password})
-        
-        return script_alerta_error("¡Registro exitoso! Ya puedes iniciar sesión con tu correo.", redireccionar="/login")
+        return script_alerta_modal(
+            tipo="exito", 
+            titulo="¡Registro Exitoso!", 
+            mensaje="Hemos enviado un enlace de confirmación a tu correo. Por favor, verifícalo para activar tu cuenta."
+        )
     except Exception as e:
-        
-        return script_alerta_error(f"Error al registrar: {str(e)}")
+        return script_alerta_modal(
+            tipo="error", 
+            titulo="Error de Registro", 
+            mensaje=f"No se pudo crear la cuenta: {str(e)}"
+        )
 
 @app.post("/login")
 def procesar_login(email: str = Form(...), password: str = Form(...)):
     try:
-        # Autentica al usuario contra Supabase
         auth_res = supabase.auth.sign_in_with_password({"email": email, "password": password})
-        
         response = RedirectResponse(url="/", status_code=303)
         response.set_cookie(
             key="access_token", 
@@ -79,8 +89,44 @@ def procesar_login(email: str = Form(...), password: str = Form(...)):
         )
         return response
     except Exception as e:
-        # Sanitiza la alerta en caso de credenciales incorrectas o fallo de conexión
-        return script_alerta_error("Credenciales incorrectas o error en el servidor.")
+        return script_alerta_modal(
+            tipo="error", 
+            titulo="Error de Acceso", 
+            mensaje="Credenciales incorrectas o correo no verificado aún."
+        )
+
+@app.post("/recuperar-password")
+def enviar_recuperacion(request: Request, email: str = Form(...)):
+    try:
+        # Define la URL de retorno apuntando al endpoint de reset
+        redirect_to = str(request.url_for("vista_reset_password"))
+        supabase.auth.reset_password_for_email(email, {"redirect_to": redirect_to})
+        return script_alerta_modal(
+            tipo="exito", 
+            titulo="Correo Enviado", 
+            mensaje="Si el correo está registrado, recibirás un enlace para restablecer tu contraseña."
+        )
+    except Exception as e:
+        return script_alerta_modal(
+            tipo="error", 
+            titulo="Error", 
+            mensaje=f"No se pudo procesar la solicitud: {str(e)}"
+        )
+
+@app.get("/reset-password")
+def vista_reset_password(request: Request):
+    return templates.TemplateResponse(request, "login.html", {"reset_mode": True})
+
+@app.post("/reset-password")
+def procesar_reset_password(access_token: str = Cookie(None), nueva_password: str = Form(...)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return script_alerta_modal(tipo="error", titulo="Sesión Expirada", mensaje="El enlace de recuperación ha expirado o es inválido.")
+    try:
+        supabase.auth.update_user({"password": nueva_password})
+        return script_alerta_modal(tipo="exito", titulo="Contraseña Actualizada", mensaje="Tu clave se ha cambiado con éxito. Puedes iniciar sesión.")
+    except Exception as e:
+        return script_alerta_modal(tipo="error", titulo="Error", mensaje=f"Error al actualizar la contraseña: {str(e)}")
 
 @app.get("/logout")
 def cerrar_sesion():
