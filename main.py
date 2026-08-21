@@ -458,7 +458,41 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
         return RedirectResponse(url="/proveedores", status_code=303)
     except ET.ParseError:
         return HTMLResponse("<script>alert('Error: El archivo XML no tiene un formato válido.'); window.location.href='/proveedores';</script>")
-# --- MÓDULO DE PERFIL DE COMPRADOR Y CATEGORÍAS ---
+
+# Endpoint para generar y descargar el reporte de proveedores en formato XML
+@app.get("/proveedores/exportar-xml")
+def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None)): # Define la ruta GET y obtiene el token de sesión
+    user = obtener_usuario_actual(access_token) # Valida el usuario autenticado
+    if not user: # Redirige si la sesión expiró o no existe
+        return RedirectResponse(url="/login", status_code=303) # Redirección limpia al login
+
+    res = supabase.table("proveedores").select("*").order("nombre").execute() # Consulta todos los proveedores de la base de datos
+    proveedores = res.data if res and res.data else [] # Extrae el listado de proveedores
+
+    root = ET.Element("Proveedores") # Crea el nodo raíz principal del documento XML
+    for p in proveedores: # Itera sobre cada registro de proveedor
+        item = ET.SubElement(root, "Proveedor") # Subnodo individual por cada proveedor
+        ET.SubElement(item, "Codigo").text = str(p.get("codigo") or "") # Agrega nodo Código
+        ET.SubElement(item, "Nombre").text = str(p.get("nombre") or "") # Agrega nodo Nombre / Razón Social
+        ET.SubElement(item, "Contacto").text = str(p.get("contacto") or "") # Agrega nodo Contacto / Atención
+        ET.SubElement(item, "Telefono").text = str(p.get("telefono") or "") # Agrega nodo Teléfono
+        ET.SubElement(item, "DiasCredito").text = str(p.get("dias_credito") if p.get("dias_credito") is not None else 0) # Agrega Días de Crédito
+        ET.SubElement(item, "FrecuenciaPedidos").text = str(p.get("dias_despacho") if p.get("dias_despacho") is not None else 3) # Agrega Frecuencia de Pedidos
+        
+        cats = p.get("categorias") or [] # Obtiene la lista de categorías o asigna lista vacía
+        if isinstance(cats, list): # Verifica si es una lista
+            cats_str = ", ".join([str(c) for c in cats]) # Une las etiquetas separadas por coma en una sola celda/texto
+        else:
+            cats_str = str(cats) # Convierte a texto si ya venía como string
+        ET.SubElement(item, "Categorias").text = cats_str # Agrega nodo Categorías / Etiquetas unificadas
+
+    xml_data = ET.tostring(root, encoding="utf-8", method="xml") # Genera el contenido XML en bytes codificados
+    
+    return Response( # Devuelve la respuesta para la descarga del archivo en el navegador
+        content=xml_data, # Contenido binario del XML
+        media_type="application/xml", # Cabecera MIME type XML
+        headers={"Content-Disposition": "attachment; filename=proveedores.xml"} # Fuerza la descarga con el nombre proveedores.xml
+    )
 
 @app.get("/perfil")
 def vista_perfil(request: Request, access_token: str = Cookie(None)):
