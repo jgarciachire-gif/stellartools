@@ -6,7 +6,7 @@ from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Res
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import List
+from typing import List, Optional
 import pandas as pd
 from datetime import datetime, timedelta, date
 from pdf_processor import extraer_datos_oc
@@ -399,17 +399,22 @@ async def eliminar_ordenes_masivo(request: Request, access_token: str = Cookie(N
     except Exception as e:
         print(f"[DEBUG ELIMINAR ERROR]:\n{traceback.format_exc()}") # Imprime la traza completa del error en la terminal
         return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
+
+# Modifica el endpoint GET de proveedores para incluir etiquetas y trazabilidad
 @app.get("/proveedores")
 def vista_proveedores(request: Request, select: int = None, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Consultar la lista de proveedores
+    # Obtenemos lista de proveedores
     res = supabase.table("proveedores").select("*").order("nombre").execute()
     proveedores = res.data if res and res.data else []
 
-    # Consultar proveedor seleccionado si existe el parámetro ?select=ID
+    # Obtenemos la lista global de categorías/etiquetas disponibles para autocompletar o asignar
+    res_cats = supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
+    categorias_disponibles = res_cats.data if res_cats and res_cats.data else []
+
     prov_obj = None
     if select:
         res_sel = supabase.table("proveedores").select("*").eq("id", select).maybe_single().execute()
@@ -418,7 +423,8 @@ def vista_proveedores(request: Request, select: int = None, access_token: str = 
 
     return templates.TemplateResponse(request, "proveedores.html", {
         "proveedores": proveedores,
-        "prov_obj": prov_obj
+        "prov_obj": prov_obj,
+        "categorias_disponibles": categorias_disponibles
     })
     
 @app.post("/proveedores/importar-xml")
@@ -553,57 +559,70 @@ def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
 
     return RedirectResponse(url="/perfil", status_code=303)
 
-# Reemplazar la función guardar_proveedor por esta versión estándar usando la API nativa
+
+# Colocar en main.py antes de @app.post("/proveedores/eliminar/{prov_id}")
 @app.post("/proveedores/guardar")
 def guardar_proveedor(
-    id: int = Form(None), 
-    codigo: str = Form(""), 
-    nombre: str = Form(...), 
-    contacto: str = Form(""), 
-    telefono: str = Form(""), # Recibe el parámetro teléfono enviado desde los formularios
-    dias_credito: int = Form(0), 
-    dias_despacho: int = Form(3), 
-    access_token: str = Cookie(None)
+    id: Optional[str] = Form(None), # Recibe el ID como texto opcional para evitar error 422 si viene ""
+    codigo: str = Form(""), # Código de proveedor opcional
+    nombre: Optional[str] = Form(""), # Recibe el nombre como opcional para evitar rechazos 422 si llega vacío
+    contacto: str = Form(""), # Contacto de atención opcional
+    telefono: str = Form(""), # Teléfono opcional
+    dias_credito: Optional[str] = Form("0"), # Días de crédito recibidos como texto seguro
+    dias_despacho: Optional[str] = Form("3"), # Días de despacho recibidos como texto seguro
+    categorias: str = Form("[]"), # Arreglo de etiquetas en formato JSON
+    access_token: str = Cookie(None) # Token de autenticación del usuario
 ):
-    user = obtener_usuario_actual(access_token) # Autentica la sesión activa
+    # Verifica la sesión activa del usuario
+    user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    redirect_url = "/proveedores"
+    # Convierte el ID de texto a entero solo si contiene un número válido
+    prov_id = int(id) if id and id.strip().isdigit() else None
 
-    if id:
-        # Actualiza el proveedor activo
-        supabase.table("proveedores").update({
-            "codigo": codigo,
-            "nombre": nombre,
-            "contacto": contacto,
-            "telefono": telefono, # Persiste el campo teléfono en Supabase
-            "dias_credito": dias_credito,
-            "dias_despacho": dias_despacho
-        }).eq("id", id).execute()
-        
-        redirect_url = f"/proveedores?select={id}"
+    # Convierte los campos numéricos de forma segura evitando excepciones
+    credito_num = int(dias_credito) if dias_credito and dias_credito.strip().isdigit() else 0
+    despacho_num = int(dias_despacho) if dias_despacho and dias_despacho.strip().isdigit() else 3
+
+    # Decodifica la cadena JSON de categorías
+    try:
+        lista_categorias = json.loads(categorias)
+    except Exception:
+        lista_categorias = []
+
+    # Genera la traza de auditoría con fecha actual y correo del usuario
+    fecha_actual = datetime.now().strftime("%d-%m-%Y")
+    usuario_str = user.email if user and hasattr(user, 'email') else "Usuario"
+    historial_mod = f"Última modificación hecha por {usuario_str} el {fecha_actual}."
+
+    # Estructura de datos limpia y saneada para Supabase
+    datos_payload = {
+        "codigo": codigo,
+        "nombre": nombre,
+        "contacto": contacto,
+        "telefono": telefono,
+        "dias_credito": credito_num,
+        "dias_despacho": despacho_num,
+        "categorias": lista_categorias,
+        "ultima_modificacion": historial_mod
+    }
+
+    # Si prov_id tiene un entero válido, actualiza; de lo contrario, inserta nuevo registro
+    if prov_id:
+        supabase.table("proveedores").update(datos_payload).eq("id", prov_id).execute()
+        redirect_url = f"/proveedores?select={prov_id}"
     else:
-        try:
-            # Crea un nuevo proveedor
-            res = supabase.table("proveedores").insert({
-                "codigo": codigo,
-                "nombre": nombre,
-                "contacto": contacto,
-                "telefono": telefono, # Inserta el campo teléfono
-                "dias_credito": dias_credito,
-                "dias_despacho": dias_despacho,
-                "dias_inventario": 15
-            }).execute()
-            
-            if res.data and len(res.data) > 0:
-                nuevo_id = res.data[0]['id']
-                redirect_url = f"/proveedores?select={nuevo_id}"
-                
-        except Exception as e:
-            print(f"Error al guardar proveedor: {e}") 
+        datos_payload["dias_inventario"] = 15
+        res = supabase.table("proveedores").insert(datos_payload).execute()
+        if res.data and len(res.data) > 0:
+            nuevo_id = res.data[0]['id']
+            redirect_url = f"/proveedores?select={nuevo_id}"
+        else:
+            redirect_url = "/proveedores"
             
     return RedirectResponse(url=redirect_url, status_code=303)
+
 
 @app.post("/proveedores/eliminar/{prov_id}")
 def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
@@ -612,9 +631,14 @@ def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
         return RedirectResponse(url="/login", status_code=303)
 
     try:
-        supabase.table("proveedores").delete().eq("id", prov_id).execute()
-    except Exception:
-        pass
+        # Intenta eliminar directamente el registro
+        res = supabase.table("proveedores").delete().eq("id", prov_id).execute()
+        if not res.data:
+            return script_alerta_error("No se pudo eliminar el proveedor. Es posible que ya no exista.", redireccionar="/proveedores")
+    except Exception as e:
+        # Manejo de restricción por Clave Foránea en Base de Datos
+        return script_alerta_error("No se puede eliminar el proveedor porque tiene Órdenes de Compra asociadas a su registro.", redireccionar=f"/proveedores?select={prov_id}")
+
     return RedirectResponse(url="/proveedores", status_code=303)
 
 @app.post("/recepciones/procesar-xml")
