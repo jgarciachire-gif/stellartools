@@ -476,6 +476,7 @@ def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None))
         ET.SubElement(item, "Nombre").text = str(p.get("nombre") or "") # Agrega nodo Nombre / Razón Social
         ET.SubElement(item, "Contacto").text = str(p.get("contacto") or "") # Agrega nodo Contacto / Atención
         ET.SubElement(item, "Telefono").text = str(p.get("telefono") or "") # Agrega nodo Teléfono
+        ET.SubElement(item, "Email").text = str(p.get("email") or "") # Agrega nodo Correo Electrónico
         ET.SubElement(item, "DiasCredito").text = str(p.get("dias_credito") if p.get("dias_credito") is not None else 0) # Agrega Días de Crédito
         ET.SubElement(item, "FrecuenciaPedidos").text = str(p.get("dias_despacho") if p.get("dias_despacho") is not None else 3) # Agrega Frecuencia de Pedidos
         
@@ -602,6 +603,7 @@ def guardar_proveedor(
     nombre: Optional[str] = Form(""), # Recibe el nombre como opcional para evitar rechazos 422 si llega vacío
     contacto: str = Form(""), # Contacto de atención opcional
     telefono: str = Form(""), # Teléfono opcional
+    email: str = Form(""), # Correo electrónico opcional
     dias_credito: Optional[str] = Form("0"), # Días de crédito recibidos como texto seguro
     dias_despacho: Optional[str] = Form("3"), # Días de despacho recibidos como texto seguro
     categorias: str = Form("[]"), # Arreglo de etiquetas en formato JSON
@@ -636,6 +638,7 @@ def guardar_proveedor(
         "nombre": nombre,
         "contacto": contacto,
         "telefono": telefono,
+        "email": email,
         "dias_credito": credito_num,
         "dias_despacho": despacho_num,
         "categorias": lista_categorias,

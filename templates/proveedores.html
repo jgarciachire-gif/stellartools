@@ -126,17 +126,30 @@
                     <input type="text" name="telefono" value="{{ prov_obj.telefono or '' }}" disabled
                         class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
                 </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-600 mb-1">Días de Crédito</label>
-                    <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito }}" min="0" max="99"
-                        oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);" disabled
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
-                </div>
-                <div>
-                    <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia de Pedidos</label>
-                    <input type="number" name="dias_despacho" value="{{ prov_obj.dias_despacho or 3 }}" min="0" max="99"
-                        oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);" disabled
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
+                <div class="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Correo Electrónico</label>
+                        <input type="email" name="email" value="{{ prov_obj.email or '' }}" disabled
+                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1 whitespace-nowrap">Días
+                                Crédito</label>
+                            <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito }}" min="0"
+                                max="99" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
+                                disabled
+                                class="w-15 px-2 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1 whitespace-nowrap">Frecuencia
+                                Pedidos</label>
+                            <input type="number" name="dias_despacho" value="{{ prov_obj.dias_despacho or 3 }}" min="0"
+                                max="99" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
+                                disabled
+                                class="w-15 px-2 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -161,12 +174,18 @@
                     {% endif %}
                 </div>
 
-                <div id="control-agregar-badge" class="hidden flex items-center gap-2 mt-2">
-                    <input type="text"
-                        class="input-badge px-3 py-1 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                        placeholder="Ej. Lácteos, Enlatados...">
+
+                <div id="control-agregar-badge" class="hidden inline-flex items-center gap-2 mt-2 relative w-64">
+                    <div class="relative flex-1">
+                        <input type="text"
+                            class="input-badge w-full px-3 py-1 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            placeholder="Ej. Lácteos..." oninput="mostrarSugerenciasEtiquetas(this)">
+                        <div
+                            class="sugerencias-etiquetas hidden absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-30 max-h-36 overflow-y-auto">
+                        </div>
+                    </div>
                     <button type="button" onclick="agregarBadgeFicha(this)"
-                        class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition">
+                        class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shrink-0">
                         <i class="fa-solid fa-plus mr-1"></i> Agregar
                     </button>
                 </div>
@@ -192,6 +211,7 @@
                 </span>
             </div>
         </form>
+
 
         <script>
             function habilitarEdicion() {
@@ -232,6 +252,8 @@
     `;
                 contenedor.appendChild(span);
                 input.value = '';
+                const menuSugerencias = seccion.querySelector('.sugerencias-etiquetas');
+                if (menuSugerencias) menuSugerencias.classList.add('hidden');
             }
 
             // Remover la etiqueta seleccionada
@@ -241,8 +263,9 @@
 
             // Recolectar dinámicamente las etiquetas activas del formulario antes de enviar el POST
             function sincronizarCategoriasSubmit(formElement) {
-
-                formElement.querySelectorAll('input').forEach(inp => inp.disabled = false);
+                formElement.querySelectorAll('input').forEach(inp => {
+                    inp.disabled = false;
+                });
 
                 const badges = formElement.querySelectorAll('.nombre-badge');
                 const lista = Array.from(badges).map(b => b.textContent.trim());
@@ -314,17 +337,29 @@
                         <input type="text" name="telefono" value="" placeholder="Ej. +58 412..."
                             class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Días de Crédito</label>
-                        <input type="number" name="dias_credito" value="0" min="0" max="99"
-                            oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
-                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Frecuencia de Pedidos</label>
-                        <input type="number" name="dias_despacho" value="3" min="0" max="99"
-                            oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
-                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                    <div class="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1">Correo Electrónico</label>
+                            <input type="email" name="email" value="" placeholder="ejemplo@proveedor.com"
+                                class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1 truncate"
+                                    title="Días de Crédito">Días Crédito</label>
+                                <input type="number" name="dias_credito" value="0" min="0" max="99"
+                                    oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
+                                    class="w-full px-3 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-medium text-slate-600 mb-1 truncate"
+                                    title="Frecuencia de Pedidos">Frecuencia Pedidos</label>
+                                <input type="number" name="dias_despacho" value="3" min="0" max="99"
+                                    oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
+                                    class="w-full px-3 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -337,12 +372,17 @@
                     </div>
 
                     <!-- Input y botón para añadir etiquetas localmente -->
-                    <div class="flex items-center gap-2 mt-2">
-                        <input type="text"
-                            class="input-badge px-3 py-1 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                            placeholder="Ej. Lácteos, Enlatados...">
+                    <div class="inline-flex items-center gap-2 mt-2 relative w-64">
+                        <div class="relative flex-1">
+                            <input type="text"
+                                class="input-badge w-full px-3 py-1 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                                placeholder="Ej. Lácteos..." oninput="mostrarSugerenciasEtiquetas(this)">
+                            <div
+                                class="sugerencias-etiquetas hidden absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-30 max-h-36 overflow-y-auto">
+                            </div>
+                        </div>
                         <button type="button" onclick="agregarBadgeFicha(this)"
-                            class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition">
+                            class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shrink-0">
                             <i class="fa-solid fa-plus mr-1"></i> Agregar
                         </button>
                     </div>
@@ -387,9 +427,7 @@
         </div>
 
         <script>
-            // Colocar al final de templates/proveedores.html reemplazando el bloque <script> principal
 
-            // Array global para almacenar etiquetas activas de búsqueda
             let etiquetasFiltro = [];
 
             // Cargar estado previo de búsqueda desde sessionStorage
@@ -518,7 +556,6 @@
             });
 
             // Abrir Modal para crear nuevo proveedor
-            // Abrir Modal para crear nuevo proveedor de forma limpia
             function abrirModalCrear() {
                 // Referencia al título del modal
                 const titulo = document.getElementById('titulo-modal-prov');
@@ -555,6 +592,70 @@
                 if (modal) modal.classList.add('hidden');
             }
 
+            // Extrae todas las etiquetas únicas creadas en los proveedores existentes
+            function obtenerTodasLasEtiquetasExistentes() {
+                const etiquetasSet = new Set();
+                document.querySelectorAll('.prov-item').forEach(item => {
+                    try {
+                        const categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
+                        categorias.forEach(cat => etiquetasSet.add(cat.trim()));
+                    } catch (e) { }
+                });
+                return Array.from(etiquetasSet);
+            }
+
+            // Filtra y muestra el menú flotante de sugerencias
+            function mostrarSugerenciasEtiquetas(inputElement) {
+                const contenedorRelativo = inputElement.closest('.relative');
+                const menuSugerencias = contenedorRelativo.querySelector('.sugerencias-etiquetas');
+                const query = normalizarTexto(inputElement.value);
+
+                if (!query) {
+                    menuSugerencias.classList.add('hidden');
+                    menuSugerencias.innerHTML = '';
+                    return;
+                }
+
+                const todasEtiquetas = obtenerTodasLasEtiquetasExistentes();
+                const coincidencias = todasEtiquetas.filter(tag => normalizarTexto(tag).includes(query));
+
+                if (coincidencias.length === 0) {
+                    menuSugerencias.classList.add('hidden');
+                    menuSugerencias.innerHTML = '';
+                    return;
+                }
+
+                menuSugerencias.innerHTML = '';
+                coincidencias.forEach(tag => {
+                    const itemBtn = document.createElement('button');
+                    itemBtn.type = 'button';
+                    itemBtn.className = 'w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors block';
+                    itemBtn.textContent = tag;
+                    itemBtn.onclick = () => seleccionarSugerenciaEtiqueta(inputElement, tag);
+                    menuSugerencias.appendChild(itemBtn);
+                });
+
+                menuSugerencias.classList.remove('hidden');
+            }
+
+            // Inserta el texto seleccionado desde el menú emergente
+            function seleccionarSugerenciaEtiqueta(inputElement, valor) {
+                inputElement.value = valor;
+                const contenedorRelativo = inputElement.closest('.relative');
+                const menuSugerencias = contenedorRelativo.querySelector('.sugerencias-etiquetas');
+                menuSugerencias.classList.add('hidden');
+
+                // Dispara el evento de agregar directamente al seleccionar
+                const btnAgregar = inputElement.closest('.seccion-badges, .flex').querySelector('button[onclick="agregarBadgeFicha(this)"]');
+                if (btnAgregar) agregarBadgeFicha(btnAgregar);
+            }
+
+            // Ocultar menú de sugerencias si el usuario hace clic fuera de él
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('.relative')) {
+                    document.querySelectorAll('.sugerencias-etiquetas').forEach(menu => menu.classList.add('hidden'));
+                }
+            });
             // Escuchadores de eventos
             document.addEventListener('DOMContentLoaded', () => {
                 const busquedaInput = document.getElementById('busqueda_proveedores');
