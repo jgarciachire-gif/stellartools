@@ -975,11 +975,11 @@ def vista_productos(
 
         # Filtra por la columna foránea correcta 'proveedor_id' si se hallaron proveedores
         if ids_prov:
-            ids_str = ",".join(ids_prov)
-            condiciones.append(f"proveedor_id.in.({ids_str})")
+            for pid in ids_prov:
+                condiciones.append(f"proveedor_id.eq.{pid}")
 
         # Encadena la condición OR al builder actual sin reiniciar la consulta
-        condicion_or = ",".join(condiciones)
+        condicion_or = ",".join(condiciones) # Une las condiciones de texto y proveedor
         builder = builder.or_(condicion_or)
 
     # Limitar a 200 resultados activos para mantener fluidez visual

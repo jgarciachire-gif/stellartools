@@ -46,7 +46,8 @@
         </div>
 
         <!-- Lista de Productos -->
-        <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
+        <div id="lista-productos" class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
+
             {% for p in productos %}
             <a href="?select={{ p.id }}&q={{ request.query_params.get('q', '') }}&tags={{ request.query_params.get('tags', '') }}"
                 class="prod-item block p-3 rounded-xl border transition {{ 'border-blue-400 bg-blue-50' if prov_obj and prov_obj.id|string == p.id|string else 'border-slate-100 bg-slate-50 hover:bg-blue-50' }}"
@@ -434,19 +435,36 @@
         ejecutarBusquedaServidor();
     }
 
-    function ejecutarBusquedaServidor() {
-        const busquedaInput = document.getElementById('busqueda_productos');
-        const q = busquedaInput ? busquedaInput.value.trim() : '';
-        const tagsStr = etiquetasFiltroProds.join(',');
+    let debounceTimerFetch = null;
 
-        const selectId = urlParams.get('select') || '';
+    function ejecutarBusquedaServidor() {
+        const busquedaInput = document.getElementById('busqueda_productos'); // Obtiene el campo de búsqueda
+        const q = busquedaInput ? busquedaInput.value.trim() : ''; // Extrae el texto ingresado
+        const tagsStr = etiquetasFiltroProds.join(','); // Convierte las etiquetas a texto
+        const selectId = urlParams.get('select') || ''; // Conserva el producto seleccionado
 
         let url = `/productos?`;
         if (selectId) url += `select=${selectId}&`;
         if (q) url += `q=${encodeURIComponent(q)}&`;
         if (tagsStr) url += `tags=${encodeURIComponent(tagsStr)}`;
 
-        window.location.href = url;
+        // Actualiza la URL en la barra de direcciones sin refrescar la pantalla
+        window.history.replaceState({}, '', url);
+
+        // Consulta en segundo plano al servidor para traer los resultados de Supabase
+        fetch(url)
+            .then(response => response.text())
+            .then(html => {
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                // Extrae la nueva lista de productos devuelta por el servidor
+                const nuevaLista = doc.getElementById('lista-productos'); // Obtiene la nueva lista devuelta por el servidor
+                const listaActual = document.getElementById('lista-productos'); // Obtiene el contenedor actual de la pantalla
+                if (nuevaLista && listaActual) { // Verifica que ambos elementos existan correctamente
+                    listaActual.innerHTML = nuevaLista.innerHTML; // Reemplaza únicamente el contenido del catálogo
+                }
+            })
+            .catch(err => console.error("Error filtrando productos:", err));
     }
 
     let indiceDestacado = { ficha: -1, modal: -1 };
@@ -562,8 +580,14 @@
         actualizarEnlacesConFiltro();
 
         if (busquedaInput) {
-
-            busquedaInput.addEventListener('input', actualizarEnlacesConFiltro);
+            // Escucha la escritura y espera 300ms para consultar al servidor sin cortar el tipeo
+            busquedaInput.addEventListener('input', () => {
+                actualizarEnlacesConFiltro(); // Mantiene los enlaces actualizados
+                clearTimeout(debounceTimerFetch); // Cancela peticiones previas si sigue escribiendo
+                debounceTimerFetch = setTimeout(() => {
+                    ejecutarBusquedaServidor(); // Realiza la búsqueda en segundo plano
+                }, 300);
+            });
 
             busquedaInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
