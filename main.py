@@ -944,25 +944,42 @@ def vista_productos(
     busqueda_query = request.query_params.get("q", "")
     tags_query = request.query_params.get("tags", "")
     
-    builder = supabase.table("productos").select("*, proveedores(id, nombre)")
+    # Inicializa la consulta trayendo los productos y su relación con proveedores
+    builder = supabase.table("productos").select("*, proveedores(nombre)")
 
-    # Aplicar filtros si existen términos de búsqueda
+    # Recopila los términos de búsqueda ingresados
     terminos = []
     if busqueda_query.strip():
         terminos.append(busqueda_query.strip())
     if tags_query.strip():
         terminos.extend([t.strip() for t in tags_query.split(",") if t.strip()])
 
+    # Aplica los filtros acumulativos por cada término
     for term in terminos:
-        # Corrige la sintaxis de Supabase OR incluyendo correctamente el comodín % en grupo.ilike
-        condicion_or = (
-            f"codigo_st.ilike.%{term}%,"
-            f"codigo_ean.ilike.%{term}%,"
-            f"descripcion.ilike.%{term}%,"
-            f"marca.ilike.%{term}%,"
-            f"departamento.ilike.%{term}%,"
-            f"grupo.ilike.%{term}%"
-        )
+        palabras = term.strip().split()
+        patron_busqueda = f"%{'%'.join(palabras)}%" if palabras else "%"
+
+        # Consulta IDs de proveedores coincidentes
+        res_prov = supabase.table("proveedores").select("id").ilike("nombre", patron_busqueda).execute()
+        ids_prov = [str(p["id"]) for p in res_prov.data] if res_prov.data else []
+
+        # Lista de condiciones OR en la tabla productos
+        condiciones = [
+            f"codigo_st.ilike.{patron_busqueda}",
+            f"codigo_ean.ilike.{patron_busqueda}",
+            f"descripcion.ilike.{patron_busqueda}",
+            f"marca.ilike.{patron_busqueda}",
+            f"departamento.ilike.{patron_busqueda}",
+            f"grupo.ilike.{patron_busqueda}"
+        ]
+
+        # Filtra por la columna foránea correcta 'proveedor_id' si se hallaron proveedores
+        if ids_prov:
+            ids_str = ",".join(ids_prov)
+            condiciones.append(f"proveedor_id.in.({ids_str})")
+
+        # Encadena la condición OR al builder actual sin reiniciar la consulta
+        condicion_or = ",".join(condiciones)
         builder = builder.or_(condicion_or)
 
     # Limitar a 200 resultados activos para mantener fluidez visual
@@ -1011,6 +1028,8 @@ def guardar_producto(
     subgrupo: str = Form(...),
     proveedor_id: Optional[str] = Form(None),
     marca: str = Form(""),
+    q: str = Form(""), 
+    tags: str = Form(""),
     access_token: str = Cookie(None)
 ):
     # Verificar usuario autenticado solo por seguridad
@@ -1040,7 +1059,14 @@ def guardar_producto(
         res = supabase.table("productos").insert(payload).execute()
         prod_id = res.data[0]["id"] if res and res.data else ""
 
-    return RedirectResponse(url=f"/productos?select={prod_id}", status_code=303)
+    import urllib.parse
+    redirect_url = f"/productos?select={prod_id}"
+    if q.strip():
+        redirect_url += f"&q={urllib.parse.quote(q.strip())}"
+    if tags.strip():
+        redirect_url += f"&tags={urllib.parse.quote(tags.strip())}"
+
+    return RedirectResponse(url=redirect_url, status_code=303)
 
 @app.post("/productos/eliminar/{producto_id}")
 def eliminar_producto(producto_id: str, access_token: str = Cookie(None)):
