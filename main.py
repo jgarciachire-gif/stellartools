@@ -14,6 +14,7 @@ import os
 import io
 import xml.etree.ElementTree as ET
 import json
+from fastapi import Form
 from supabase import create_client, Client
 import traceback
 
@@ -924,3 +925,218 @@ def crear_orden_manual(
         return {"status": "ok", "mensaje": "Orden guardada con éxito"}
         
     return RedirectResponse(url="/ordenes", status_code=303)
+
+@app.get("/productos")
+def vista_productos(
+    request: Request, 
+    query: Optional[str] = None,
+    departamento: Optional[str] = None,
+    grupo: Optional[str] = None,
+    proveedor_id: Optional[int] = None,
+    select: Optional[str] = None,
+    access_token: str = Cookie(None)
+):
+    # Valida la sesión activa del usuario
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    busqueda_query = request.query_params.get("q", "")
+    tags_query = request.query_params.get("tags", "")
+    
+    builder = supabase.table("productos").select("*, proveedores(id, nombre)")
+
+    # Aplicar filtros si existen términos de búsqueda
+    terminos = []
+    if busqueda_query.strip():
+        terminos.append(busqueda_query.strip())
+    if tags_query.strip():
+        terminos.extend([t.strip() for t in tags_query.split(",") if t.strip()])
+
+    for term in terminos:
+        # Corrige la sintaxis de Supabase OR incluyendo correctamente el comodín % en grupo.ilike
+        condicion_or = (
+            f"codigo_st.ilike.%{term}%,"
+            f"codigo_ean.ilike.%{term}%,"
+            f"descripcion.ilike.%{term}%,"
+            f"marca.ilike.%{term}%,"
+            f"departamento.ilike.%{term}%,"
+            f"grupo.ilike.%{term}%"
+        )
+        builder = builder.or_(condicion_or)
+
+    # Limitar a 200 resultados activos para mantener fluidez visual
+    productos_res = builder.order("descripcion", desc=False).limit(200).execute()
+    productos = productos_res.data or []
+
+    # Cargar lista de proveedores para la selección
+    res_prov = supabase.table("proveedores").select("id, nombre").order("nombre").execute()
+    proveedores = res_prov.data if res_prov and res_prov.data else []
+
+    # Obtener el producto seleccionado si existe el parámetro select
+    select_id = request.query_params.get("select")
+    prov_obj = None
+
+    if select_id:
+        try:
+            # Convierte a int si es numérico para coincidir con el tipo int8 de Supabase
+            query_id = int(select_id) if str(select_id).isdigit() else select_id
+            res_sel = supabase.table("productos").select("*").eq("id", query_id).execute()
+            if res_sel.data:
+                prov_obj = res_sel.data[0]
+        except Exception as e:
+            print("Error al obtener producto seleccionado:", e)
+
+    # 2. Retornar la plantilla asegurando la clave 'prov_obj'
+    return templates.TemplateResponse(
+        request=request,
+        name="productos.html",
+        context={
+            "productos": productos,
+            "prov_obj": prov_obj,
+            "proveedores": proveedores
+        }
+    )
+
+@app.post("/productos/guardar")
+def guardar_producto(
+    id: Optional[str] = Form(None),
+    codigo_st: str = Form(...),
+    codigo_ean: Optional[str] = Form(None),
+    unidad_manejo: str = Form(...),
+    descripcion: str = Form(...),
+    precio: float = Form(0.0),
+    departamento: str = Form(...),
+    grupo: str = Form(...),
+    subgrupo: str = Form(...),
+    proveedor_id: Optional[str] = Form(None),
+    marca: str = Form(""),
+    access_token: str = Cookie(None)
+):
+    # Verificar usuario autenticado solo por seguridad
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Estructura de datos global (sin usuario_id)
+    payload = {
+        "codigo_st": codigo_st,
+        "codigo_ean": codigo_ean or None,
+        "unidad_manejo": unidad_manejo,
+        "descripcion": descripcion,
+        "precio": precio,
+        "departamento": departamento,
+        "grupo": grupo,
+        "subgrupo": subgrupo,
+        "proveedor_id": int(proveedor_id) if proveedor_id and proveedor_id.isdigit() else None,
+        "marca": marca.strip(),
+    }
+
+    # Actualizar o insertar sin filtrar por usuario
+    if id:
+        supabase.table("productos").update(payload).eq("id", id).execute()
+        prod_id = id
+    else:
+        res = supabase.table("productos").insert(payload).execute()
+        prod_id = res.data[0]["id"] if res and res.data else ""
+
+    return RedirectResponse(url=f"/productos?select={prod_id}", status_code=303)
+
+@app.post("/productos/eliminar/{producto_id}")
+def eliminar_producto(producto_id: str, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Eliminar producto por su ID de manera global
+    supabase.table("productos").delete().eq("id", producto_id).execute()
+
+    return RedirectResponse(url="/productos", status_code=303)
+
+@app.post("/productos/cargar-lista")
+async def cargar_lista_productos(
+    archivo: UploadFile = File(...),
+    access_token: str = Cookie(None)
+):
+    # Validar autenticación de usuario
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    contenido = await archivo.read()
+    nombre = archivo.filename.lower()
+    filas = []
+
+    # 1. Lectura si el archivo es un Excel (.xlsx)
+    if nombre.endswith(".xlsx"):
+        df = pd.read_excel(io.BytesIO(contenido))
+        for _, r in df.iterrows():
+            filas.append({
+                "codigo": str(r.get("CodigoDelProducto", "")),
+                "descripcion": str(r.get("Descripcion", "")),
+                "marca": str(r.get("Marca", "")),
+                "departamento": str(r.get("Departamento", "")),
+                "grupo": str(r.get("Grupo", "")),
+                "subgrupo": str(r.get("SubGrupo", "")),
+                "costo": r.get("CostoActual", 0)
+            })
+
+    # 2. Lectura si el archivo es XML (.xml)
+    elif nombre.endswith(".xml"):
+        root = ET.fromstring(contenido)
+        for item in (root.findall(".//Producto") or root):
+            filas.append({
+                "codigo": item.findtext("CodigoDelProducto", ""),
+                "descripcion": item.findtext("Descripcion", ""),
+                "marca": item.findtext("Marca", ""),
+                "departamento": item.findtext("Departamento", ""),
+                "grupo": item.findtext("Grupo", ""),
+                "subgrupo": item.findtext("SubGrupo", ""),
+                "costo": item.findtext("CostoActual", "0")
+            })
+
+    # 3. Formateo de datos
+    payload = []
+    for f in filas:
+        raw_cod = f["codigo"].split(".")[0].strip()
+        codigo_st = raw_cod.zfill(6) if raw_cod.isdigit() else raw_cod
+
+        desc = f["descripcion"].strip().upper() if f["descripcion"] and f["descripcion"] != "nan" else ""
+        marca = f["marca"].strip().upper() if f["marca"] and f["marca"] != "nan" else ""
+        nombre_final = f"{desc} {marca}".strip() if marca else desc
+
+        costo_raw = f["costo"]
+        precio = 0.0
+        if pd.notna(costo_raw) and costo_raw != "":
+            if isinstance(costo_raw, str):
+                c_limpio = costo_raw.replace(".", "").replace(",", ".")
+                try:
+                    precio = float(c_limpio)
+                except ValueError:
+                    precio = 0.0
+            else:
+                try:
+                    precio = float(costo_raw)
+                except ValueError:
+                    precio = 0.0
+
+        if codigo_st and desc:
+            payload.append({
+                "codigo_st": codigo_st,
+                "descripcion": desc,
+                "marca": marca,
+                "unidad_manejo": "UND",
+                "departamento": f["departamento"].strip() if f["departamento"] != "nan" else "",
+                "grupo": f["grupo"].strip() if f["grupo"] != "nan" else "",
+                "subgrupo": f["subgrupo"].strip() if f["subgrupo"] != "nan" else "",
+                "precio": precio
+            })
+
+    # Upsert global usando solo codigo_st como conflicto
+    if payload:
+        supabase.table("productos").upsert(
+            payload, 
+            on_conflict="codigo_st"
+        ).execute()
+
+    return RedirectResponse(url="/productos", status_code=303)
