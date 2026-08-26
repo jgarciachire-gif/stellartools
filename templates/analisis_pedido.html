@@ -1,0 +1,865 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- ENCABEZADO -->
+<div class="flex items-center justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-800">Análisis de Pedido</h1>
+        <p class="text-xs text-slate-500 mt-1">Planificación y estimación de cantidades por tienda y proveedor</p>
+    </div>
+</div>
+
+<!-- CONTENEDOR PRINCIPAL DE CONTROLES (PROVEEDOR, TIENDA Y FILTROS EN PROPORCIÓN 2:1) -->
+<div class="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6">
+
+    <!-- TARJETA IZQUIERDA: SELECCIÓN DE PROVEEDOR Y TIENDA -->
+    <div class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+
+        <!-- Buscador de Proveedor -->
+        <div class="relative" id="combo-proveedor-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-2">
+                <i class="fa-solid fa-truck-field text-blue-600 mr-1"></i> Proveedor
+            </label>
+            <input type="hidden" id="proveedor_id_analisis" value="">
+
+            <div class="relative">
+                <input type="text" id="buscar_proveedor_analisis" placeholder="Escriba para buscar proveedor..."
+                    autocomplete="off" oninput="filtrarProveedoresAnalisis()" onfocus="mostrarOpcionesProvAnalisis()"
+                    onkeydown="navegarProveedoresAnalisis(event)"
+                    class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition">
+
+                <button type="button" onclick="limpiarProveedorAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <!-- Menú desplegable flotante de proveedores -->
+            <div id="opciones_proveedor_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto z-30">
+                <div onclick="seleccionarProveedorAnalisis('', '-- Seleccionar Proveedor --')"
+                    class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+                    -- Seleccionar Proveedor --
+                </div>
+                {% for p in proveedores %}
+                <div onclick="seleccionarProveedorAnalisis('{{ p.id }}', '{{ p.nombre }}')"
+                    data-nombre="{{ p.nombre|lower }}"
+                    class="opcion-prov-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
+                    {{ p.nombre }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+
+        <!-- Buscador / Selector de Tienda Destino -->
+        <div class="relative" id="combo-tienda-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-2">
+                <i class="fa-solid fa-store text-blue-600 mr-1"></i> Tienda
+            </label>
+
+            <!-- Campo oculto sin valor predeterminado (inicia vacío) -->
+            <input type="hidden" id="tienda_destino" name="tienda_destino" value="">
+
+            <div class="relative">
+                <!-- Input visible con value vacío para mostrar el placeholder -->
+                <input type="text" id="buscar_tienda_analisis" value="" placeholder="Escriba para buscar tienda..."
+                    autocomplete="off" oninput="filtrarTiendasAnalisis()" onfocus="mostrarOpcionesTiendaAnalisis()"
+                    onkeydown="navegarTiendasAnalisis(event)"
+                    class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition">
+
+                <!-- Botón para limpiar selección de tienda -->
+                <button type="button" onclick="limpiarTiendaAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+
+            <!-- Menú desplegable flotante con las tiendas disponibles -->
+            <div id="opciones_tienda_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto z-30">
+                <div onclick="seleccionarTiendaAnalisis('', '-- Seleccionar Tienda --')"
+                    class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+                    -- Seleccionar Tienda --
+                </div>
+                {% for tienda in ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'] %}
+                <div onclick="seleccionarTiendaAnalisis('{{ tienda }}', '{{ tienda }}')"
+                    data-nombre="{{ tienda|lower }}"
+                    class="opcion-tienda-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
+                    {{ tienda }}
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+
+    <!-- TARJETA DERECHA: SECCIÓN FILTROS EN CASCADA (Se activa al seleccionar un proveedor) -->
+    <div id="sec-filtros-clasificacion"
+        class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 opacity-50 pointer-events-none transition-all">
+
+        <!-- 1er Campo: Departamento -->
+        <div class="relative" id="combo-depto-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-layer-group text-blue-600 mr-1"></i> Departamento
+            </label>
+            <input type="hidden" id="depto_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_depto_analisis" placeholder="Todos los departamentos..."
+                    autocomplete="off" oninput="filtrarDeptosAnalisis()" onfocus="mostrarOpcionesDeptoAnalisis()"
+                    disabled
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-not-allowed">
+                <button type="button" onclick="limpiarDeptoAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_depto_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- 2do Campo: Grupo -->
+        <div class="relative" id="combo-grupo-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-boxes-stacked text-blue-600 mr-1"></i> Grupo
+            </label>
+            <input type="hidden" id="grupo_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_grupo_analisis" placeholder="Todos los grupos..." autocomplete="off"
+                    oninput="filtrarGruposAnalisis()" onfocus="mostrarOpcionesGrupoAnalisis()" disabled
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-not-allowed">
+                <button type="button" onclick="limpiarGrupoAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_grupo_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- 3er Campo: Subgrupo -->
+        <div class="relative" id="combo-subgrupo-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-tags text-blue-600 mr-1"></i> Subgrupo
+            </label>
+            <input type="hidden" id="subgrupo_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_subgrupo_analisis" placeholder="Todos los subgrupos..." autocomplete="off"
+                    oninput="filtrarSubgruposAnalisis()" onfocus="mostrarOpcionesSubgrupoAnalisis()" disabled
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-not-allowed">
+                <button type="button" onclick="limpiarSubgrupoAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_subgrupo_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- Botón Importar Productos -->
+        <div class="pt-2">
+            <button type="button" id="btn_importar_productos" onclick="importarProductosAnalisis()" disabled
+                class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed">
+                <i class="fa-solid fa-file-import"></i> Importar Productos
+            </button>
+        </div>
+
+    </div>
+    <!-- TARJETA DERECHA: EXPORTACIÓN DE DATOS A TXT -->
+    <div
+        class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
+        <div>
+            <!-- Título del contenedor con icono -->
+            <h3 class="text-xs font-semibold text-slate-700 tracking-wider mb-2">
+                <i class="fa-solid fa-file-export text-blue-600 mr-1"></i> Exportar Productos
+            </h3>
+            <!-- Texto descriptivo de la acción -->
+            <p class="text-xs text-slate-500">
+                Genera un archivo para importar a Stellar.
+            </p>
+        </div>
+
+        <!-- Botón para ejecutar la exportación -->
+        <div>
+            <button type="button" onclick="exportarTablaTxt()"
+                class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-download"></i> Exportar Orden de Compra
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<!-- TABLA DE DETALLE DE PRODUCTOS -->
+<div class="bg-white border border-slate-300 rounded-2xl shadow-xs overflow-hidden">
+    <div class="overflow-x-auto">
+        <!-- Cuadrícula compacta con bordes definidos estilo hoja de cálculo -->
+        <table class="w-full text-left border-collapse border border-slate-300" id="tabla-analisis">
+            <thead>
+                <tr class="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
+                    <th class="py-2.5 px-3 w-36 border-r border-slate-800">CÓDIGO</th>
+                    <th class="py-2.5 px-3 border-r border-slate-800">DESCRIPCIÓN</th>
+                    <th class="py-2.5 px-3 w-24 text-center border-r border-slate-800">PRE.</th>
+                    <th class="py-2.5 px-3 w-24 text-center border-r border-slate-800">EMP.</th>
+                    <th class="py-2.5 px-3 w-24 text-center border-r border-slate-800">UNI.</th>
+                    <th class="py-2.5 px-3 w-32 text-right border-r border-slate-800">COSTO UNI. ($)</th>
+                    <th class="py-2.5 px-3 w-36 text-right border-r border-slate-800">SUBTOTAL ($)</th>
+                    <th class="py-2.5 px-2 w-12 text-center"></th>
+                </tr>
+            </thead>
+            <tbody id="filas-tabla-analisis" class="bg-white text-xs">
+                <!-- Las celdas y filas tipo cuadrícula se insertan dinámicamente -->
+            </tbody>
+        </table>
+    </div>
+
+    <!-- BOTÓN AGREGAR LÍNEA Y TOTALIZACIÓN -->
+    <div class="p-3 bg-slate-50 border-t border-slate-300 flex flex-col md:flex-row justify-between items-center gap-4">
+        <button type="button" onclick="agregarFilaAnalisis()"
+            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-normal rounded-lg text-xs transition shadow-xs flex items-center gap-2">
+            <i class="fa-solid fa-plus"></i> Agregar Producto
+        </button>
+
+        <!-- RESUMEN DE TOTALES CON FUENTE NORMAL -->
+        <div class="flex flex-wrap items-center gap-6 text-xs text-slate-600">
+            <div>
+                <span class="text-slate-400 block font-normal">TOTAL EMPAQUES</span>
+                <span id="tot-empaques" class="text-sm font-normal text-slate-800">0</span>
+            </div>
+            <div>
+                <span class="text-slate-400 block font-normal">TOTAL UNIDADES</span>
+                <span id="tot-unidades" class="text-sm font-normal text-slate-800">0</span>
+            </div>
+            <div class="pl-4 border-l border-slate-300">
+                <span class="text-slate-400 block font-normal">MONTO TOTAL ESTIMADO</span>
+                <span id="tot-monto" class="text-base font-normal text-blue-600">$ 0,00</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let indiceDestacadoAnalisis = -1;
+
+    // --- TIENDA SEARCH LOGIC ---
+    function mostrarOpcionesTiendaAnalisis() {
+        // Despliega el menú flotante de tiendas
+        document.getElementById('opciones_tienda_analisis').classList.remove('hidden');
+    }
+
+    function filtrarTiendasAnalisis() {
+        const texto = document.getElementById('buscar_tienda_analisis').value.toLowerCase().trim();
+        const opciones = document.querySelectorAll('.opcion-tienda-analisis');
+        document.getElementById('opciones_tienda_analisis').classList.remove('hidden');
+
+        indiceDestacadoTiendaAnalisis = -1;
+        // Filtra las opciones visibles según lo ingresado en el buscador
+        opciones.forEach(opcion => {
+            const nombre = opcion.getAttribute('data-nombre') || '';
+            opcion.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold');
+            if (nombre.includes(texto)) {
+                opcion.classList.remove('hidden');
+            } else {
+                opcion.classList.add('hidden');
+            }
+        });
+    }
+
+    function navegarTiendasAnalisis(e) {
+        const dropdown = document.getElementById('opciones_tienda_analisis');
+        const opciones = Array.from(document.querySelectorAll('.opcion-tienda-analisis')).filter(el => !el.classList.contains('hidden'));
+
+        // Permite la navegación por teclado (flechas arriba/abajo y Enter)
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (dropdown.classList.contains('hidden')) mostrarOpcionesTiendaAnalisis();
+            indiceDestacadoTiendaAnalisis = Math.min(indiceDestacadoTiendaAnalisis + 1, opciones.length - 1);
+            resaltarOpcionTiendaAnalisis(opciones);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            indiceDestacadoTiendaAnalisis = Math.max(indiceDestacadoTiendaAnalisis - 1, 0);
+            resaltarOpcionTiendaAnalisis(opciones);
+        } else if (e.key === 'Enter') {
+            if (!dropdown.classList.contains('hidden') && indiceDestacadoTiendaAnalisis >= 0 && opciones[indiceDestacadoTiendaAnalisis]) {
+                e.preventDefault();
+                opciones[indiceDestacadoTiendaAnalisis].click();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden');
+        }
+    }
+
+    function resaltarOpcionTiendaAnalisis(opciones) {
+        // Marca la opción activa en la navegación por teclado
+        opciones.forEach(op => op.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold'));
+        if (opciones[indiceDestacadoTiendaAnalisis]) {
+            opciones[indiceDestacadoTiendaAnalisis].classList.add('bg-blue-100', 'text-blue-700', 'font-semibold');
+            opciones[indiceDestacadoTiendaAnalisis].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function seleccionarTiendaAnalisis(val, nombre) {
+        // Establece el valor final en el input oculto y en el buscador visible
+        document.getElementById('tienda_destino').value = val;
+        document.getElementById('buscar_tienda_analisis').value = val ? nombre : '';
+        document.getElementById('opciones_tienda_analisis').classList.add('hidden');
+    }
+
+    function limpiarTiendaAnalisis() {
+        // Limpia el campo de selección
+        seleccionarTiendaAnalisis('', '');
+    }
+
+    // --- PROVEEDOR SEARCH LOGIC ---
+    function mostrarOpcionesProvAnalisis() {
+        document.getElementById('opciones_proveedor_analisis').classList.remove('hidden');
+    }
+
+    function filtrarProveedoresAnalisis() {
+        const texto = document.getElementById('buscar_proveedor_analisis').value.toLowerCase().trim();
+        const opciones = document.querySelectorAll('.opcion-prov-analisis');
+        document.getElementById('opciones_proveedor_analisis').classList.remove('hidden');
+
+        indiceDestacadoAnalisis = -1;
+        opciones.forEach(opcion => {
+            const nombre = opcion.getAttribute('data-nombre') || '';
+            opcion.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold');
+            if (nombre.includes(texto)) {
+                opcion.classList.remove('hidden');
+            } else {
+                opcion.classList.add('hidden');
+            }
+        });
+    }
+
+    function navegarProveedoresAnalisis(e) {
+        const dropdown = document.getElementById('opciones_proveedor_analisis');
+        const opciones = Array.from(document.querySelectorAll('.opcion-prov-analisis')).filter(el => !el.classList.contains('hidden'));
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (dropdown.classList.contains('hidden')) mostrarOpcionesProvAnalisis();
+            indiceDestacadoAnalisis = Math.min(indiceDestacadoAnalisis + 1, opciones.length - 1);
+            resaltarOpcionAnalisis(opciones);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            indiceDestacadoAnalisis = Math.max(indiceDestacadoAnalisis - 1, 0);
+            resaltarOpcionAnalisis(opciones);
+        } else if (e.key === 'Enter') {
+            if (!dropdown.classList.contains('hidden') && indiceDestacadoAnalisis >= 0 && opciones[indiceDestacadoAnalisis]) {
+                e.preventDefault();
+                opciones[indiceDestacadoAnalisis].click();
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden');
+        }
+    }
+
+    function resaltarOpcionAnalisis(opciones) {
+        opciones.forEach(op => op.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold'));
+        if (opciones[indiceDestacadoAnalisis]) {
+            opciones[indiceDestacadoAnalisis].classList.add('bg-blue-100', 'text-blue-700', 'font-semibold');
+            opciones[indiceDestacadoAnalisis].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    // Variable global para almacenar la estructura de clasificación del proveedor activo
+    let datosClasificacionAnalisis = [];
+
+    // --- SELECCIÓN Y ACTIVACIÓN DE PROVEEDOR EN CASCADA ---
+    function seleccionarProveedorAnalisis(id, nombre) {
+        // Asigna el ID y nombre del proveedor seleccionado a los inputs del buscador
+        document.getElementById('proveedor_id_analisis').value = id;
+        document.getElementById('buscar_proveedor_analisis').value = id ? nombre : '';
+        document.getElementById('opciones_proveedor_analisis').classList.add('hidden');
+
+        const secFiltros = document.getElementById('sec-filtros-clasificacion');
+        const inpDepto = document.getElementById('buscar_depto_analisis');
+        const btnImportar = document.getElementById('btn_importar_productos');
+
+        // Reinicia selecciones previas de departamento, grupo y subgrupo
+        limpiarDeptoAnalisis();
+
+        if (id) {
+            // Remueve el estado bloqueado y opaco de la tarjeta de filtros
+            secFiltros.classList.remove('opacity-50', 'pointer-events-none');
+            // Desbloquea el input de departamento para que el usuario empiece la selección
+            inpDepto.disabled = false;
+            btnImportar.disabled = false;
+            // Consulta en la API los departamentos/grupos/subgrupos asociados a este proveedor
+            cargarClasificacionProveedor(id);
+        } else {
+            // Si se borra la selección, vuelve a bloquear los filtros e importación
+            secFiltros.classList.add('opacity-50', 'pointer-events-none');
+            inpDepto.disabled = true;
+            btnImportar.disabled = true;
+        }
+    }
+
+    function limpiarProveedorAnalisis() {
+        seleccionarProveedorAnalisis('', '');
+    }
+
+    // --- CARGA Y FILTRADO EN CASCADA (DEPTO -> GRUPO -> SUBGRUPO) ---
+    async function cargarClasificacionProveedor(proveedorId) {
+        try {
+            const res = await fetch(`/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`);
+            datosClasificacionAnalisis = await res.json();
+            poblarDepartamentosAnalisis();
+        } catch (e) {
+            console.error('Error al obtener clasificaciones:', e);
+        }
+    }
+
+    function poblarDepartamentosAnalisis() {
+        const container = document.getElementById('opciones_depto_analisis');
+        const deptos = [...new Set(datosClasificacionAnalisis.map(item => item.departamento))].filter(Boolean);
+
+        let html = `<div onclick="seleccionarDeptoAnalisis('', 'Todos los departamentos')" class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todos los departamentos</div>`;
+        deptos.forEach(d => {
+            html += `<div onclick="seleccionarDeptoAnalisis('${d}', '${d}')" data-nombre="${d.toLowerCase()}" class="opcion-depto-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${d}</div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function seleccionarDeptoAnalisis(val, label) {
+        document.getElementById('depto_analisis').value = val;
+        document.getElementById('buscar_depto_analisis').value = val ? label : '';
+        document.getElementById('opciones_depto_analisis').classList.add('hidden');
+
+        limpiarGrupoAnalisis();
+
+        const inpGrupo = document.getElementById('buscar_grupo_analisis');
+        if (val) {
+            inpGrupo.disabled = false;
+            poblarGruposAnalisis(val);
+        } else {
+            inpGrupo.disabled = true;
+        }
+    }
+
+    function poblarGruposAnalisis(deptoSel) {
+        const container = document.getElementById('opciones_grupo_analisis');
+        const grupos = [...new Set(datosClasificacionAnalisis.filter(item => item.departamento === deptoSel).map(item => item.grupo))].filter(Boolean);
+
+        let html = `<div onclick="seleccionarGrupoAnalisis('', 'Todos los grupos')" class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todos los grupos</div>`;
+        grupos.forEach(g => {
+            html += `<div onclick="seleccionarGrupoAnalisis('${g}', '${g}')" data-nombre="${g.toLowerCase()}" class="opcion-grupo-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${g}</div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function seleccionarGrupoAnalisis(val, label) {
+        document.getElementById('grupo_analisis').value = val;
+        document.getElementById('buscar_grupo_analisis').value = val ? label : '';
+        document.getElementById('opciones_grupo_analisis').classList.add('hidden');
+
+        limpiarSubgrupoAnalisis();
+
+        const inpSubgrupo = document.getElementById('buscar_subgrupo_analisis');
+        if (val) {
+            inpSubgrupo.disabled = false;
+            poblarSubgruposAnalisis(document.getElementById('depto_analisis').value, val);
+        } else {
+            inpSubgrupo.disabled = true;
+        }
+    }
+
+    function poblarSubgruposAnalisis(deptoSel, grupoSel) {
+        const container = document.getElementById('opciones_subgrupo_analisis');
+        const subgrupos = [...new Set(datosClasificacionAnalisis.filter(item => item.departamento === deptoSel && item.grupo === grupoSel).map(item => item.subgrupo))].filter(Boolean);
+
+        let html = `<div onclick="seleccionarSubgrupoAnalisis('', 'Todos los subgrupos')" class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todos los subgrupos</div>`;
+        subgrupos.forEach(s => {
+            html += `<div onclick="seleccionarSubgrupoAnalisis('${s}', '${s}')" data-nombre="${s.toLowerCase()}" class="opcion-subgrupo-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${s}</div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function seleccionarSubgrupoAnalisis(val, label) {
+        document.getElementById('subgrupo_analisis').value = val;
+        document.getElementById('buscar_subgrupo_analisis').value = val ? label : '';
+        document.getElementById('opciones_subgrupo_analisis').classList.add('hidden');
+    }
+
+    // Funciones de filtro de texto para los combos
+    function filtrarDeptosAnalisis() {
+        const texto = document.getElementById('buscar_depto_analisis').value.toLowerCase().trim();
+        document.querySelectorAll('.opcion-depto-analisis').forEach(op => {
+            op.classList.toggle('hidden', !op.getAttribute('data-nombre').includes(texto));
+        });
+        document.getElementById('opciones_depto_analisis').classList.remove('hidden');
+    }
+    function mostrarOpcionesDeptoAnalisis() {
+        document.getElementById('opciones_depto_analisis').classList.remove('hidden');
+    }
+
+    function filtrarGruposAnalisis() {
+        const texto = document.getElementById('buscar_grupo_analisis').value.toLowerCase().trim();
+        document.querySelectorAll('.opcion-grupo-analisis').forEach(op => {
+            op.classList.toggle('hidden', !op.getAttribute('data-nombre').includes(texto));
+        });
+        document.getElementById('opciones_grupo_analisis').classList.remove('hidden');
+    }
+    function mostrarOpcionesGrupoAnalisis() {
+        document.getElementById('opciones_grupo_analisis').classList.remove('hidden');
+    }
+
+    function filtrarSubgruposAnalisis() {
+        const texto = document.getElementById('buscar_subgrupo_analisis').value.toLowerCase().trim();
+        document.querySelectorAll('.opcion-subgrupo-analisis').forEach(op => {
+            op.classList.toggle('hidden', !op.getAttribute('data-nombre').includes(texto));
+        });
+        document.getElementById('opciones_subgrupo_analisis').classList.remove('hidden');
+    }
+    function mostrarOpcionesSubgrupoAnalisis() {
+        document.getElementById('opciones_subgrupo_analisis').classList.remove('hidden');
+    }
+
+    // Limpieza de combos
+    function limpiarDeptoAnalisis() {
+        document.getElementById('depto_analisis').value = '';
+        document.getElementById('buscar_depto_analisis').value = '';
+        document.getElementById('opciones_depto_analisis').classList.add('hidden');
+        limpiarGrupoAnalisis();
+    }
+
+    function limpiarGrupoAnalisis() {
+        document.getElementById('grupo_analisis').value = '';
+        document.getElementById('buscar_grupo_analisis').value = '';
+        document.getElementById('opciones_grupo_analisis').classList.add('hidden');
+        document.getElementById('buscar_grupo_analisis').disabled = true;
+        limpiarSubgrupoAnalisis();
+    }
+
+    function limpiarSubgrupoAnalisis() {
+        document.getElementById('subgrupo_analisis').value = '';
+        document.getElementById('buscar_subgrupo_analisis').value = '';
+        document.getElementById('opciones_subgrupo_analisis').classList.add('hidden');
+        document.getElementById('buscar_subgrupo_analisis').disabled = true;
+    }
+
+    // --- IMPORTACIÓN MASIVA DE PRODUCTOS A LA TABLA ---
+    async function importarProductosAnalisis() {
+        const proveedorId = document.getElementById('proveedor_id_analisis').value;
+        if (!proveedorId) return;
+
+        const depto = document.getElementById('depto_analisis').value;
+        const grupo = document.getElementById('grupo_analisis').value;
+        const subgrupo = document.getElementById('subgrupo_analisis').value;
+
+        const params = new URLSearchParams({
+            proveedor_id: proveedorId,
+            departamento: depto,
+            grupo: grupo,
+            subgrupo: subgrupo
+        });
+
+        try {
+            const res = await fetch(`/api/productos/importar-analisis?${params.toString()}`);
+            const productos = await res.json();
+
+            if (!Array.isArray(productos) || productos.length === 0) {
+                alert('No se encontraron productos para los filtros seleccionados.');
+                return;
+            }
+
+            const tbody = document.getElementById('filas-tabla-analisis');
+
+            // Si hay 1 sola fila inicial y está vacía, se reemplaza
+            if (tbody.children.length === 1) {
+                const primerCod = tbody.querySelector('.inp-codigo').value.trim();
+                if (!primerCod) tbody.innerHTML = '';
+            }
+
+            // Inserta cada producto extraído en la cuadrícula
+            productos.forEach(prod => {
+                const tr = agregarFilaAnalisis();
+                tr.querySelector('.inp-codigo').value = prod.codigo || '';
+                tr.querySelector('.inp-desc').value = prod.descripcion || '';
+                tr.querySelector('.inp-pre').value = prod.unidad_manejo || 1;
+                tr.querySelector('.inp-costo').value = (prod.precio || 0).toFixed(2);
+                tr.querySelector('.inp-emp').value = 0;
+                calcularFila(tr.querySelector('.inp-codigo'));
+            });
+
+            totalizarAnalisis();
+
+        } catch (e) {
+            console.error('Error al importar productos:', e);
+            alert('Ocurrió un error al importar los productos.');
+        }
+    }
+
+    // --- TABLA DINÁMICA & CÁLCULOS ---
+    // --- GENERACIÓN DE FILAS TIPO CUADRÍCULA EXCEL SIN BORDES REDONDEADOS NI NEGRITAS ---
+    function agregarFilaAnalisis() {
+        const tbody = document.getElementById('filas-tabla-analisis');
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-blue-50/40 transition text-xs';
+
+        // Estructura de celdas con bordes tipo cuadrícula (border-slate-200) e inputs planos sin border-radius
+        tr.innerHTML = `
+            <td class="border border-slate-200 p-0">
+                <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+                    placeholder="" onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)">
+            </td>
+            <td class="border border-slate-200 p-0">
+                <input type="text" readonly tabindex="-1" class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-not-allowed border-0"
+                    placeholder="">
+            </td>
+            <td class="border border-slate-200 p-0">
+                <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+                    onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)">
+            </td>
+            <td class="border border-slate-200 p-0">
+                <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+                    onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)">
+            </td>
+            <td class="border border-slate-200 p-0">
+                <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+                    onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)">
+            </td>
+            <td class="border border-slate-200 p-0">
+                <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+                    onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)">
+            </td>
+            <td class="border border-slate-200 px-2 py-1.5 text-right font-normal text-slate-700 bg-slate-50/50">
+                <span class="txt-subtotal">$ 0,00</span>
+            </td>
+            <td class="border border-slate-200 p-0 text-center bg-slate-50/50">
+                <button type="button" onclick="eliminarFila(this)" class="w-full h-full text-slate-400 hover:text-rose-600 transition py-1.5">
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+        return tr;
+    }
+
+    async function consultarProductoCodigo(inputCodigo) {
+        const codigo = inputCodigo.value.trim();
+        const tr = inputCodigo.closest('tr');
+        const inpDesc = tr.querySelector('.inp-desc');
+        const inpPre = tr.querySelector('.inp-pre');
+        const inpCosto = tr.querySelector('.inp-costo');
+
+        // Si se borra el código, se limpia la descripción y se recalculan totales
+        if (!codigo) {
+            inpDesc.value = '';
+            inpCosto.value = '0.00';
+            calcularFila(inputCodigo);
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/productos/buscar-codigo/${encodeURIComponent(codigo)}`);
+            const data = await res.json();
+
+            if (data.encontrado) {
+                inpDesc.value = data.descripcion;
+                inpCosto.value = data.precio.toFixed(2);
+
+                // Intenta extraer número de la unidad de manejo si aplica
+                const numManejo = parseInt(data.unidad_manejo);
+                if (!isNaN(numManejo) && numManejo > 0) {
+                    inpPre.value = numManejo;
+                }
+            } else {
+                inpDesc.value = 'PRODUCTO NO ENCONTRADO';
+                inpCosto.value = '0.00';
+            }
+        } catch (e) {
+            inpDesc.value = 'ERROR DE CONEXIÓN';
+        }
+
+        calcularFila(inputCodigo);
+    }
+
+    function calcularFila(elem) {
+        const tr = elem.closest('tr');
+        const pre = parseFloat(tr.querySelector('.inp-pre').value) || 1;
+        const emp = parseFloat(tr.querySelector('.inp-emp').value) || 0;
+        const costo = parseFloat(tr.querySelector('.inp-costo').value) || 0;
+
+        const uniInput = tr.querySelector('.inp-uni');
+        const totalUni = pre * emp;
+        uniInput.value = totalUni;
+
+        const subtotal = totalUni * costo;
+        tr.querySelector('.txt-subtotal').textContent = `$ ${subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        totalizarAnalisis();
+    }
+
+    function ajustarPorUnidades(elem) {
+        const tr = elem.closest('tr');
+        const pre = parseFloat(tr.querySelector('.inp-pre').value) || 1;
+        const uni = parseFloat(tr.querySelector('.inp-uni').value) || 0;
+        const costo = parseFloat(tr.querySelector('.inp-costo').value) || 0;
+
+        const empInput = tr.querySelector('.inp-emp');
+        empInput.value = pre > 0 ? (uni / pre) : 0;
+
+        const subtotal = uni * costo;
+        tr.querySelector('.txt-subtotal').textContent = `$ ${subtotal.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+        totalizarAnalisis();
+    }
+
+    function totalizarAnalisis() {
+        let totEmp = 0;
+        let totUni = 0;
+        let totMonto = 0;
+
+        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+            const emp = parseFloat(tr.querySelector('.inp-emp')?.value) || 0;
+            const uni = parseFloat(tr.querySelector('.inp-uni')?.value) || 0;
+            const costo = parseFloat(tr.querySelector('.inp-costo')?.value) || 0;
+
+            totEmp += emp;
+            totUni += uni;
+            totMonto += (uni * costo);
+        });
+
+        document.getElementById('tot-empaques').textContent = totEmp.toLocaleString('es-VE');
+        document.getElementById('tot-unidades').textContent = totUni.toLocaleString('es-VE');
+        document.getElementById('tot-monto').textContent = `$ ${totMonto.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    }
+
+    function eliminarFila(btn) {
+        const tbody = document.getElementById('filas-tabla-analisis');
+        if (tbody.children.length > 1) {
+            btn.closest('tr').remove();
+            totalizarAnalisis();
+        } else {
+            // Si es la última fila restante, reinicia sus valores
+            const tr = btn.closest('tr');
+            tr.querySelectorAll('input').forEach(i => {
+                if (i.classList.contains('inp-pre')) i.value = '1';
+                else if (i.classList.contains('inp-costo')) i.value = '0.00';
+                else i.value = '';
+            });
+            tr.querySelector('.txt-subtotal').textContent = '$ 0,00';
+            totalizarAnalisis();
+        }
+    }
+
+    // --- NAVEGACIÓN TECLA ENTER ---
+    function manejarKeyNav(e, elem, campoActual) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            const tr = elem.closest('tr');
+
+            if (campoActual === 'codigo') {
+                consultarProductoCodigo(elem).then(() => {
+                    tr.querySelector('.inp-pre').focus();
+                    tr.querySelector('.inp-pre').select();
+                });
+            } else if (campoActual === 'pre') {
+                tr.querySelector('.inp-emp').focus();
+                tr.querySelector('.inp-emp').select();
+            } else if (campoActual === 'emp') {
+                tr.querySelector('.inp-uni').focus();
+                tr.querySelector('.inp-uni').select();
+            } else if (campoActual === 'uni') {
+                tr.querySelector('.inp-costo').focus();
+                tr.querySelector('.inp-costo').select();
+            } else if (campoActual === 'costo') {
+                let sigTr = tr.nextElementSibling;
+                if (!sigTr) {
+                    sigTr = agregarFilaAnalisis();
+                }
+                const inpCod = sigTr.querySelector('.inp-codigo');
+                inpCod.focus();
+                inpCod.select();
+            }
+        }
+    }
+
+    // Cierra desplegables al hacer clic fuera
+    document.addEventListener('click', (e) => {
+        if (!e.target.closest('#combo-proveedor-analisis')) {
+            document.getElementById('opciones_proveedor_analisis')?.classList.add('hidden');
+        }
+        if (!e.target.closest('#combo-tienda-analisis')) {
+            document.getElementById('opciones_tienda_analisis')?.classList.add('hidden');
+        }
+        if (!e.target.closest('#combo-depto-analisis')) {
+            document.getElementById('opciones_depto_analisis')?.classList.add('hidden');
+        }
+        if (!e.target.closest('#combo-grupo-analisis')) {
+            document.getElementById('opciones_grupo_analisis')?.classList.add('hidden');
+        }
+        if (!e.target.closest('#combo-subgrupo-analisis')) {
+            document.getElementById('opciones_subgrupo_analisis')?.classList.add('hidden');
+        }
+    });
+
+    // Cargar 1 filas iniciales al abrir la vista
+    document.addEventListener('DOMContentLoaded', () => {
+        agregarFilaAnalisis();
+    });
+    // --- EXPORTACIÓN DE TABLA A FORMATO TXT ---
+    function exportarTablaTxt() {
+        // Obtiene todas las filas activas dentro de la tabla
+        const filas = document.querySelectorAll('#filas-tabla-analisis tr');
+        let lineas = [];
+
+        filas.forEach(tr => {
+            // Extrae el código ST y la cantidad en unidades
+            const codigo = tr.querySelector('.inp-codigo')?.value.trim() || '';
+            const unidades = parseInt(tr.querySelector('.inp-uni')?.value) || 0;
+
+            // Agrega la línea solo si la fila contiene un código
+            if (codigo !== '') {
+                lineas.push(`${codigo}|${unidades}|`);
+            }
+        });
+
+        // Valida que existan datos cargados antes de descargar
+        if (lineas.length === 0) {
+            alert('No hay productos con código en la tabla para exportar.');
+            return;
+        }
+
+        // Une cada producto con un salto de línea
+        const contenido = lineas.join('\r\n') + '\r\n';
+        // Crea el archivo en memoria en formato texto plano
+        const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+
+        // Genera y simula el clic de descarga
+        const a = document.createElement('a');
+        a.href = url;
+        const selectProveedor = document.getElementById('select-proveedor');
+        const proveedor = selectProveedor?.options[selectProveedor.selectedIndex]?.text.trim() || 'PROVEEDOR';
+
+        // Obtiene el elemento select de tienda e ingresa su texto seleccionado
+        const selectTienda = document.getElementById('select-tienda');
+        const tienda = selectTienda?.options[selectTienda.selectedIndex]?.text.trim() || 'TIENDA';
+
+        // Obtiene el día, mes y año actual
+        const hoy = new Date();
+        const dia = String(hoy.getDate()).padStart(2, '0'); // Asegura 2 dígitos para el día
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Asegura 2 dígitos para el mes
+        const anio = hoy.getFullYear(); // Obtiene el año de 4 dígitos
+        const fechaActual = `${dia}-${mes}-${anio}`;
+
+        // Construye el nombre del archivo y elimina caracteres que no son válidos para nombres de archivos en Windows
+        const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
+
+        // Asigna el nombre dinámico generado al enlace de descarga
+        a.download = nombreArchivo;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+</script>
+
+{% endblock %}

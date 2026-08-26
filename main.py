@@ -1166,3 +1166,117 @@ async def cargar_lista_productos(
         ).execute()
 
     return RedirectResponse(url="/productos", status_code=303)
+
+    # --- RUTAS DE ANÁLISIS DE PEDIDO ---
+
+@app.get("/analisis-pedido")
+def vista_analisis_pedido(request: Request, access_token: str = Cookie(None)):
+    # Verifica autenticación del usuario
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
+    # Obtiene lista de proveedores para el buscador desplegable
+    res_prov = supabase.table("proveedores").select("id, nombre").order("nombre").execute()
+    proveedores = res_prov.data if res_prov and res_prov.data else []
+
+    return templates.TemplateResponse(request, "analisis_pedido.html", {
+        "proveedores": proveedores
+    })
+
+@app.get("/api/productos/buscar-codigo/{codigo}")
+def buscar_producto_por_codigo(codigo: str, access_token: str = Cookie(None)):
+    # Endpoint JSON para consulta fluida sin recargar página
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return JSONResponse(status_code=401, content={"encontrado": False})
+
+    codigo_limpio = codigo.strip()
+    # Busca en Supabase coincidencia exacta por codigo_st
+    res = supabase.table("productos").select("*").eq("codigo_st", codigo_limpio).execute()
+    
+    if res.data and len(res.data) > 0:
+        prod = res.data[0]
+        return {
+            "encontrado": True,
+            "codigo_st": prod.get("codigo_st", ""),
+            "descripcion": prod.get("descripcion", ""),
+            "precio": float(prod.get("precio") or 0.0),
+            "unidad_manejo": prod.get("unidad_manejo", "1")
+        }
+    
+    return {"encontrado": False}
+
+# --- RUTAS API DE CLASIFICACIÓN E IMPORTACIÓN PARA ANÁLISIS DE PEDIDO ---
+
+@app.get("/api/clasificacion")
+def api_obtener_clasificacion(
+    proveedor_id: Optional[int] = None, 
+    access_token: str = Cookie(None)
+):
+    """Obtiene las distintas clasificaciones (departamento, grupo, subgrupo) de los productos de un proveedor."""
+    user = obtener_usuario_actual(access_token) # Verifica que exista sesión activa
+    if not user or not proveedor_id:
+        return []
+
+    # Consulta en Supabase solo las columnas de clasificación para el proveedor seleccionado
+    res = supabase.table("productos").select("departamento, grupo, subgrupo").eq("proveedor_id", proveedor_id).execute()
+    productos = res.data or []
+
+    # Genera lista de clasificaciones únicas filtrando duplicados
+    resultado = []
+    vistos = set()
+    for p in productos:
+        depto = p.get("departamento") or ""
+        grupo = p.get("grupo") or ""
+        subgrupo = p.get("subgrupo") or ""
+        
+        clave = (depto, grupo, subgrupo)
+        if clave not in vistos:
+            vistos.add(clave)
+            resultado.append({
+                "departamento": depto,
+                "grupo": grupo,
+                "subgrupo": subgrupo
+            })
+
+    return resultado
+
+
+@app.get("/api/productos/importar-analisis")
+def api_importar_productos_analisis(
+    proveedor_id: Optional[int] = None,
+    departamento: Optional[str] = "",
+    grupo: Optional[str] = "",
+    subgrupo: Optional[str] = "",
+    access_token: str = Cookie(None)
+):
+    """Retorna los productos de un proveedor filtrados dinámicamente por departamento, grupo o subgrupo."""
+    user = obtener_usuario_actual(access_token) # Verifica sesión activa
+    if not user or not proveedor_id:
+        return []
+
+    # Inicia la consulta filtrando por el proveedor
+    query = supabase.table("productos").select("*").eq("proveedor_id", proveedor_id)
+
+    # Aplica filtros opcionales de clasificación si vienen informados
+    if departamento and departamento.strip():
+        query = query.eq("departamento", departamento.strip())
+    if grupo and grupo.strip():
+        query = query.eq("grupo", grupo.strip())
+    if subgrupo and subgrupo.strip():
+        query = query.eq("subgrupo", subgrupo.strip())
+
+    res = query.execute()
+    productos = res.data or []
+
+    # Retorna la estructura limpia formateada para la tabla
+    return [
+        {
+            "codigo": p.get("codigo_st") or p.get("codigo", ""),
+            "descripcion": p.get("descripcion", ""),
+            "unidad_manejo": p.get("unidad_manejo") or "1",
+            "precio": float(p.get("precio") or 0.0)
+        }
+        for p in productos
+    ]
