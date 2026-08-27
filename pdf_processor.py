@@ -8,7 +8,8 @@ def extraer_datos_oc(pdf_file):
         "tienda_destino": "",
         "monto_total": 0.0,
         "fecha_emision": "",
-        "fecha_envio": ""
+        "fecha_envio": "",
+        "productos": []
     }
 
     try:
@@ -24,7 +25,7 @@ def extraer_datos_oc(pdf_file):
                 for w in sorted(words, key=lambda x: x['top']):
                     placed = False
                     for r in rows:
-                        if abs(r['top'] - w['top']) < 10:
+                        if abs(r['top'] - w['top']) < 3:
                             r['words'].append(w)
                             placed = True
                             break
@@ -32,6 +33,7 @@ def extraer_datos_oc(pdf_file):
                         rows.append({'top': w['top'], 'words': [w]})
 
                 rows = sorted(rows, key=lambda r: r['top'])
+                
                 lines_data = []
                 for r in rows:
                     sorted_words = sorted(r['words'], key=lambda w: w['x0'])
@@ -87,8 +89,59 @@ def extraer_datos_oc(pdf_file):
                                 datos_extraidos["monto_total"] = float(m_tot.group(1).replace(',', ''))
                             except ValueError:
                                 pass
+                    productos_capturados = []
 
+                    # --- 6. EXTRAER DETALLE DE PRODUCTOS EN STELLAR BUSINESS (POR COORDENADAS X/Y) ---
+        productos_capturados = []
+
+        for page in pdf.pages:
+            words = page.extract_words() # Extrae cada palabra individual con sus coordenadas x0, top, bottom
+            width = page.width # Ancho total de la página para delimitar columnas
+
+            # 1. Captura los códigos de producto de 6 dígitos
+            codigos_words = [
+                w for w in words 
+                if re.match(r'^\d{6}$', w['text']) and w['text'] != "000000"
+            ]
+
+            # 2. Recorre cada código e identifica las columnas numéricas de su fila
+            for cod_w in codigos_words:
+                # Filtra valores numéricos en la misma fila (tolerancia vertical 8px) a la derecha del código
+                candidatos = [
+                    w for w in words 
+                    if abs(w['top'] - cod_w['top']) < 8 
+                    and w['x0'] > cod_w['x0'] 
+                    and re.match(r'^\d+(?:\.\d+)?$', w['text'].replace(',', ''))
+                ]
+                
+                # Ordena las columnas numéricas de izquierda a derecha (PRE -> EMP -> UNI -> COSTO -> SUBTOTAL)
+                candidatos_ordenados = sorted(candidatos, key=lambda w: w['x0'])
+                
+                # Selecciona la 3ª columna numérica (índice 2) que corresponde a 'UNI'
+                cant_w = candidatos_ordenados[2] if len(candidatos_ordenados) >= 3 else None
+                
+                if cant_w:
+                    try:
+                        # Extrae y convierte el valor de la cantidad
+                        cant_val = float(cant_w['text'].replace(',', ''))
+                        if cant_val > 0:
+                            productos_capturados.append({
+                                "codigo": cod_w['text'],
+                                "codigo_producto": cod_w['text'],
+                                "producto_id": cod_w['text'],
+                                "cantidad": cant_val
+                            })
+                    except ValueError:
+                        pass
+
+        datos_extraidos["productos"] = productos_capturados
+
+        # Log de verificación en la terminal de VS Code
+        print(f"=== PRODUCTOS DETECTADOS EN STELLAR: {len(datos_extraidos['productos'])} ===")
+        print(datos_extraidos["productos"])
+        print("==================================================")
     except Exception as e:
-        print(f"Error al procesar el PDF: {e}")
+            # Imprime el error en la consola de VS Code para depuración sin detener el servidor
+        print(f"Error crítico al procesar el PDF: {str(e)}")           
 
     return datos_extraidos

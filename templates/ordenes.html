@@ -171,7 +171,14 @@
                                 data-id="{{ o.id }}" value="{{ o.id }}" onchange="actualizarEstadoBotonEliminar()">
                         </td>
 
-                        <td class="p-4 font-semibold text-slate-900">{{ o.numero_orden }}</td>
+                        <td class="p-4 font-semibold text-slate-900">
+                            <button type="button" onclick="toggleDetalleOC('{{ o.id }}')"
+                                class="hover:text-blue-600 inline-flex items-center gap-2 focus:outline-none group/btn">
+                                <i id="icono-desplegar-{{ o.id }}"
+                                    class="fa-solid fa-chevron-right text-xs text-slate-400 group-hover/btn:text-blue-600 transition-transform"></i>
+                                <span>{{ o.numero_orden }}</span>
+                            </button>
+                        </td>
                         <td class="p-4 font-medium text-blue-800 max-w-[180px] truncate" title="{{ o.proveedor }}">
                             {{ o.proveedor }}
                         </td>
@@ -221,6 +228,75 @@
                                         class="chk-finalizada rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                                     Finalizada
                                 </label>
+                            </div>
+                        </td>
+                    </tr>
+                    <!-- Fila de Pestaña Desplegable con el detalle de la Orden de Compra -->
+                    <tr id="detalle-{{ o.id }}" class="hidden bg-slate-50/80 border-b border-slate-200">
+                        <!-- td ajustado sin pl-12 para garantizar centrado simétrico -->
+                        <td colspan="10" class="p-4">
+                            <!-- max-w-4xl y mx-auto centran el contenedor horizontalmente -->
+                            <div
+                                class="max-w-6xl mx-auto bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                                    <span
+                                        class="text-xs font-bold text-slate-600 tracking-wider flex items-center gap-2">
+                                        <i class="fa-solid fa-boxes-stacked text-blue-600"></i> Detalle de Orden de
+                                        Compra
+                                    </span>
+                                    <span class="text-xs font-semibold text-slate-500">
+                                        {{ o.detalles_productos|length if o.detalles_productos else 0 }} ítem(s)
+                                    </span>
+                                </div>
+
+                                {% if o.detalles_productos and o.detalles_productos|length > 0 %}
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left text-xs">
+                                        <thead>
+                                            <tr
+                                                class="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
+                                                <th class="p-2">Código ST</th>
+                                                <th class="p-2">Descripción</th>
+                                                <th class="p-2 text-right">Cant. (UNI)</th>
+                                                <th class="p-2 text-right">Precio Unit. ($)</th>
+                                                <th class="p-2 text-right">Subtotal ($)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            {% for dp in o.detalles_productos %}
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="p-2 font-semibold font-semibold text-blue-800">{{ dp.codigo
+                                                    }}
+                                                </td>
+                                                <td class="p-2 text-slate-800 font-medium">{{ dp.descripcion }}</td>
+                                                <td class="p-2 text-right font-semibold text-slate-800">{{ dp.cantidad
+                                                    }}</td>
+                                                <td class="p-2 text-right font-semibold text-slate-800">${{
+                                                    "{:,.2f}".format(dp.precio_unitario or 0).replace(",",
+                                                    "X").replace(".", ",").replace("X", ".") }}</td>
+                                                <td class="p-2 text-right font-semibold text-slate-800">${{
+                                                    "{:,.2f}".format((dp.cantidad or 0) * (dp.precio_unitario or
+                                                    0)).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                        <!-- Pie de tabla: Fila final destacada con el Total General de la OC -->
+                                        <tfoot class="border-t-2 border-slate-200 bg-slate-50/80">
+                                            <tr>
+                                                <td colspan="4"
+                                                    class="p-2 text-right font-bold text-[11px] tracking-wider text-slate-600">
+                                                    Total:</td>
+                                                <td class="p-2 text-right font-bold text-blue-900 text-sm">${{
+                                                    "{:,.2f}".format(o.monto_total or 0).replace(",", "X").replace(".",
+                                                    ",").replace("X", ".") }}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-xs text-slate-400 italic py-1">Sin ítems o detalle registrado para esta
+                                    orden.</p>
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -876,6 +952,8 @@
 
         ordenes.forEach((datos) => {
             const diasInventarioSugerido = datos.dias_despacho !== null && datos.dias_despacho !== undefined ? datos.dias_despacho : 15;
+            const listaProductos = datos.productos || datos.detalles_productos || [];
+            const productosJsonEscapado = JSON.stringify(listaProductos).replace(/"/g, '&quot;');
 
             const tarjetaHtml = `
             <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 transition-opacity duration-300 tarjeta-oc">
@@ -894,7 +972,7 @@
 
                 <form action="/ordenes/crear" method="POST" class="space-y-4 orden-form-modal">
                     <input type="hidden" name="ajax" value="true">
-                    <input type="hidden" name="productos_json" value="[]">
+                    <input type="hidden" name="productos_json" value="${productosJsonEscapado}">
 
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                         <div>
@@ -1228,6 +1306,17 @@
             actualizarEstadoBotonEliminar();
         }
     });
+    // Alternar visibilidad del detalle desplegable de la Orden de Compra
+    function toggleDetalleOC(ordenId) {
+        const filaDetalle = document.getElementById(`detalle-${ordenId}`);
+        const icono = document.getElementById(`icono-desplegar-${ordenId}`);
+        if (filaDetalle) {
+            filaDetalle.classList.toggle('hidden');
+            if (icono) {
+                icono.classList.toggle('rotate-90'); // Rotar flecha indicadora
+            }
+        }
+    }
 </script>
 
 <!-- Modal 1: Cargar Órdenes de Compra (PDF) -->

@@ -1,3 +1,7 @@
+import socket
+import httpx
+socket.setdefaulttimeout(30.0)
+httpx._config.DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(30.0)
 import sys
 import os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -15,27 +19,40 @@ import io
 import xml.etree.ElementTree as ET
 import json
 from fastapi import Form
-from supabase import create_client, Client
 import traceback
-
+from supabase import create_client, Client, ClientOptions
 
 SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
 SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Inicializa la conexión asignando 30 segundos de tiempo de espera sin errores de sintaxis
+supabase: Client = create_client(
+    SUPABASE_URL, 
+    SUPABASE_KEY,
+    options=ClientOptions(
+        postgrest_client_timeout=30, # Ajusta el tiempo de espera para consultas a la base de datos
+        storage_client_timeout=30    # Ajusta el tiempo de espera para subida/descarga de archivos
+    )
+)
 
 app = FastAPI(title="Control de Compras", version="2.0")
-# Silencia las peticiones automáticas de Chrome DevTools para evitar falsos logs 404
 @app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
 async def chrome_devtools_silencer():
-    return Response(status_code=204) # Retorna 204 No Content sin generar alertas en servidor
+    return Response(status_code=204) 
 
-def obtener_usuario_actual(access_token: str = Cookie(None)):
-    if not access_token:
+def obtener_usuario_actual(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
+    if not access_token and not refresh_token:
         return None
     try:
         user_response = supabase.auth.get_user(access_token)
         return user_response.user
     except Exception:
+        if refresh_token:
+            try:
+                res = supabase.auth.refresh_session(refresh_token)
+                return res.user if res else None
+            except Exception:
+                return None
         return None
 
 def script_alerta_error(mensaje: str, redireccionar: str = None) -> HTMLResponse:
@@ -80,28 +97,45 @@ def procesar_registro(email: str = Form(...), password: str = Form(...)):
 @app.post("/login")
 def procesar_login(email: str = Form(...), password: str = Form(...)):
     try:
-        auth_res = supabase.auth.sign_in_with_password({"email": email, "password": password})
+        # Sanea el correo e inicia sesión en Supabase
+        auth_res = supabase.auth.sign_in_with_password({"email": email.strip(), "password": password})
         response = RedirectResponse(url="/", status_code=303)
+        
+        # Guarda los tokens en cookies compatibles con HTTP local
         response.set_cookie(
             key="access_token", 
             value=auth_res.session.access_token, 
             httponly=True, 
-            secure=True, 
+            secure=False, 
+            samesite="lax", 
+            max_age=3600 * 24 * 7
+        )
+        response.set_cookie(
+            key="refresh_token", 
+            value=auth_res.session.refresh_token, 
+            httponly=True, 
+            secure=False, 
             samesite="lax", 
             max_age=3600 * 24 * 7
         )
         return response
     except Exception as e:
-        return script_alerta_modal(
+        # Muestra la causa exacta del rechazo en la terminal
+        print(f"\n[DETALLE ERROR SUPABASE]: {e}\n")
+        
+        # Muestra la respuesta de error enviada por Supabase en el modal
+        res_error = script_alerta_modal(
             tipo="error", 
             titulo="Error de Acceso", 
-            mensaje="Credenciales incorrectas o correo no verificado aún."
+            mensaje=f"Supabase rechazó la entrada: {str(e)}"
         )
+        res_error.delete_cookie("access_token")
+        res_error.delete_cookie("refresh_token")
+        return res_error
 
 @app.post("/recuperar-password")
 def enviar_recuperacion(request: Request, email: str = Form(...)):
     try:
-        # Define la URL de retorno apuntando al endpoint de reset
         redirect_to = str(request.url_for("vista_reset_password"))
         supabase.auth.reset_password_for_email(email, {"redirect_to": redirect_to})
         return script_alerta_modal(
@@ -135,9 +169,9 @@ def procesar_reset_password(access_token: str = Cookie(None), nueva_password: st
 def cerrar_sesion():
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie("access_token")
+    response.delete_cookie("refresh_token")
     return response
 
-# Configuración de plantillas
 templates = Jinja2Templates(directory="templates")
 def formato_moneda_latina(valor):
     if valor is None:
@@ -154,14 +188,12 @@ def dashboard(request: Request):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Obtenemos las OCs ordenadas por ID ascendente para evaluar su orden cronológico de registro
     res_oc = supabase.table("ordenes_compra").select("*, proveedores(nombre)").eq("usuario_id", user.id).order("id", desc=False).execute()
     
     proveedores_desglose = {}
     hoy = datetime.now().date()
 
     if res_oc.data:
-        # Agrupar todas las órdenes por proveedor y tienda
         agrupado = {}
         for row in res_oc.data:
             prov_obj = row.get("proveedores")
@@ -173,7 +205,6 @@ def dashboard(request: Request):
                 agrupado[key] = []
             agrupado[key].append(row)
 
-        # Procesar la selección de la OC principal a mostrar por cada (Proveedor, Tienda)
         for (prov, tienda), lista_ocs in agrupado.items():
             if prov not in proveedores_desglose:
                 proveedores_desglose[prov] = {}
@@ -866,7 +897,38 @@ async def procesar_pdf(
         contenido_bytes = await archivo.read()
         pdf_en_memoria = io.BytesIO(contenido_bytes)
         datos_extraidos = extraer_datos_oc(pdf_en_memoria)
+        # Enriquecer productos extraídos consultando la base de datos 'productos'
+        prods_procesados = []
+        monto_calculado_total = 0.0
         
+        for p in datos_extraidos.get("productos", []):
+            cod_st = str(p.get("codigo", "")).strip()
+            cant = float(p.get("cantidad", 0))
+            
+            # Buscar coincidencia exacta por código ST en Supabase
+            res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute()
+            
+            desc = "Producto no registrado"
+            precio_unitario = 0.0
+            if res_p.data and len(res_p.data) > 0:
+                desc = res_p.data[0].get("descripcion", desc)
+                precio_unitario = float(res_p.data[0].get("precio") or 0.0)
+            
+            subtotal = cant * precio_unitario # Multiplica precio por cantidad solicitada
+            monto_calculado_total += subtotal # Suma al total acumulado de la OC
+            
+            prods_procesados.append({
+                "codigo": cod_st,
+                "descripcion": desc,
+                "cantidad": cant,
+                "precio_unitario": precio_unitario,
+                "subtotal": subtotal
+            })
+        
+        datos_extraidos["productos"] = prods_procesados
+        # Si el PDF no tenía total de cabecera, asignar el monto total calculado por los productos
+        if monto_calculado_total > 0 and datos_extraidos.get("monto_total", 0.0) == 0.0:
+            datos_extraidos["monto_total"] = monto_calculado_total
         if not datos_extraidos:
             datos_extraidos = {
                 "numero_orden": "",
