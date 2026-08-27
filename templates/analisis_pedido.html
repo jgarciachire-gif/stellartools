@@ -836,21 +836,22 @@
         // Genera y simula el clic de descarga
         const a = document.createElement('a');
         a.href = url;
-        const selectProveedor = document.getElementById('select-proveedor');
-        const proveedor = selectProveedor?.options[selectProveedor.selectedIndex]?.text.trim() || 'PROVEEDOR';
+        // Obtiene el valor del proveedor desde el campo de texto de la interfaz
+        const inputProveedor = document.getElementById('buscar_proveedor_analisis');
+        const proveedor = inputProveedor?.value.trim() || 'PROVEEDOR';
 
-        // Obtiene el elemento select de tienda e ingresa su texto seleccionado
-        const selectTienda = document.getElementById('select-tienda');
-        const tienda = selectTienda?.options[selectTienda.selectedIndex]?.text.trim() || 'TIENDA';
+        // Obtiene el valor de la tienda desde el campo de texto de la interfaz
+        const inputTienda = document.getElementById('buscar_tienda_analisis');
+        const tienda = inputTienda?.value.trim() || 'TIENDA';
 
-        // Obtiene el día, mes y año actual
+        // Genera la fecha exacta al momento de la creación del archivo
         const hoy = new Date();
-        const dia = String(hoy.getDate()).padStart(2, '0'); // Asegura 2 dígitos para el día
-        const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Asegura 2 dígitos para el mes
-        const anio = hoy.getFullYear(); // Obtiene el año de 4 dígitos
+        const dia = String(hoy.getDate()).padStart(2, '0');
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+        const anio = hoy.getFullYear();
         const fechaActual = `${dia}-${mes}-${anio}`;
 
-        // Construye el nombre del archivo y elimina caracteres que no son válidos para nombres de archivos en Windows
+        // Limpia caracteres inválidos y construye el nombre final del archivo
         const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
 
         // Asigna el nombre dinámico generado al enlace de descarga
