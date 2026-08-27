@@ -86,6 +86,8 @@ def procesar_login(email: str = Form(...), password: str = Form(...)):
             key="access_token", 
             value=auth_res.session.access_token, 
             httponly=True, 
+            secure=True, 
+            samesite="lax", 
             max_age=3600 * 24 * 7
         )
         return response
