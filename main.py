@@ -190,16 +190,17 @@ def dashboard(request: Request):
                 else:
                     ocs_enviadas.append(oc)
 
-            # Determinamos la OC activa a mostrar según prioridad:
-            # - Si hay nueva OC enviada, la anterior con recepción cambia su estatus visible a "Nueva OC enviada"
-            # - La última OC recibida se mantiene en pantalla hasta que la nueva OC cambie a "Despacho Recibido"
+            # Determinamos la OC activa a mostrar según prioridad
             if ocs_recibidas:
-                oc_seleccionada = ocs_recibidas[-1] # La última recibida
-                if ocs_enviadas:
-                    # Existe una nueva OC en estatus "Enviada" posterior a la última recibida
-                    estatus_oc = "Nueva OC enviada"
+                oc_seleccionada = ocs_recibidas[-1] # Obtiene la última OC con recepción confirmada
+                
+                # Comprueba si existe alguna OC enviada cuyo ID sea mayor (creada después) que la recibida
+                hay_nueva_enviada = any(oc.get('id', 0) > oc_seleccionada.get('id', 0) for oc in ocs_enviadas)
+                
+                if hay_nueva_enviada:
+                    estatus_oc = "Nueva OC enviada" # Hay un nuevo pedido posterior pendiente por recibir
                 else:
-                    estatus_oc = "Despacho Recibido"
+                    estatus_oc = "Despacho Recibido" # La última OC activa ya fue completada
             else:
                 # No hay recepciones registradas aún para esta tienda/proveedor
                 oc_seleccionada = ocs_enviadas[-1]
@@ -336,6 +337,7 @@ async def actualizar_orden(
     fecha_recepcion: str = Form(None),
     access_token: str = Cookie(None)
 ):
+    # Validar sesión de usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -346,15 +348,53 @@ async def actualizar_orden(
     f_env = fecha_envio if fecha_envio else None
     estatus = "Despacho Recibido" if f_rec else "Enviada"
 
+    # Actualizar fecha y estatus en base de datos
     supabase.table("ordenes_compra").update({
         "estatus": estatus,
         "fecha_envio": f_env,
         "fecha_recepcion": f_rec
     }).eq("id", orden_id).eq("usuario_id", user.id).execute()
     
-    # Respuesta asíncrona para evitar recargar la página y mantener el filtro activo
+    # Respuesta asíncrona JSON para actualizar la interfaz sin recargar
     if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
-        return {"status": "ok", "estatus": estatus}
+        vencimiento_str = ""
+        alerta_text = ""
+        alerta_color = "transparent"
+
+        # Calcular vencimiento de la factura y estado de alerta si hay fecha de recepción
+        if f_rec:
+            res_oc = supabase.table("ordenes_compra").select("pagada, proveedores(dias_credito)").eq("id", orden_id).execute()
+            if res_oc.data:
+                oc_info = res_oc.data[0]
+                prov_info = oc_info.get("proveedores") or {}
+                dias_credito = prov_info.get("dias_credito", 30) or 30
+
+                try:
+                    hoy = datetime.now().date()
+                    f_rec_date = datetime.strptime(f_rec, "%Y-%m-%d").date()
+                    venc_date = f_rec_date + timedelta(days=int(dias_credito))
+                    vencimiento_str = venc_date.strftime("%d/%m/%Y")
+                    dias_restantes = (venc_date - hoy).days
+
+                    if dias_restantes < 0:
+                        alerta_text = f"Vencido ({abs(dias_restantes)}d)"
+                        alerta_color = "bg-red-500"
+                    elif dias_restantes <= 3:
+                        alerta_text = f"Por vencer ({dias_restantes}d)"
+                        alerta_color = "bg-yellow-400"
+                    else:
+                        alerta_text = "Vigente"
+                        alerta_color = "bg-green-500"
+                except ValueError:
+                    pass
+
+        return {
+            "status": "ok", 
+            "estatus": estatus,
+            "vencimiento_factura_str": vencimiento_str,
+            "alerta_text": alerta_text,
+            "alerta_color": alerta_color
+        }
 
     return RedirectResponse(url="/ordenes", status_code=303)
 

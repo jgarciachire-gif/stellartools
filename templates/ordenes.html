@@ -204,22 +204,21 @@
                         <td class="p-4 font-semibold text-slate-900">
                             <div class="flex flex-col gap-1.5">
                                 <div class="flex items-center gap-2">
-                                    {% if o.alerta_text %}
+                                    <!-- Mantener spans en el DOM para actualización dinámica -->
                                     <span
-                                        class="w-2.5 h-2.5 rounded-full {{ 'bg-green-500' if o.pagada else o.alerta_color }}"
+                                        class="w-2.5 h-2.5 rounded-full {{ 'bg-green-500' if o.pagada else o.alerta_color }} {{ 'hidden' if not o.alerta_text and not o.pagada }}"
                                         id="punto-{{ o.id }}"></span>
                                     <span id="texto-estado-{{ o.id }}" class="texto-pago" {% if o.pagada
                                         %}style="color: #16a34a;" {% endif %}>
                                         {{ 'Pagada' if o.pagada else o.alerta_text }}
                                     </span>
-                                    {% endif %}
                                 </div>
                                 <label
                                     class="text-[11px] text-slate-500 flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors"
                                     onclick="event.stopPropagation();">
                                     <input type="checkbox" {{ 'checked' if o.pagada else '' }}
                                         onchange="cambiarEstadoPago(this, '{{ o.id }}', '{{ o.alerta_text }}', '{{ o.alerta_color }}')"
-                                        class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                                        class="chk-finalizada rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                                     Finalizada
                                 </label>
                             </div>
@@ -370,15 +369,51 @@
 
             const data = await response.json();
             if (data.status === 'ok') {
+                // 1. Actualizar Badge de Estatus
                 const badge = tr.querySelector('.badge-estatus');
                 if (badge) {
                     badge.textContent = data.estatus;
-                    if (data.estatus === 'Recibido') {
+                    if (data.estatus === 'Despacho Recibido' || data.estatus === 'Stock OK') {
                         badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800';
                     } else {
                         badge.className = 'badge-estatus px-2.5 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800';
                     }
                 }
+
+                // 2. Actualizar Fecha de Vencimiento de Factura
+                const celdas = tr.querySelectorAll('td');
+                if (celdas[6]) {
+                    celdas[6].textContent = data.vencimiento_factura_str || '';
+                }
+
+                // 3. Actualizar Alerta de Pago y Punto indicador
+                const punto = document.getElementById(`punto-${ordenId}`);
+                const textoEstado = document.getElementById(`texto-estado-${ordenId}`);
+                const chkPago = tr.querySelector('.chk-finalizada');
+
+                if (punto && textoEstado) {
+                    if (data.alerta_text || (chkPago && chkPago.checked)) {
+                        punto.classList.remove('hidden');
+                    } else {
+                        punto.classList.add('hidden');
+                    }
+
+                    if (chkPago && chkPago.checked) {
+                        textoEstado.textContent = "Pagada";
+                        textoEstado.style.color = "#16a34a";
+                        punto.className = "w-2.5 h-2.5 rounded-full bg-green-500";
+                    } else {
+                        textoEstado.textContent = data.alerta_text;
+                        textoEstado.style.color = "";
+                        punto.className = `w-2.5 h-2.5 rounded-full ${data.alerta_color}`;
+                    }
+                }
+
+                // 4. Reconfigurar evento del checkbox de pago con los nuevos datos
+                if (chkPago) {
+                    chkPago.setAttribute('onchange', `cambiarEstadoPago(this, '${ordenId}', '${data.alerta_text}', '${data.alerta_color}')`);
+                }
+
                 filtrarOrdenes();
             }
         } catch (error) {
