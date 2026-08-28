@@ -923,11 +923,13 @@ async def procesar_pdf(
             desc = p.get("descripcion") or "Producto no registrado" # Asigna descripción detectada por el scanner
             precio_unitario = float(p.get("precio_unitario") or 0.0) # Asigna precio unitario detectado por el scanner
             
-            # Verifica si el producto ya existe en Supabase para tomar sus datos de catálogo
-            res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute() # Consulta producto por código ST
-            if res_p.data and len(res_p.data) > 0: # Si se encuentra en la base de datos
+            # Consulta la base de datos para obtener la descripción oficial del catálogo
+            res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute()
+            if res_p.data and len(res_p.data) > 0:
                 desc = res_p.data[0].get("descripcion") or desc # Utiliza la descripción oficial del sistema
-                precio_unitario = float(res_p.data[0].get("precio") or precio_unitario) # Utiliza el precio oficial
+                # Solo usa el precio de la BD si el escáner NO detectó un precio (precio_unitario == 0)
+                if precio_unitario == 0.0:
+                    precio_unitario = float(res_p.data[0].get("precio") or 0.0)
             
             subtotal = cant * precio_unitario # Calcula subtotal multiplicando cantidad por precio unitario
             monto_calculado_total += subtotal # Acumula el subtotal al monto total general de la OC
@@ -981,90 +983,123 @@ async def procesar_pdf(
     })
 
 @app.post("/ordenes/crear")
-def crear_orden_manual(
+async def crear_orden(
+    request: Request,
     numero_orden: str = Form(...),
     proveedor: str = Form(...),
     tienda_destino: str = Form(...),
-    monto_total: float = Form(0.0),
+    monto_total: float = Form(...),
     fecha_emision: str = Form(...),
-    dias_inventario: int = Form(...),
-    fecha_envio: str = Form(""),
+    fecha_envio: str = Form(None),
+    dias_inventario: int = Form(15),
     productos_json: str = Form("[]"),
-    ajax: bool = Form(False),
     access_token: str = Cookie(None)
 ):
+    # Verifica que el usuario tenga sesión activa
     user = obtener_usuario_actual(access_token)
     if not user:
-        if ajax: return {"status": "error", "mensaje": "No autorizado"}
-        return RedirectResponse(url="/login", status_code=303)
+        return JSONResponse(status_code=401, content={"status": "error", "mensaje": "No autorizado"})
 
-    res_existe = supabase.table("ordenes_compra").select("id").eq("numero_orden", numero_orden).eq("usuario_id", user.id).execute()
-    if res_existe.data and len(res_existe.data) > 0:
-        if ajax:
-            return {"status": "error", "mensaje": f"La Orden N° {numero_orden} ya está registrada."}
-        alerta_js = f"<script>alert('Cuidado: La Orden de Compra N° {numero_orden} ya fue registrada.'); window.history.back();</script>"
-        return HTMLResponse(content=alerta_js)
+    try:
+        # Busca si el proveedor existe o lo registra
+        res_prov = supabase.table("proveedores").select("id").eq("nombre", proveedor).execute()
+        if res_prov.data:
+            proveedor_id = res_prov.data[0]["id"]
+        else:
+            res_ins = supabase.table("proveedores").insert({"nombre": proveedor}).execute()
+            proveedor_id = res_ins.data[0]["id"]
 
-    res_p = supabase.table("proveedores").select("id").ilike("nombre", proveedor.strip()).execute()
-    if res_p.data and len(res_p.data) > 0:
-        prov_id = res_p.data[0]['id']
-    else:
-        res_ins_p = supabase.table("proveedores").insert({
-            "nombre": proveedor.strip(),
-            "dias_credito": 30,
-            "dias_despacho": 3,
-            "dias_inventario": 15
+        # Inserta la orden de compra principal
+        res_oc = supabase.table("ordenes_compra").insert({
+            "usuario_id": user.id,
+            "numero_orden": numero_orden,
+            "proveedor_id": proveedor_id,
+            "tienda_destino": tienda_destino,
+            "monto_total": monto_total,
+            "fecha_emision": fecha_emision,
+            "fecha_envio": fecha_envio or fecha_emision,
+            "dias_inventario": dias_inventario,
+            "estatus": "Enviada"
         }).execute()
-        prov_id = res_ins_p.data[0]['id'] if res_ins_p.data else None
 
-    res_insert = supabase.table("ordenes_compra").insert({
-        "usuario_id": user.id,
-        "numero_orden": numero_orden,
-        "proveedor_id": prov_id,
-        "proveedor": proveedor,
-        "tienda_destino": tienda_destino,
-        "fecha_emision": fecha_emision,
-        "fecha_envio": fecha_envio if fecha_envio else None,
-        "monto_total": monto_total,
-        "estatus": "Enviada",
-        "dias_inventario": dias_inventario
-    }).execute()
+        orden_id = res_oc.data[0]["id"]
 
-    if res_insert.data and res_insert.data[0].get("id"):
-        nueva_oc_id = res_insert.data[0]["id"]
-        try:
-            lista_prods = json.loads(productos_json) # Convierte el texto JSON recibidos a lista de productos
-            for p in lista_prods:
-                # Extrae 'pre' probando la llave 'pre' o 'unidad_manejo'
-                raw_pre = p.get("pre") if p.get("pre") is not None else p.get("unidad_manejo")
-                # Extrae 'emp' probando la llave 'emp' o 'empaques'
-                raw_emp = p.get("emp") if p.get("emp") is not None else p.get("empaques")
-
-                # Convierte a entero seguro (int(float(...))) para limpiar strings con decimales como '480.0'
-                val_cant = int(float(p.get("cantidad") or 0)) # Convierte '480.0' o 480.0 a 480
-                val_pre = int(float(raw_pre)) if raw_pre is not None and str(raw_pre).strip() != "" else 1 # Convierte PRE a entero
-                val_emp = int(float(raw_emp)) if raw_emp is not None and str(raw_emp).strip() != "" else 0 # Convierte EMP a entero
-
-                # Diccionario con los tipos de datos compatibles con Supabase (INTEGER para cantidad, pre, emp)
-                datos_detalle = {
-                    "orden_id": nueva_oc_id, # ID de la orden principal recién creada
-                    "codigo": p.get("codigo") or p.get("codigo_producto") or p.get("producto_id") or "", # Código de producto
-                    "descripcion": p.get("descripcion") or p.get("nombre_producto") or "Sin descripción", # Descripción
-                    "cantidad": val_cant, # Valor entero para la columna INTEGER de la BD
-                    "precio_unitario": float(p.get("precio_unitario") or 0.0), # Valor flotante/decimal para el precio
-                    "pre": val_pre, # Valor entero para PRE
-                    "emp": val_emp # Valor entero para EMP
-                }
-
-                # Inserta el detalle en Supabase
-                supabase.table("detalles_productos").insert(datos_detalle).execute()
-        except Exception as e:
-            print("Error al insertar detalle de productos:", e) # Imprime cualquier falla en consola
+        # Parsea los productos recibidos en formato JSON
+        productos = json.loads(productos_json)
+        for prod in productos:
+            print(f"[DEBUG BD] Payload recibido del producto: {prod}")
             
-    if ajax:
-        return {"status": "ok", "mensaje": "Orden guardada con éxito"}
-        
-    return RedirectResponse(url="/ordenes", status_code=303)
+            codigo_raw = prod.get("codigo") or prod.get("codigo_producto") or prod.get("codigo_st")
+            descripcion = prod.get("descripcion") or prod.get("nombre_producto") or "Sin descripción"
+
+            # Recolecta todos los valores de precio enviados en el objeto
+            candidatos_precio = []
+            for key in ["precio_unitario", "precio", "costo_unitario", "costo", "precio_nuevo"]:
+                val = prod.get(key)
+                if val is not None:
+                    try:
+                        val_float = float(val)
+                        if val_float > 0 and val_float not in candidatos_precio:
+                            candidatos_precio.append(val_float)
+                    except (ValueError, TypeError):
+                        pass
+
+            # Define un precio por defecto a partir de los candidatos
+            precio_extraido = candidatos_precio[0] if candidatos_precio else 0.0
+
+            if codigo_raw:
+                codigo = str(codigo_raw).strip()
+                codigo_sin_ceros = codigo.lstrip("0")
+
+                # Consulta el producto en base de datos por 'codigo_st'
+                res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo).execute()
+                
+                if not res_prod.data and codigo != codigo_sin_ceros:
+                    res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo_sin_ceros).execute()
+
+                if res_prod.data:
+                    prod_db = res_prod.data[0]
+                    target_codigo = prod_db["codigo_st"]
+                    precio_db = float(prod_db.get("precio") or 0.0)
+
+                    # Busca si entre los candidatos hay un precio diferente al registrado en BD
+                    precio_nuevo_detectado = None
+                    for c in candidatos_precio:
+                        if abs(c - precio_db) > 0.001:
+                            precio_nuevo_detectado = c
+                            break
+
+                    # Si detecta un precio nuevo, lo actualiza en la tabla productos
+                    if precio_nuevo_detectado is not None:
+                        precio_extraido = precio_nuevo_detectado
+                        res_upd = supabase.table("productos").update({"precio": precio_extraido}).eq("codigo_st", target_codigo).execute()
+                        print(f"[DEBUG BD] ¡PRECIO ACTUALIZADO EN BD! Código '{target_codigo}': Antes {precio_db} -> Ahora {precio_extraido}")
+                    else:
+                        print(f"[DEBUG BD] Código '{target_codigo}': Sin cambios de precio (BD: {precio_db} | Candidatos: {candidatos_precio})")
+                else:
+                    # Registra el producto nuevo en catálogo si no existía
+                    print(f"[DEBUG BD] Código '{codigo}' no existía en catálogo. Insertando...")
+                    supabase.table("productos").insert({
+                        "codigo_st": codigo,
+                        "descripcion": descripcion,
+                        "precio": precio_extraido
+                    }).execute()
+
+            # Asocia el ítem a la orden de compra con el precio actualizado
+            supabase.table("detalles_productos").insert({
+                "orden_id": orden_id,
+                "codigo": codigo_raw,
+                "descripcion": descripcion,
+                "cantidad": prod.get("cantidad", 0),
+                "precio_unitario": precio_extraido,
+                "pre": prod.get("pre"),
+                "emp": prod.get("emp")
+            }).execute()
+
+        return {"status": "ok", "mensaje": "Orden guardada y precios actualizados."}
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "mensaje": str(e)})
 
 @app.get("/productos")
 def vista_productos(
