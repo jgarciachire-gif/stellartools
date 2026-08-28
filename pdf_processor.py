@@ -92,46 +92,78 @@ def extraer_datos_oc(pdf_file):
                     productos_capturados = []
 
                     # --- 6. EXTRAER DETALLE DE PRODUCTOS EN STELLAR BUSINESS (POR COORDENADAS X/Y) ---
-        productos_capturados = []
+        # Función interna para limpiar números con formato de miles (.) y decimales (,)
+        def parse_num(val_str):
+            clean = val_str.replace('$', '').strip()  # Elimina el símbolo de moneda y espacios
+            if '.' in clean and ',' in clean:         # Formato tipo 1.250,50
+                clean = clean.replace('.', '').replace(',', '.')  # Elimina miles y convierte coma a punto
+            elif ',' in clean:                        # Formato tipo 1250,50
+                clean = clean.replace(',', '.')       # Convierte coma a punto decimal
+            return float(clean)                       # Convierte la cadena limpia a número decimal
+
+        productos_capturados = []  # Inicializa el listado de productos procesados
 
         for page in pdf.pages:
-            words = page.extract_words() # Extrae cada palabra individual con sus coordenadas x0, top, bottom
-            width = page.width # Ancho total de la página para delimitar columnas
+            words = page.extract_words()  # Extrae palabras con sus coordenadas x0, top y bottom
+            width = page.width  # Obtiene el ancho de la página del PDF
 
-            # 1. Captura los códigos de producto de 6 dígitos
+            # 1. Captura las palabras de 6 dígitos (Códigos ST)
             codigos_words = [
                 w for w in words 
                 if re.match(r'^\d{6}$', w['text']) and w['text'] != "000000"
             ]
 
-            # 2. Recorre cada código e identifica las columnas numéricas de su fila
+            # 2. Iterar por cada código detectado en la página
             for cod_w in codigos_words:
-                # Filtra valores numéricos en la misma fila (tolerancia vertical 8px) a la derecha del código
+                # Filtra valores numéricos en la misma fila (tolerancia vertical de 8px) a la derecha del código
                 candidatos = [
                     w for w in words 
                     if abs(w['top'] - cod_w['top']) < 8 
                     and w['x0'] > cod_w['x0'] 
-                    and re.match(r'^\d+(?:\.\d+)?$', w['text'].replace(',', ''))
+                    and re.match(r'^[\d.,]+$', w['text'].replace('$', ''))
                 ]
                 
                 # Ordena las columnas numéricas de izquierda a derecha (PRE -> EMP -> UNI -> COSTO -> SUBTOTAL)
                 candidatos_ordenados = sorted(candidatos, key=lambda w: w['x0'])
                 
-                # Selecciona la 3ª columna numérica (índice 2) que corresponde a 'UNI'
-                cant_w = candidatos_ordenados[2] if len(candidatos_ordenados) >= 3 else None
-                
-                if cant_w:
+                # Requiere mínimo 3 columnas numéricas (PRE, EMP, UNI) para armar la estructura completa
+                if len(candidatos_ordenados) >= 3:
                     try:
-                        # Extrae y convierte el valor de la cantidad
-                        cant_val = float(cant_w['text'].replace(',', ''))
+                        # Extrae PRE (Unidad de manejo)
+                        pre_val = parse_num(candidatos_ordenados[0]['text'])
+                        # Extrae EMP (Cantidad de empaques solicitados)
+                        emp_val = parse_num(candidatos_ordenados[1]['text'])
+                        # Extrae UNI (Cantidad total de unidades)
+                        cant_val = parse_num(candidatos_ordenados[2]['text'])
+                        
+                        # Extrae Precio Unitario ($) si la 4ª columna existe
+                        precio_val = 0.0
+                        if len(candidatos_ordenados) >= 4:
+                            precio_val = parse_num(candidatos_ordenados[3]['text'])
+
+                        # Extrae la Descripción: palabras ubicadas entre el Código y la columna PRE
+                        primer_num_x0 = candidatos_ordenados[0]['x0']
+                        desc_words = [
+                            w['text'] for w in words 
+                            if abs(w['top'] - cod_w['top']) < 8 
+                            and cod_w['x0'] < w['x0'] < primer_num_x0
+                        ]
+                        descripcion_texto = " ".join(desc_words).strip()
+
                         if cant_val > 0:
                             productos_capturados.append({
-                                "codigo": cod_w['text'],
-                                "codigo_producto": cod_w['text'],
-                                "producto_id": cod_w['text'],
-                                "cantidad": cant_val
+                                "codigo": cod_w['text'],             # Código de 6 dígitos
+                                "codigo_producto": cod_w['text'],    # Compatibilidad de claves
+                                "producto_id": cod_w['text'],         # Compatibilidad de claves
+                                "descripcion": descripcion_texto,     # Texto de la descripción
+                                "pre": int(pre_val),                  # Unidad de manejo PRE
+                                "unidad_manejo": int(pre_val),        # Alias unidad de manejo
+                                "emp": int(emp_val),                  # Empaques EMP
+                                "empaques": int(emp_val),              # Alias empaques
+                                "cantidad": cant_val,                 # Total unidades UNI
+                                "precio_unitario": precio_val         # Precio unitario en $
                             })
-                    except ValueError:
+                    except (ValueError, IndexError):
                         pass
 
         datos_extraidos["productos"] = productos_capturados

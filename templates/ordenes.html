@@ -257,6 +257,8 @@
                                                 class="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
                                                 <th class="p-2">Código ST</th>
                                                 <th class="p-2">Descripción</th>
+                                                <th class="p-2 text-right">PRE.</th>
+                                                <th class="p-2 text-right">EMP.</th>
                                                 <th class="p-2 text-right">Cant. (UNI)</th>
                                                 <th class="p-2 text-right">Precio Unit. ($)</th>
                                                 <th class="p-2 text-right">Subtotal ($)</th>
@@ -265,27 +267,47 @@
                                         <tbody class="divide-y divide-slate-100">
                                             {% for dp in o.detalles_productos %}
                                             <tr class="hover:bg-slate-50">
-                                                <td class="p-2 font-semibold font-semibold text-blue-800">{{ dp.codigo
-                                                    }}
+                                                <!-- Lee el código del producto -->
+                                                <td class="p-2 font-semibold text-blue-800">{{ dp.codigo or
+                                                    dp.codigo_producto or dp.producto_id or '-' }}</td>
+                                                <!-- Lee la descripción del producto -->
+                                                <td class="p-2 text-slate-700 font-medium">{{ dp.descripcion or
+                                                    dp.nombre_producto or 'Sin descripción' }}</td>
+                                                <!-- Evalúa la presentación PRE comprobando que no sea None -->
+                                                <td class="p-2 text-right font-semibold text-slate-700">
+                                                    {% set val_pre = dp.pre if dp.pre is not none else (dp.unidad_manejo
+                                                    if dp.unidad_manejo is not none else 1) %}
+                                                    {{ val_pre | int }}
                                                 </td>
-                                                <td class="p-2 text-slate-800 font-medium">{{ dp.descripcion }}</td>
-                                                <td class="p-2 text-right font-semibold text-slate-800">{{ dp.cantidad
-                                                    }}</td>
+                                                <!-- Evalúa los empaques EMP comprobando que no sea None -->
+                                                <td class="p-2 text-right font-semibold text-slate-700">
+                                                    {% set val_emp = dp.emp if dp.emp is not none else (dp.empaques if
+                                                    dp.empaques is not none else 0) %}
+                                                    {{ val_emp | int }}
+                                                </td>
+                                                <!-- Lee la cantidad -->
+                                                <td class="p-2 text-right font-semibold text-slate-800">{{ (dp.cantidad
+                                                    or 0) | int }}</td>
+                                                <!-- Lee el precio unitario en dólares -->
                                                 <td class="p-2 text-right font-semibold text-slate-800">${{
-                                                    "{:,.2f}".format(dp.precio_unitario or 0).replace(",",
+                                                    "{:,.2f}".format((dp.precio_unitario or 0) | float).replace(",",
                                                     "X").replace(".", ",").replace("X", ".") }}</td>
+                                                <!-- Calcula el subtotal por fila -->
                                                 <td class="p-2 text-right font-semibold text-slate-800">${{
-                                                    "{:,.2f}".format((dp.cantidad or 0) * (dp.precio_unitario or
-                                                    0)).replace(",", "X").replace(".", ",").replace("X", ".") }}</td>
+                                                    "{:,.2f}".format(((dp.cantidad or 0) | float) * ((dp.precio_unitario
+                                                    or 0) | float)).replace(",", "X").replace(".", ",").replace("X",
+                                                    ".") }}</td>
                                             </tr>
                                             {% endfor %}
                                         </tbody>
-                                        <!-- Pie de tabla: Fila final destacada con el Total General de la OC -->
+                                        <!-- Pie de tabla para mostrar la suma total -->
                                         <tfoot class="border-t-2 border-slate-200 bg-slate-50/80">
                                             <tr>
-                                                <td colspan="4"
+                                                <!-- Colspan en 6 para alinear la etiqueta 'Total:' exactamente a la izquierda del monto final -->
+                                                <td colspan="6"
                                                     class="p-2 text-right font-bold text-[11px] tracking-wider text-slate-600">
                                                     Total:</td>
+                                                <!-- Muestra el total general de la orden -->
                                                 <td class="p-2 text-right font-bold text-blue-900 text-sm">${{
                                                     "{:,.2f}".format(o.monto_total or 0).replace(",", "X").replace(".",
                                                     ",").replace("X", ".") }}</td>
@@ -313,7 +335,7 @@
 </div>
 
 <script>
-    // Array global para almacenar etiquetas activas estilo Odoo
+    let ordenesAEliminarIds = [];
     let etiquetasFiltro = [];
 
     // Función para agregar etiquetas dinámicas (Odoo Style)
@@ -754,12 +776,6 @@
             modal.classList.remove('hidden');
         }
     }
-    // Cierra el modal y limpia el estado
-    function cerrarModalEliminar() {
-        document.getElementById('modalEliminarOrdenes').classList.add('hidden'); // Oculta el modal
-        seleccionadosAEliminar = []; // Limpia el arreglo temporal
-    }
-
 
     // Procesa la eliminación masiva enviando los IDs por POST al backend
     async function procesarEliminacionModal() {
@@ -819,40 +835,41 @@
         }
     }
 
-    // Captura dinámicamente los IDs marcados en la tabla al abrir el modal
-    function abrirModalEliminar() {
-        // Captura las casillas seleccionadas de la tabla
-        const checkboxes = document.querySelectorAll('input[type="checkbox"][data-id]:checked, input.select-row:checked');
+    // Abre el modal de eliminación soportando IDs por argumento o leyendo la tabla
+    function abrirModalEliminar(ids = null) {
+        if (ids) {
+            // Si se pasan IDs manualmente (en array o entero individual)
+            ordenesAEliminarIds = Array.isArray(ids) ? ids : [ids];
+        } else {
+            // Si no se pasan IDs, captura las casillas marcadas en el DOM
+            const checkboxes = document.querySelectorAll('input[type="checkbox"][data-id]:checked, input.select-row:checked');
+            ordenesAEliminarIds = Array.from(checkboxes)
+                .map(cb => parseInt(cb.getAttribute('data-id') || cb.value))
+                .filter(id => !isNaN(id));
+        }
 
-        // Mapea los IDs numéricos
-        ordenesAEliminarIds = Array.from(checkboxes)
-            .map(cb => parseInt(cb.getAttribute('data-id') || cb.value))
-            .filter(id => !isNaN(id));
-
-        console.log("[CLIENTE] IDs capturados para eliminar:", ordenesAEliminarIds);
-
+        // Validación de seguridad antes de mostrar el modal
         if (ordenesAEliminarIds.length === 0) {
             alert("Por favor, selecciona al menos una orden para eliminar.");
             return;
         }
 
-        // Actualiza el texto con la cantidad exacta de registros
+        // Actualiza el contador dinámico en el modal
         const textoModal = document.getElementById('textoConfirmacionEliminar');
         if (textoModal) {
             textoModal.textContent = `¿Estás seguro de que deseas eliminar ${ordenesAEliminarIds.length} orden(es) de forma permanente?`;
         }
 
-        // Abre el modal apuntando al ID correcto de tu HTML
+        // Muestra el modal quitando la clase de ocultamiento
         const modal = document.getElementById('modalEliminarOrdenes');
-        if (modal) {
-            modal.classList.remove('hidden');
-        }
+        if (modal) modal.classList.remove('hidden');
     }
 
-    // Cierra el modal y limpia la variable global
+    // Cierra el modal y restablece el arreglo global de selección
     function cerrarModalEliminar() {
-        document.getElementById('modalEliminarOrdenes').classList.add('hidden');
-        ordenesAEliminarIds = [];
+        const modal = document.getElementById('modalEliminarOrdenes');
+        if (modal) modal.classList.add('hidden');
+        ordenesAEliminarIds = []; // Limpia la lista de IDs a eliminar
     }
 
     // Controles para Modales de Carga (PDF y XML)
@@ -1269,10 +1286,6 @@
         // Vuelve a inyectar las filas en el orden correcto
         filas.forEach(fila => tbody.appendChild(fila));
     }
-    // Controla el estado del botón principal de eliminación según las casillas marcadas
-    // Variable global para almacenar los IDs a eliminar
-    let ordenesAEliminarIds = [];
-
     // Revisa las casillas marcadas y activa/desactiva el botón de eliminación
     function actualizarEstadoBotonEliminar() {
         const checkboxes = document.querySelectorAll('.select-row:checked');

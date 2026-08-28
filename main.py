@@ -294,27 +294,38 @@ def dashboard(request: Request):
 
 @app.get("/ordenes")
 def listar_ordenes(request: Request):
-    token = request.cookies.get("access_token")
-    user = obtener_usuario_actual(token)
+    token = request.cookies.get("access_token") # Obtiene el token de cookie del navegador
+    user = obtener_usuario_actual(token) # Obtiene la información del usuario autenticado
     if not user:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/login", status_code=303) # Redirige al login si no hay usuario
 
+    # Consulta las órdenes de compra asociadas al usuario con sus productos y proveedor
     res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito), detalles_productos(*)").eq("usuario_id", user.id).order("fecha_envio", desc=True).execute()
     
-    hoy = datetime.now().date()
+    hoy = datetime.now().date() # Captura la fecha actual
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     ordenes_agrupadas = {}
     
-    if res.data:
-        for row in res.data:
-            o = row.copy()
-            prov_obj = o.get("proveedores")
+    if res.data: # Si la consulta devuelve registros
+        for row in res.data: # Recorre cada orden de compra
+            o = row.copy() # Crea una copia del diccionario de la orden
             
+            # Convierte la estructura de detalles_productos si viene en formato texto JSON
+            dp_raw = o.get("detalles_productos")
+            if isinstance(dp_raw, str):
+                try:
+                    o['detalles_productos'] = json.loads(dp_raw) # Convierte texto JSON a lista de Python
+                except (json.JSONDecodeError, TypeError):
+                    o['detalles_productos'] = [] # Asigna lista vacía si hay error de formato
+            elif not isinstance(dp_raw, list):
+                o['detalles_productos'] = [] # Asegura lista vacía si viene como None
+            
+            prov_obj = o.get("proveedores")
             if prov_obj:
-                o['proveedor'] = prov_obj.get("nombre")
-                dias_credito = prov_obj.get("dias_credito")
+                o['proveedor'] = prov_obj.get("nombre") # Extrae nombre del proveedor
+                dias_credito = prov_obj.get("dias_credito") # Extrae días de crédito
             else:
-                dias_credito = 30
+                dias_credito = 30 # Valor por defecto si no existe proveedor registrado
 
             f_rec_raw = str(o.get('fecha_recepcion') or "").strip()
             tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
@@ -327,28 +338,28 @@ def listar_ordenes(request: Request):
             
             if tiene_fecha_rec and dias_credito:
                 try:
-                    f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
-                    venc_date = f_rec + timedelta(days=int(dias_credito))
-                    o['vencimiento_factura_str'] = venc_date.strftime("%d/%m/%Y")
-                    dias_restantes = (venc_date - hoy).days
+                    f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date() # Formatea fecha de recepción
+                    venc_date = f_rec + timedelta(days=int(dias_credito)) # Calcula fecha de vencimiento
+                    o['vencimiento_factura_str'] = venc_date.strftime("%d/%m/%Y") # Formatea fecha a DD/MM/AAAA
+                    dias_restantes = (venc_date - hoy).days # Calcula días restantes para el pago
                     
                     if dias_restantes < 0:
                         o['alerta_text'] = f"Vencido ({abs(dias_restantes)}d)"
-                        o['alerta_color'] = "bg-red-500"
+                        o['alerta_color'] = "bg-red-500" # Indicador rojo para facturas vencidas
                     elif dias_restantes <= 3:
                         o['alerta_text'] = f"Por vencer ({dias_restantes}d)"
-                        o['alerta_color'] = "bg-yellow-400"
+                        o['alerta_color'] = "bg-yellow-400" # Indicador amarillo para facturas por vencer
                     else:
                         o['alerta_text'] = "Vigente"
-                        o['alerta_color'] = "bg-green-500"
+                        o['alerta_color'] = "bg-green-500" # Indicador verde para facturas vigentes
                 except ValueError:
                     pass
             
             fecha_agrupar_raw = str(o.get('fecha_envio') or "").strip()
             if fecha_agrupar_raw and fecha_agrupar_raw.lower() not in ['none', 'nan', 'nat', 'null']:
                 try:
-                    dt = datetime.strptime(fecha_agrupar_raw, "%Y-%m-%d")
-                    mes_anio = f"{meses_espanol[dt.month - 1]} {dt.year}"
+                    dt = datetime.strptime(fecha_agrupar_raw, "%Y-%m-%d") # Convierte fecha de envío
+                    mes_anio = f"{meses_espanol[dt.month - 1]} {dt.year}" # Formatea el agrupador a "Mes Año"
                 except ValueError:
                     mes_anio = "Fecha Inválida"
             else:
@@ -356,9 +367,9 @@ def listar_ordenes(request: Request):
                 
             if mes_anio not in ordenes_agrupadas:
                 ordenes_agrupadas[mes_anio] = []
-            ordenes_agrupadas[mes_anio].append(o)
+            ordenes_agrupadas[mes_anio].append(o) # Agrupa la orden según su mes de envío
             
-    return templates.TemplateResponse(request, "ordenes.html", {"ordenes_agrupadas": ordenes_agrupadas})
+    return templates.TemplateResponse(request, "ordenes.html", {"ordenes_agrupadas": ordenes_agrupadas}) # Retorna la plantilla cargada
 
 @app.post("/ordenes/actualizar/{orden_id}")
 async def actualizar_orden(
@@ -901,28 +912,37 @@ async def procesar_pdf(
         prods_procesados = []
         monto_calculado_total = 0.0
         
+        # Recorre los productos extraídos del PDF conservando presentación (PRE) y empaques (EMP)
         for p in datos_extraidos.get("productos", []):
-            cod_st = str(p.get("codigo", "")).strip()
-            cant = float(p.get("cantidad", 0))
+            cod_st = str(p.get("codigo", "")).strip() # Extrae y limpia el código del producto
+            cant = float(p.get("cantidad", 0)) # Obtiene la cantidad de unidades
+            pre = float(p.get("pre") or p.get("unidad_manejo") or 1) # Conserva el empaque/presentación (PRE)
+            emp = float(p.get("emp") or p.get("empaques") or 0) # Conserva la cantidad de bultos (EMP)
             
-            # Buscar coincidencia exacta por código ST en Supabase
-            res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute()
+            # Toma como valor inicial la descripción y el precio extraídos directamente del PDF
+            desc = p.get("descripcion") or "Producto no registrado" # Asigna descripción detectada por el scanner
+            precio_unitario = float(p.get("precio_unitario") or 0.0) # Asigna precio unitario detectado por el scanner
             
-            desc = "Producto no registrado"
-            precio_unitario = 0.0
-            if res_p.data and len(res_p.data) > 0:
-                desc = res_p.data[0].get("descripcion", desc)
-                precio_unitario = float(res_p.data[0].get("precio") or 0.0)
+            # Verifica si el producto ya existe en Supabase para tomar sus datos de catálogo
+            res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute() # Consulta producto por código ST
+            if res_p.data and len(res_p.data) > 0: # Si se encuentra en la base de datos
+                desc = res_p.data[0].get("descripcion") or desc # Utiliza la descripción oficial del sistema
+                precio_unitario = float(res_p.data[0].get("precio") or precio_unitario) # Utiliza el precio oficial
             
-            subtotal = cant * precio_unitario # Multiplica precio por cantidad solicitada
-            monto_calculado_total += subtotal # Suma al total acumulado de la OC
+            subtotal = cant * precio_unitario # Calcula subtotal multiplicando cantidad por precio unitario
+            monto_calculado_total += subtotal # Acumula el subtotal al monto total general de la OC
             
             prods_procesados.append({
-                "codigo": cod_st,
-                "descripcion": desc,
-                "cantidad": cant,
-                "precio_unitario": precio_unitario,
-                "subtotal": subtotal
+                "codigo": cod_st, # Código ST principal
+                "codigo_producto": cod_st, # Alias para código de producto
+                "descripcion": desc, # Descripción validada
+                "pre": pre, # Presentación PRE
+                "unidad_manejo": pre, # Alias para presentación
+                "emp": emp, # Cantidad de empaques EMP
+                "empaques": emp, # Alias para empaques
+                "cantidad": cant, # Cantidad en unidades
+                "precio_unitario": precio_unitario, # Precio unitario
+                "subtotal": subtotal # Subtotal calculado por renglón
             })
         
         datos_extraidos["productos"] = prods_procesados
@@ -1013,17 +1033,33 @@ def crear_orden_manual(
     if res_insert.data and res_insert.data[0].get("id"):
         nueva_oc_id = res_insert.data[0]["id"]
         try:
-            lista_prods = json.loads(productos_json)
+            lista_prods = json.loads(productos_json) # Convierte el texto JSON recibidos a lista de productos
             for p in lista_prods:
-                supabase.table("detalles_productos").insert({
-                    "orden_id": nueva_oc_id,
-                    "codigo": p.get("codigo"),
-                    "descripcion": p.get("descripcion"),
-                    "cantidad": p.get("cantidad"),
-                    "precio_unitario": p.get("precio_unitario")
-                }).execute()
-        except Exception:
-            pass
+                # Extrae 'pre' probando la llave 'pre' o 'unidad_manejo'
+                raw_pre = p.get("pre") if p.get("pre") is not None else p.get("unidad_manejo")
+                # Extrae 'emp' probando la llave 'emp' o 'empaques'
+                raw_emp = p.get("emp") if p.get("emp") is not None else p.get("empaques")
+
+                # Convierte a entero seguro (int(float(...))) para limpiar strings con decimales como '480.0'
+                val_cant = int(float(p.get("cantidad") or 0)) # Convierte '480.0' o 480.0 a 480
+                val_pre = int(float(raw_pre)) if raw_pre is not None and str(raw_pre).strip() != "" else 1 # Convierte PRE a entero
+                val_emp = int(float(raw_emp)) if raw_emp is not None and str(raw_emp).strip() != "" else 0 # Convierte EMP a entero
+
+                # Diccionario con los tipos de datos compatibles con Supabase (INTEGER para cantidad, pre, emp)
+                datos_detalle = {
+                    "orden_id": nueva_oc_id, # ID de la orden principal recién creada
+                    "codigo": p.get("codigo") or p.get("codigo_producto") or p.get("producto_id") or "", # Código de producto
+                    "descripcion": p.get("descripcion") or p.get("nombre_producto") or "Sin descripción", # Descripción
+                    "cantidad": val_cant, # Valor entero para la columna INTEGER de la BD
+                    "precio_unitario": float(p.get("precio_unitario") or 0.0), # Valor flotante/decimal para el precio
+                    "pre": val_pre, # Valor entero para PRE
+                    "emp": val_emp # Valor entero para EMP
+                }
+
+                # Inserta el detalle en Supabase
+                supabase.table("detalles_productos").insert(datos_detalle).execute()
+        except Exception as e:
+            print("Error al insertar detalle de productos:", e) # Imprime cualquier falla en consola
             
     if ajax:
         return {"status": "ok", "mensaje": "Orden guardada con éxito"}
