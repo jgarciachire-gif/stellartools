@@ -1,3 +1,4 @@
+import re
 import socket
 import httpx
 socket.setdefaulttimeout(30.0)
@@ -25,13 +26,19 @@ from supabase import create_client, Client, ClientOptions
 SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
 SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
 
-# Inicializa la conexión asignando 30 segundos de tiempo de espera sin errores de sintaxis
+# 1. Ajusta los tiempos de espera globales en httpx para todas las solicitudes HTTP (incluyendo Auth)
+httpx._config.DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(timeout=60.0, connect=30.0)
+
+SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
+SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
+
+# 2. Inicializa el cliente asignando los límites de tiempo de espera
 supabase: Client = create_client(
     SUPABASE_URL, 
     SUPABASE_KEY,
     options=ClientOptions(
-        postgrest_client_timeout=30, # Ajusta el tiempo de espera para consultas a la base de datos
-        storage_client_timeout=30    # Ajusta el tiempo de espera para subida/descarga de archivos
+        postgrest_client_timeout=60, # Tiempo de espera para consultas a la base de datos
+        storage_client_timeout=60    # Tiempo de espera para subida y descarga de archivos
     )
 )
 
@@ -180,6 +187,21 @@ def formato_moneda_latina(valor):
 
 templates.env.filters["moneda"] = formato_moneda_latina
 
+# Función para limpiar cantidades con separador de miles en coma (ej: "1,440.00" -> 1440.0)
+def limpiar_cantidad(valor):
+    if valor is None: # Retorna 0.0 si el valor recibido está vacío
+        return 0.0
+    if isinstance(valor, (int, float)): # Si ya es número, lo retorna directamente
+        return float(valor)
+    # Elimina la coma de miles y limpia espacios antes de convertir
+    val_limpio = str(valor).replace(",", "").strip()
+    try:
+        return float(val_limpio) # Convierte el texto numérico limpio a float
+    except ValueError:
+        return 0.0 # En caso de texto no numérico, evita colapsos retornando 0.0
+
+# Registra la función como un filtro reutilizable en las plantillas HTML
+templates.env.filters["limpiar_cantidad"] = limpiar_cantidad
 
 @app.get("/")
 def dashboard(request: Request):
@@ -912,42 +934,57 @@ async def procesar_pdf(
         prods_procesados = []
         monto_calculado_total = 0.0
         
-        # Recorre los productos extraídos del PDF conservando presentación (PRE) y empaques (EMP)
+        # Recorre los productos extraídos del PDF e inserta cada ítem dentro de la lista procesada
+        # Recorre los productos extraídos del PDF e inserta cada ítem dentro de la lista procesada
         for p in datos_extraidos.get("productos", []):
-            cod_st = str(p.get("codigo", "")).strip() # Extrae y limpia el código del producto
-            cant = float(p.get("cantidad", 0)) # Obtiene la cantidad de unidades
-            pre = float(p.get("pre") or p.get("unidad_manejo") or 1) # Conserva el empaque/presentación (PRE)
-            emp = float(p.get("emp") or p.get("empaques") or 0) # Conserva la cantidad de bultos (EMP)
+            cod_st = str(p.get("codigo", "")).strip()  # Extrae y limpia el código del producto
+            desc = p.get("descripcion", "")  # Obtiene la descripción actual del producto
+        
+            # Limpia valores de presentación y empaque pegados al final del texto (ej. "24.00 70.00")
+            match_extra = re.search(r'^(.*?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$', desc)
+            if match_extra:
+                desc = match_extra.group(1).strip()  # Guarda solo el nombre limpio del producto
+                p["descripcion"] = desc
+                p["pre"] = int(float(match_extra.group(2)))  # Extrae la presentación
+                p["emp"] = int(float(match_extra.group(3)))  # Extrae los empaques
+                p["empaques"] = p["emp"]  # Sincroniza la clave empaques
+
+            emp = p.get("emp", 0)  # Obtiene empaques de forma segura
+            pre = p.get("pre", 1)  # Obtiene presentación de forma segura
+
+            # Recalcula la cantidad de unidades en base a empaques y presentación o cantidad directa
+            if emp > 0 and pre > 0:
+                cant = int(emp * pre)  # Multiplica empaques por presentación
+            else:
+                cant = int(round(sanitizar_numero(p.get("cantidad", 0))))  # Usa la cantidad directa si no hay empaques
+
+            precio_unitario = float(p.get("precio_unitario") or 0.0)  # Obtiene precio unitario
             
-            # Toma como valor inicial la descripción y el precio extraídos directamente del PDF
-            desc = p.get("descripcion") or "Producto no registrado" # Asigna descripción detectada por el scanner
-            precio_unitario = float(p.get("precio_unitario") or 0.0) # Asigna precio unitario detectado por el scanner
-            
-            # Consulta la base de datos para obtener la descripción oficial del catálogo
+            # Consulta el catálogo oficial para recuperar datos faltantes
             res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute()
             if res_p.data and len(res_p.data) > 0:
-                desc = res_p.data[0].get("descripcion") or desc # Utiliza la descripción oficial del sistema
-                # Solo usa el precio de la BD si el escáner NO detectó un precio (precio_unitario == 0)
+                desc = res_p.data[0].get("descripcion") or desc  # Aplica descripción guardada en BD
                 if precio_unitario == 0.0:
-                    precio_unitario = float(res_p.data[0].get("precio") or 0.0)
+                    precio_unitario = float(res_p.data[0].get("precio") or 0.0)  # Aplica precio registrado en BD si viene en cero
             
-            subtotal = cant * precio_unitario # Calcula subtotal multiplicando cantidad por precio unitario
-            monto_calculado_total += subtotal # Acumula el subtotal al monto total general de la OC
-            
+            subtotal = round(cant * precio_unitario, 2)  # Calcula subtotal del renglón
+            monto_calculado_total += subtotal  # Acumula al total general de la orden
+
+            # Agrega cada producto procesado dentro del bucle
             prods_procesados.append({
-                "codigo": cod_st, # Código ST principal
-                "codigo_producto": cod_st, # Alias para código de producto
-                "descripcion": desc, # Descripción validada
-                "pre": pre, # Presentación PRE
-                "unidad_manejo": pre, # Alias para presentación
-                "emp": emp, # Cantidad de empaques EMP
-                "empaques": emp, # Alias para empaques
-                "cantidad": cant, # Cantidad en unidades
-                "precio_unitario": precio_unitario, # Precio unitario
-                "subtotal": subtotal # Subtotal calculado por renglón
+                "codigo": cod_st,  # Código ST principal
+                "codigo_producto": cod_st,  # Código de producto
+                "descripcion": desc,  # Descripción limpia y validada
+                "pre": pre,  # Presentación
+                "unidad_manejo": pre,  # Unidades por empaque
+                "emp": emp,  # Cantidad de empaques
+                "empaques": emp,  # Alias de empaques
+                "cantidad": cant,  # Cantidad total de unidades
+                "precio_unitario": precio_unitario,  # Precio por unidad
+                "subtotal": subtotal  # Subtotal del ítem
             })
         
-        datos_extraidos["productos"] = prods_procesados
+        datos_extraidos["productos"] = prods_procesados  # Asigna la lista completa de productos procesados
         # Si el PDF no tenía total de cabecera, asignar el monto total calculado por los productos
         if monto_calculado_total > 0 and datos_extraidos.get("monto_total", 0.0) == 0.0:
             datos_extraidos["monto_total"] = monto_calculado_total
@@ -981,79 +1018,129 @@ async def procesar_pdf(
     return templates.TemplateResponse(request, "escanear.html", {
         "lista_datos": lista_datos
     })
+def limpiar_monto_decimal(valor_str):
+    # Convierte el valor a texto y elimina espacios o símbolos de moneda
+    texto = str(valor_str).strip().replace('$', '')
+    # Normaliza separadores numéricos para formato decimal
+    if ',' in texto and '.' in texto:
+        texto = texto.replace(',', '')  # Elimina la coma de miles
+    elif ',' in texto:
+        texto = texto.replace(',', '.')  # Cambia la coma decimal a punto
+    # Retorna el flotante redondeado a 2 decimales para PostgreSQL
+    return round(float(texto), 2)
+    # Función helper para procesar números que vienen con formato latino de miles ("1.440") o cadenas ambiguas
+def sanitizar_numero(val):
+    if val is None:
+        return 0.0 # Devuelve 0.0 si el valor es nulo
+    if isinstance(val, (int, float)):
+        return float(val) # Si ya es numérico, lo convierte a float
+    val_str = str(val).strip() # Limpia espacios en blanco
+    if "." in val_str and "," in val_str:
+        val_str = val_str.replace(".", "").replace(",", ".") # Convierte "1.440,00" -> "1440.00"
+    elif "." in val_str and len(val_str.split(".")[-1]) == 3:
+        val_str = val_str.replace(".", "") # Detecta punto de miles "1.440" -> "1440"
+    elif "," in val_str:
+        val_str = val_str.replace(",", "") # Elimina comas de miles "1,440" -> "1440"
+    try:
+        return float(val_str) # Retorna el valor en flotante válido
+    except ValueError:
+        return 0.0 # Evita caídas 500 retornando 0.0 en caso de error
 
+# Endpoint para procesar y guardar la creación de una orden de compra
 @app.post("/ordenes/crear")
 async def crear_orden(
     request: Request,
-    numero_orden: str = Form(...),
-    proveedor: str = Form(...),
-    tienda_destino: str = Form(...),
-    monto_total: float = Form(...),
-    fecha_emision: str = Form(...),
-    fecha_envio: str = Form(None),
-    dias_inventario: int = Form(15),
+    numero_orden: str = Form(""),
+    proveedor: str = Form(""),
+    tienda_destino: str = Form(""),
+    monto_total: Optional[str] = Form("0"),
+    fecha_emision: Optional[str] = Form(None),
+    fecha_envio: Optional[str] = Form(None),
+    dias_inventario: Optional[str] = Form("15"),
     productos_json: str = Form("[]"),
     access_token: str = Cookie(None)
 ):
-    # Verifica que el usuario tenga sesión activa
+    # Validar sesión activa del usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return JSONResponse(status_code=401, content={"status": "error", "mensaje": "No autorizado"})
 
     try:
-        # Busca si el proveedor existe o lo registra
-        res_prov = supabase.table("proveedores").select("id").eq("nombre", proveedor).execute()
+        # Sanitizar y normalizar datos numéricos recibidos del formulario
+        monto_total_val = sanitizar_numero(monto_total)
+        dias_inv_val = int(sanitizar_numero(dias_inventario)) if dias_inventario else 15
+
+        # Saneamiento de fechas para evitar cadenas vacías que rompan PostgreSQL
+        f_emision = fecha_emision.strip() if fecha_emision and fecha_emision.strip() else datetime.now().strftime("%Y-%m-%d")
+        f_envio = fecha_envio.strip() if fecha_envio and fecha_envio.strip() else f_emision
+        # Validar si la orden de compra ya existe registrada para el usuario
+        num_oc = numero_orden.strip() # Limpia espacios en blanco del número de orden
+        if num_oc: # Verifica que se haya proporcionado un número de orden
+            res_existente = supabase.table("ordenes_compra").select("id").eq("numero_orden", num_oc).eq("usuario_id", user.id).execute() # Consulta si la OC ya existe en la BD
+            if res_existente.data: # Si existen registros previos con el mismo número
+                return JSONResponse(status_code=400, content={"status": "error", "mensaje": f"La Orden de Compra N° {num_oc} ya se encuentra registrada."}) # Cancela la operación y devuelve respuesta de error
+
+        # Buscar o registrar el proveedor de forma segura
+        prov_nombre = proveedor.strip()
+        res_prov = supabase.table("proveedores").select("id").eq("nombre", prov_nombre).execute()
         if res_prov.data:
             proveedor_id = res_prov.data[0]["id"]
         else:
-            res_ins = supabase.table("proveedores").insert({"nombre": proveedor}).execute()
+            res_ins = supabase.table("proveedores").insert({"nombre": prov_nombre}).execute()
+            if not res_ins.data:
+                return JSONResponse(status_code=500, content={"status": "error", "mensaje": "Error al registrar el proveedor en la base de datos."})
             proveedor_id = res_ins.data[0]["id"]
 
-        # Inserta la orden de compra principal
+        # Insertar cabecera de la orden de compra
         res_oc = supabase.table("ordenes_compra").insert({
             "usuario_id": user.id,
-            "numero_orden": numero_orden,
+            "numero_orden": numero_orden.strip(),
             "proveedor_id": proveedor_id,
-            "tienda_destino": tienda_destino,
-            "monto_total": monto_total,
-            "fecha_emision": fecha_emision,
-            "fecha_envio": fecha_envio or fecha_emision,
-            "dias_inventario": dias_inventario,
+            "tienda_destino": tienda_destino.strip(),
+            "monto_total": monto_total_val,
+            "fecha_emision": f_emision,
+            "fecha_envio": f_envio,
+            "dias_inventario": dias_inv_val,
             "estatus": "Enviada"
         }).execute()
 
+        if not res_oc.data:
+            return JSONResponse(status_code=500, content={"status": "error", "mensaje": "No se pudo guardar la orden de compra."})
+
         orden_id = res_oc.data[0]["id"]
 
-        # Parsea los productos recibidos en formato JSON
-        productos = json.loads(productos_json)
+        # Decodificar lista de productos enviada en JSON
+        try:
+            productos = json.loads(productos_json) if isinstance(productos_json, str) else productos_json
+        except Exception:
+            productos = []
+
         for prod in productos:
             print(f"[DEBUG BD] Payload recibido del producto: {prod}")
             
             codigo_raw = prod.get("codigo") or prod.get("codigo_producto") or prod.get("codigo_st")
             descripcion = prod.get("descripcion") or prod.get("nombre_producto") or "Sin descripción"
 
-            # Recolecta todos los valores de precio enviados en el objeto
+            # Recolectar posibles candidatos de precio
             candidatos_precio = []
             for key in ["precio_unitario", "precio", "costo_unitario", "costo", "precio_nuevo"]:
                 val = prod.get(key)
                 if val is not None:
                     try:
-                        val_float = float(val)
+                        val_float = float(sanitizar_numero(val))
                         if val_float > 0 and val_float not in candidatos_precio:
                             candidatos_precio.append(val_float)
                     except (ValueError, TypeError):
                         pass
 
-            # Define un precio por defecto a partir de los candidatos
             precio_extraido = candidatos_precio[0] if candidatos_precio else 0.0
 
             if codigo_raw:
                 codigo = str(codigo_raw).strip()
                 codigo_sin_ceros = codigo.lstrip("0")
 
-                # Consulta el producto en base de datos por 'codigo_st'
+                # Consultar producto en catálogo global
                 res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo).execute()
-                
                 if not res_prod.data and codigo != codigo_sin_ceros:
                     res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo_sin_ceros).execute()
 
@@ -1062,22 +1149,20 @@ async def crear_orden(
                     target_codigo = prod_db["codigo_st"]
                     precio_db = float(prod_db.get("precio") or 0.0)
 
-                    # Busca si entre los candidatos hay un precio diferente al registrado en BD
+                    # Verificar cambio de precio
                     precio_nuevo_detectado = None
                     for c in candidatos_precio:
                         if abs(c - precio_db) > 0.001:
                             precio_nuevo_detectado = c
                             break
 
-                    # Si detecta un precio nuevo, lo actualiza en la tabla productos
                     if precio_nuevo_detectado is not None:
                         precio_extraido = precio_nuevo_detectado
-                        res_upd = supabase.table("productos").update({"precio": precio_extraido}).eq("codigo_st", target_codigo).execute()
+                        supabase.table("productos").update({"precio": precio_extraido}).eq("codigo_st", target_codigo).execute()
                         print(f"[DEBUG BD] ¡PRECIO ACTUALIZADO EN BD! Código '{target_codigo}': Antes {precio_db} -> Ahora {precio_extraido}")
                     else:
                         print(f"[DEBUG BD] Código '{target_codigo}': Sin cambios de precio (BD: {precio_db} | Candidatos: {candidatos_precio})")
                 else:
-                    # Registra el producto nuevo en catálogo si no existía
                     print(f"[DEBUG BD] Código '{codigo}' no existía en catálogo. Insertando...")
                     supabase.table("productos").insert({
                         "codigo_st": codigo,
@@ -1085,20 +1170,36 @@ async def crear_orden(
                         "precio": precio_extraido
                     }).execute()
 
-            # Asocia el ítem a la orden de compra con el precio actualizado
+            # Sanitizar empaques y presentación a números enteros
+            emp_val = int(float(sanitizar_numero(prod.get("empaques") or prod.get("emp") or 0)))
+            pre_val = int(float(sanitizar_numero(prod.get("unidad_manejo") or prod.get("pre") or 1)))
+
+            # Procesar cantidad y garantizar un entero estricto para PostgreSQL
+            cant_raw = float(sanitizar_numero(prod.get("cantidad") or 0))
+            if emp_val > 0 and pre_val > 0 and cant_raw != (emp_val * pre_val):
+                cant_val = int(emp_val * pre_val)
+            else:
+                cant_val = int(round(cant_raw))
+
+            # Garantizar tipo de precio como decimal/float para BD
+            precio_final = precio_extraido if precio_extraido > 0 else float(sanitizar_numero(prod.get("precio_unitario") or 0))
+
+            # Guardar ítem del detalle con sangría reestructurada y corregida
             supabase.table("detalles_productos").insert({
                 "orden_id": orden_id,
-                "codigo": codigo_raw,
+                "codigo": str(codigo_raw) if codigo_raw else "",
                 "descripcion": descripcion,
-                "cantidad": prod.get("cantidad", 0),
-                "precio_unitario": precio_extraido,
-                "pre": prod.get("pre"),
-                "emp": prod.get("emp")
+                "cantidad": cant_val,
+                "precio_unitario": precio_final,
+                "pre": pre_val,
+                "emp": emp_val
             }).execute()
 
-        return {"status": "ok", "mensaje": "Orden guardada y precios actualizados."}
+        return JSONResponse(content={"status": "ok", "mensaje": "Orden guardada y precios actualizados."})
 
     except Exception as e:
+        # Imprime el detalle completo del error en terminal para depuración exacta
+        print(f"[DEBUG CREAR ORDEN ERROR]:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"status": "error", "mensaje": str(e)})
 
 @app.get("/productos")

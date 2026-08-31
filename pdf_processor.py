@@ -124,7 +124,30 @@ def extraer_datos_oc(pdf_file):
                 ]
                 
                 # Ordena las columnas numéricas de izquierda a derecha (PRE -> EMP -> UNI -> COSTO -> SUBTOTAL)
+                # Ordena las columnas numéricas de izquierda a derecha
                 candidatos_ordenados = sorted(candidatos, key=lambda w: w['x0'])
+
+                # Descarta números pertenecientes a la descripción (ej. "100" en "100 GR") validando la relación PRE * EMP == UNI
+                if len(candidatos_ordenados) > 3:
+                    idx_inicio = 0  # Índice por defecto para el inicio de las columnas
+                    encontrado = False  # Estado de validación
+                    
+                    for i in range(len(candidatos_ordenados) - 2):
+                        try:
+                            p = parse_num(candidatos_ordenados[i]['text'])  # Candidato PRE
+                            e = parse_num(candidatos_ordenados[i+1]['text'])  # Candidato EMP
+                            u = parse_num(candidatos_ordenados[i+2]['text'])  # Candidato UNI
+                            if p > 0 and e > 0 and abs((p * e) - u) < 0.01:  # Valida la ecuación PRE * EMP == UNI
+                                idx_inicio = i  # Define el inicio correcto en PRE
+                                encontrado = True  # Confirmación de coincidencia
+                                break  # Detiene la búsqueda al encontrar la primera coincidencia
+                        except ValueError:
+                            continue  # Omite elementos no numéricos
+                    
+                    if not encontrado:  # Si la ecuación no calza, toma las últimas columnas de la derecha
+                        idx_inicio = len(candidatos_ordenados) - (4 if len(candidatos_ordenados) >= 4 else 3)
+                    
+                    candidatos_ordenados = candidatos_ordenados[idx_inicio:]  # Filtra y conserva únicamente los datos numéricos de la tabla
                 
                 # Requiere mínimo 3 columnas numéricas (PRE, EMP, UNI) para armar la estructura completa
                 if len(candidatos_ordenados) >= 3:

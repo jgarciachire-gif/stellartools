@@ -285,16 +285,17 @@
                                                     dp.empaques is not none else 0) %}
                                                     {{ val_emp | int }}
                                                 </td>
-                                                <!-- Lee la cantidad -->
+                                                <!-- Lee la cantidad aplicando el filtro para limpiar comas de miles -->
                                                 <td class="p-2 text-right font-semibold text-slate-800">{{ (dp.cantidad
-                                                    or 0) | int }}</td>
+                                                    | limpiar_cantidad) | int }}</td>
                                                 <!-- Lee el precio unitario en dólares -->
                                                 <td class="p-2 text-right font-semibold text-slate-800">${{
                                                     "{:,.2f}".format((dp.precio_unitario or 0) | float).replace(",",
                                                     "X").replace(".", ",").replace("X", ".") }}</td>
-                                                <!-- Calcula el subtotal por fila -->
+                                                <!-- Calcula el subtotal multiplicando la cantidad limpia por el precio unitario -->
                                                 <td class="p-2 text-right font-semibold text-slate-800">${{
-                                                    "{:,.2f}".format(((dp.cantidad or 0) | float) * ((dp.precio_unitario
+                                                    "{:,.2f}".format((dp.cantidad | limpiar_cantidad) *
+                                                    ((dp.precio_unitario
                                                     or 0) | float)).replace(",", "X").replace(".", ",").replace("X",
                                                     ".") }}</td>
                                             </tr>
