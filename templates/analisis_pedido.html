@@ -2,10 +2,27 @@
 {% block content %}
 
 <!-- ENCABEZADO -->
-<div class="flex items-center justify-between mb-6">
+<div class="flex items-center justify-between mb-6 relative">
     <div>
         <h1 class="text-2xl font-bold text-slate-800">Análisis de Pedido</h1>
         <p class="text-xs text-slate-500 mt-1">Planificación y estimación de cantidades por tienda y proveedor</p>
+    </div>
+
+    <!-- Botón Menú 3 Puntos -->
+    <div class="relative">
+        <button id="btn-menu-opciones" type="button"
+            class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
+            <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
+        </button>
+
+        <div id="dropdown-opciones"
+            class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+            <!-- Opción para Limpiar Lista -->
+            <button type="button" onclick="limpiarListaProductos();"
+                class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-rose-600 rounded-xl flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-trash-can text-rose-500"></i> Limpiar lista
+            </button>
+        </div>
     </div>
 </div>
 
@@ -252,7 +269,7 @@
             <i class="fa-solid fa-plus"></i> Agregar Producto
         </button>
 
-        <!-- RESUMEN DE TOTALES CON FUENTE NORMAL -->
+        <!-- RESUMEN DE TOTALES -->
         <div class="flex flex-wrap items-center gap-6 text-xs text-slate-600">
             <div>
                 <span class="text-slate-400 block font-normal">TOTAL EMPAQUES</span>
@@ -271,6 +288,45 @@
 </div>
 
 <script>
+    // Control del Menú desplegable de 3 puntos
+    document.addEventListener('DOMContentLoaded', () => {
+        const btnMenuOpciones = document.getElementById('btn-menu-opciones');
+        const dropdownOpciones = document.getElementById('dropdown-opciones');
+
+        if (btnMenuOpciones) {
+            btnMenuOpciones.addEventListener('click', (e) => {
+                e.stopPropagation();
+                dropdownOpciones.classList.toggle('hidden');
+            });
+        }
+
+        document.addEventListener('click', () => {
+            if (dropdownOpciones) dropdownOpciones.classList.add('hidden');
+        });
+    });
+
+    // Función para borrar todos los productos de la tabla de análisis
+    function limpiarListaProductos() {
+        const tbody = document.getElementById('filas-tabla-analisis');
+        const dropdown = document.getElementById('dropdown-opciones');
+
+        if (dropdown) dropdown.classList.add('hidden');
+
+        if (tbody) {
+            if (tbody.children.length === 0) return;
+
+            if (confirm('¿Estás seguro de que deseas vaciar todos los productos de la lista?')) {
+                tbody.innerHTML = '';
+
+                // Recalcular totales si la función existe en tu lógica de la vista
+                if (typeof calcularTotalesAnalisis === 'function') {
+                    calcularTotalesAnalisis();
+                } else if (typeof calcularTotales === 'function') {
+                    calcularTotales();
+                }
+            }
+        }
+    }
     let indiceDestacadoAnalisis = -1;
 
     // --- TIENDA SEARCH LOGIC ---
@@ -623,8 +679,6 @@
         }
     }
 
-    // --- TABLA DINÁMICA & CÁLCULOS ---
-    // --- GENERACIÓN DE FILAS TIPO CUADRÍCULA EXCEL SIN BORDES REDONDEADOS NI NEGRITAS ---
     function agregarFilaAnalisis() {
         const tbody = document.getElementById('filas-tabla-analisis');
         const tr = document.createElement('tr');
@@ -637,7 +691,7 @@
                     placeholder="" onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)">
             </td>
             <td class="border border-slate-200 p-0">
-                <input type="text" readonly tabindex="-1" class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-not-allowed border-0"
+                <input type="text" readonly tabindex="-1" class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
                     placeholder="">
             </td>
             <td class="border border-slate-200 p-0">
@@ -670,8 +724,9 @@
         return tr;
     }
 
+    // Formatea el código a 6 dígitos agregando ceros a la izquierda antes de consultar la API
     async function consultarProductoCodigo(inputCodigo) {
-        const codigo = inputCodigo.value.trim();
+        let codigo = inputCodigo.value.trim();
         const tr = inputCodigo.closest('tr');
         const inpDesc = tr.querySelector('.inp-desc');
         const inpPre = tr.querySelector('.inp-pre');
@@ -683,6 +738,12 @@
             inpCosto.value = '0.00';
             calcularFila(inputCodigo);
             return;
+        }
+
+        // Si contiene dígitos, autocompleta con ceros a la izquierda hasta 6 caracteres
+        if (/^\d+$/.test(codigo)) {
+            codigo = codigo.padStart(6, '0');
+            inputCodigo.value = codigo;
         }
 
         try {
