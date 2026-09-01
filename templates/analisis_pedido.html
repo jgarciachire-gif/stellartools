@@ -266,7 +266,7 @@
     <div class="p-3 bg-slate-50 border-t border-slate-300 flex flex-col md:flex-row justify-between items-center gap-4">
         <button type="button" onclick="agregarFilaAnalisis()"
             class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-normal rounded-lg text-xs transition shadow-xs flex items-center gap-2">
-            <i class="fa-solid fa-plus"></i> Agregar Producto
+            <i class="fa-solid fa-plus"></i> Agregar linea
         </button>
 
         <!-- RESUMEN DE TOTALES -->
@@ -678,36 +678,241 @@
             alert('Ocurrió un error al importar los productos.');
         }
     }
+    // Lógica de selección rectangular estilo Excel
+    let celdasSeleccionadas = [];
+    let celdaInicio = null;
+    let isArrastrando = false;
+
+    // Bloquea la celda de código, mantiene el cursor por defecto pero permite selección
+    function bloquearCeldaCodigo(inputCodigo) {
+        if (inputCodigo.value.trim() !== '') {
+            inputCodigo.readOnly = true;
+            inputCodigo.classList.add('bg-slate-100', 'cursor-default', 'select-none');
+            inputCodigo.classList.remove('focus:bg-white', 'cursor-pointer');
+        }
+    }
+
+    // Desbloquea la celda mediante doble click y sombrea su contenido
+    function desbloquearCeldaCodigo(inputCodigo) {
+        if (inputCodigo.readOnly) {
+            inputCodigo.readOnly = false;
+            inputCodigo.classList.remove('bg-slate-100', 'cursor-default', 'select-none');
+            inputCodigo.classList.add('focus:bg-white');
+            inputCodigo.focus();
+            inputCodigo.select();
+        }
+    }
+
+    // Eventos de ratón para selección estilo Excel
+    document.addEventListener('mouseup', () => {
+        isArrastrando = false;
+    });
+
+    function iniciarArrastre(input) {
+        isArrastrando = true;
+        celdaInicio = input;
+        actualizarSeleccionRango(input);
+    }
+
+    function arrastrarSobreCelda(input) {
+        if (isArrastrando && celdaInicio) {
+            window.getSelection()?.removeAllRanges();
+            actualizarSeleccionRango(input);
+        }
+    }
+
+    // Calcula el rango rectangular (Matriz de celdas) desde celdaInicio hasta celdaActual
+    function actualizarSeleccionRango(celdaActual) {
+        desseleccionarCeldas();
+        window.getSelection()?.removeAllRanges();
+
+        const tbody = document.getElementById('filas-tabla-analisis');
+        const filas = Array.from(tbody.children);
+
+        const trInicio = celdaInicio.closest('tr');
+        const trFin = celdaActual.closest('tr');
+
+        const rowIndexInicio = filas.indexOf(trInicio);
+        const rowIndexFin = filas.indexOf(trFin);
+
+        const rMin = Math.min(rowIndexInicio, rowIndexFin);
+        const rMax = Math.max(rowIndexInicio, rowIndexFin);
+
+        const tdInicio = celdaInicio.closest('td');
+        const tdFin = celdaActual.closest('td');
+
+        const colIndexInicio = Array.from(trInicio.children).indexOf(tdInicio);
+        const colIndexFin = Array.from(trFin.children).indexOf(tdFin);
+
+        const cMin = Math.min(colIndexInicio, colIndexFin);
+        const cMax = Math.max(colIndexInicio, colIndexFin);
+
+        // Recorrer la matriz seleccionada
+        for (let r = rMin; r <= rMax; r++) {
+            const tr = filas[r];
+            for (let c = cMin; c <= cMax; c++) {
+                const td = tr.children[c];
+                const input = td?.querySelector('input');
+                if (input) {
+                    celdasSeleccionadas.push(input);
+
+                    // Estilo de fondo interior unificado
+                    td.classList.add('bg-blue-100/70');
+
+                    // Bordes exteriores del cuadro unificado estilo Excel
+                    if (r === rMin) td.classList.add('border-t-2', 'border-t-blue-600');
+                    if (r === rMax) td.classList.add('border-b-2', 'border-b-blue-600');
+                    if (c === cMin) td.classList.add('border-l-2', 'border-l-blue-600');
+                    if (c === cMax) td.classList.add('border-r-2', 'border-r-blue-600');
+                }
+            }
+        }
+    }
+
+    // Limpia las clases de resaltado del rango
+    function desseleccionarCeldas() {
+        celdasSeleccionadas.forEach(input => {
+            const td = input.closest('td');
+            if (td) {
+                td.classList.remove(
+                    'bg-blue-100/70',
+                    'border-t-2', 'border-t-blue-600',
+                    'border-b-2', 'border-b-blue-600',
+                    'border-l-2', 'border-l-blue-600',
+                    'border-r-2', 'border-r-blue-600'
+                );
+            }
+        });
+        celdasSeleccionadas = [];
+    }
+
+    // Listener global de teclado (CTRL + C, Delete, Escape)
+    document.addEventListener('keydown', function (e) {
+        // Tecla ESC: Cancela modo edición y deselecciona celdas
+        if (e.key === 'Escape') {
+            if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+                document.activeElement.blur();
+            }
+            desseleccionarCeldas();
+            return;
+        }
+
+        // Copiar rango seleccionado (CTRL + C o CMD + C) incluyendo celdas bloqueadas
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && celdasSeleccionadas.length > 0) {
+            e.preventDefault();
+
+            const matrizValores = {};
+
+            celdasSeleccionadas.forEach(input => {
+                const tr = input.closest('tr');
+                const tbody = tr.parentElement;
+                const rowIndex = Array.from(tbody.children).indexOf(tr);
+                const colIndex = Array.from(tr.children).indexOf(input.closest('td'));
+
+                if (!matrizValores[rowIndex]) matrizValores[rowIndex] = {};
+                // Obtener el valor del campo sin importar si está bloqueado (readOnly)
+                matrizValores[rowIndex][colIndex] = input.value || '';
+            });
+
+            // Formato tabulado compatible con Excel / hojas de cálculo
+            const textoCopiar = Object.keys(matrizValores)
+                .sort((a, b) => a - b)
+                .map(r => {
+                    return Object.keys(matrizValores[r])
+                        .sort((a, b) => a - b)
+                        .map(c => matrizValores[r][c])
+                        .join('\t');
+                })
+                .join('\n');
+
+            navigator.clipboard.writeText(textoCopiar);
+            return;
+        }
+
+        // Borrar datos en rango seleccionado (Delete / Supr)
+        if ((e.key === 'Delete' || e.key === 'Del') && celdasSeleccionadas.length > 0) {
+            e.preventDefault();
+
+            celdasSeleccionadas.forEach(input => {
+                const tr = input.closest('tr');
+
+                // Si se borra un código (bloqueado o no), reactivar edición
+                if (input.classList.contains('inp-codigo')) {
+                    input.readOnly = false;
+                    input.value = '';
+                    input.classList.remove('bg-slate-100', 'cursor-default', 'select-none');
+                    input.classList.add('focus:bg-white');
+
+                    tr.querySelector('.inp-desc').value = '';
+                    tr.querySelector('.inp-pre').value = '1';
+                    tr.querySelector('.inp-emp').value = '0';
+                    tr.querySelector('.inp-uni').value = '0';
+                    tr.querySelector('.inp-costo').value = '0.00';
+                    tr.querySelector('.txt-subtotal').textContent = '$ 0,00';
+                }
+                else if (input.classList.contains('inp-emp') || input.classList.contains('inp-uni')) {
+                    input.value = '0';
+                    calcularFila(input);
+                }
+                else if (input.classList.contains('inp-costo')) {
+                    input.value = '0.00';
+                    calcularFila(input);
+                }
+                else if (input.classList.contains('inp-pre')) {
+                    input.value = '1';
+                    calcularFila(input);
+                }
+            });
+
+            desseleccionarCeldas();
+            totalizarAnalisis();
+        }
+    });
+
+    // Desseleccionar celdas al hacer clic fuera de la tabla
+    document.addEventListener('click', function (e) {
+        if (!e.target.closest('#tabla-analisis')) {
+            desseleccionarCeldas();
+        }
+    });
 
     function agregarFilaAnalisis() {
         const tbody = document.getElementById('filas-tabla-analisis');
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-blue-50/40 transition text-xs';
 
-        // Estructura de celdas con bordes tipo cuadrícula e inputs habilitados para pegado múltiple por columna
+        // Estructura de celdas con bordes tipo cuadrícula e inputs con eventos de click, doble click y arrastre
         tr.innerHTML = `
-            <td class="border border-slate-200 p-0">
-                <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
-                    placeholder="" onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)" onpaste="manejarPegadoCodigo(event, this)">
+            <td class="border border-slate-200 p-0 celda-interactiva relative">
+                <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:outline-none bg-transparent"
+                    placeholder=""
+                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                    ondblclick="desbloquearCeldaCodigo(this)"
+                    onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)" onpaste="manejarPegadoCodigo(event, this)">
             </td>
-            <td class="border border-slate-200 p-0">
-                <input type="text" readonly tabindex="-1" class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
-                    placeholder="">
+            <td class="border border-slate-200 p-0 celda-interactiva relative">
+                <input type="text" readonly class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
+                    placeholder=""
+                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)">
             </td>
-            <td class="border border-slate-200 p-0">
-                <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+            <td class="border border-slate-200 p-0 celda-interactiva relative">
+                <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'pre')">
             </td>
-            <td class="border border-slate-200 p-0">
-                <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+            <td class="border border-slate-200 p-0 celda-interactiva relative">
+                <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')">
             </td>
-            <td class="border border-slate-200 p-0">
-                <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+            <td class="border border-slate-200 p-0 celda-interactiva relative">
+                <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')">
             </td>
-            <td class="border border-slate-200 p-0">
-                <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
+            <td class="border border-slate-200 p-0 celda-interactiva relative">
+                <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'costo')">
             </td>
             <td class="border border-slate-200 px-2 py-1.5 text-right font-normal text-slate-700 bg-slate-50/50">
@@ -835,6 +1040,10 @@
                 if (!isNaN(numManejo) && numManejo > 0) {
                     inpPre.value = numManejo;
                 }
+
+                // Bloquea la celda de código tras cargar los datos
+                bloquearCeldaCodigo(inputCodigo);
+
             } else {
                 inpDesc.value = 'PRODUCTO NO ENCONTRADO';
                 inpCosto.value = '0.00';
