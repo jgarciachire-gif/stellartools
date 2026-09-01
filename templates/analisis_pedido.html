@@ -198,15 +198,44 @@
     <div class="overflow-x-auto">
         <!-- Cuadrícula compacta con bordes definidos estilo hoja de cálculo -->
         <table class="w-full text-left border-collapse border border-slate-300" id="tabla-analisis">
+            <!-- Se agregan eventos click para ordenar y cursores interactivos en la cabecera -->
             <thead>
-                <tr class="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider">
-                    <th class="py-2.5 px-3 w-36 border-r border-slate-800">CÓDIGO</th>
-                    <th class="py-2.5 px-3 border-r border-slate-800">DESCRIPCIÓN</th>
-                    <th class="py-2.5 px-3 w-24 text-center border-r border-slate-800">PRE.</th>
-                    <th class="py-2.5 px-3 w-24 text-center border-r border-slate-800">EMP.</th>
-                    <th class="py-2.5 px-3 w-24 text-center border-r border-slate-800">UNI.</th>
-                    <th class="py-2.5 px-3 w-32 text-right border-r border-slate-800">COSTO UNI. ($)</th>
-                    <th class="py-2.5 px-3 w-36 text-right border-r border-slate-800">SUBTOTAL ($)</th>
+                <tr class="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider select-none">
+                    <th onclick="ordenarTablaAnalisis(0, 'texto')"
+                        class="py-2.5 px-3 w-36 border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-between">CÓDIGO <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(1, 'texto')"
+                        class="py-2.5 px-3 border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-between">DESCRIPCIÓN <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(2, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-center gap-1">PRE. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(3, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-center gap-1">EMP. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(4, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-center gap-1">UNI. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(5, 'numero')"
+                        class="py-2.5 px-3 w-32 text-right border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-end gap-1">COSTO UNI. ($) <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(6, 'subtotal')"
+                        class="py-2.5 px-3 w-36 text-right border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-end gap-1">SUBTOTAL ($) <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
                     <th class="py-2.5 px-2 w-12 text-center"></th>
                 </tr>
             </thead>
@@ -804,6 +833,70 @@
     document.addEventListener('DOMContentLoaded', () => {
         agregarFilaAnalisis();
     });
+
+    // --- LÓGICA DE ORDENACIÓN DE COLUMNAS ---
+    let colOrdenActual = -1;
+    let ascOrdenActual = true;
+
+    function ordenarTablaAnalisis(colIndex, tipo) {
+        const tbody = document.getElementById('filas-tabla-analisis');
+        const filas = Array.from(tbody.querySelectorAll('tr'));
+
+        // Si se hace clic en la misma columna, invierte el sentido; si es otra, inicia ascendente
+        if (colOrdenActual === colIndex) {
+            ascOrdenActual = !ascOrdenActual;
+        } else {
+            colOrdenActual = colIndex;
+            ascOrdenActual = true;
+        }
+
+        // Actualizar iconos visuales en las cabeceras
+        document.querySelectorAll('#tabla-analisis thead .th-icon').forEach((icon, idx) => {
+            icon.className = 'fa-solid fa-sort text-[10px] opacity-40 th-icon';
+            if (idx === colIndex) {
+                icon.className = `fa-solid ${ascOrdenActual ? 'fa-sort-up' : 'fa-sort-down'} text-[10px] text-blue-400 opacity-100 th-icon`;
+            }
+        });
+
+        // Extraer el valor correspondiente de la celda según su tipo de control
+        const obtenerValor = (tr) => {
+            const celda = tr.children[colIndex];
+            if (!celda) return '';
+
+            const input = celda.querySelector('input');
+            if (input) {
+                return input.value.trim();
+            }
+
+            const spanSubtotal = celda.querySelector('.txt-subtotal');
+            if (spanSubtotal) {
+                // Limpia el formato de moneda $ X.XXX,XX a valor float para ordenar numéricamente
+                const numStr = spanSubtotal.textContent.replace('$', '').replace(/\./g, '').replace(',', '.').trim();
+                return parseFloat(numStr) || 0;
+            }
+
+            return celda.textContent.trim();
+        };
+
+        // Algoritmo de ordenación según el tipo de datos (Texto o Número)
+        filas.sort((a, b) => {
+            let valA = obtenerValor(a);
+            let valB = obtenerValor(b);
+
+            if (tipo === 'numero' || tipo === 'subtotal') {
+                valA = parseFloat(valA) || 0;
+                valB = parseFloat(valB) || 0;
+                return ascOrdenActual ? valA - valB : valB - valA;
+            } else {
+                valA = valA.toString().toLowerCase();
+                valB = valB.toString().toLowerCase();
+                return ascOrdenActual ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+        });
+
+        // Reinsertar las filas ordenadas dentro del DOM
+        filas.forEach(tr => tbody.appendChild(tr));
+    }
     // --- EXPORTACIÓN DE TABLA A FORMATO TXT ---
     function exportarTablaTxt() {
         // Obtiene todas las filas activas dentro de la tabla

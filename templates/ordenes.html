@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="space-y-6">
+<div class="max-w-[1800px] mx-auto space-y-6">
     <!-- Encabezado con título, buscador unificado estilo Odoo y menú de opciones -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-10">
         <h1 class="text-2xl font-bold text-slate-800">Diario de Órdenes de Compra</h1>
@@ -179,7 +179,7 @@
                                 <span>{{ o.numero_orden }}</span>
                             </button>
                         </td>
-                        <td class="p-4 font-medium text-blue-800 max-w-[180px] truncate" title="{{ o.proveedor }}">
+                        <td class="p-4 font-medium text-blue-800 max-w-[260px] truncate" title="{{ o.proveedor }}">
                             {{ o.proveedor }}
                         </td>
                         <td class="p-4 font-semibold text-slate-700">{{ o.tienda_destino }}</td>
@@ -255,13 +255,13 @@
                                         <thead>
                                             <tr
                                                 class="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
-                                                <th class="p-2">Código ST</th>
+                                                <th class="p-2">Código</th>
                                                 <th class="p-2">Descripción</th>
-                                                <th class="p-2 text-right">PRE.</th>
-                                                <th class="p-2 text-right">EMP.</th>
-                                                <th class="p-2 text-right">Cant. (UNI)</th>
-                                                <th class="p-2 text-right">Precio Unit. ($)</th>
-                                                <th class="p-2 text-right">Subtotal ($)</th>
+                                                <th class="p-2 text-right">Cantidad/Pre.</th>
+                                                <th class="p-2 text-right">Cantidad/Emp.</th>
+                                                <th class="p-2 text-right">Cantidad/Und.</th>
+                                                <th class="p-2 text-right">Costo/Und.</th>
+                                                <th class="p-2 text-right">Subtotal</th>
                                             </tr>
                                         </thead>
                                         <tbody class="divide-y divide-slate-100">
