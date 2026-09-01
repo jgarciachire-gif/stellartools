@@ -898,17 +898,20 @@
             <td class="border border-slate-200 p-0 celda-interactiva relative">
                 <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                     onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'pre')">
+                    onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'pre')"
+                    onfocus="iniciarEdicion(this)">
             </td>
             <td class="border border-slate-200 p-0 celda-interactiva relative">
                 <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                     onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')">
+                    onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')"
+                    onfocus="iniciarEdicion(this)">
             </td>
             <td class="border border-slate-200 p-0 celda-interactiva relative">
                 <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                     onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')">
+                    onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')"
+                    onfocus="iniciarEdicion(this)">
             </td>
             <td class="border border-slate-200 p-0 celda-interactiva relative">
                 <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
@@ -1126,24 +1129,55 @@
 
     // --- NAVEGACIÓN TECLA ENTER ---
     function manejarKeyNav(e, elem, campoActual) {
+        // --- LÓGICA PARA ESCAPE (Manteniendo la que agregamos antes) ---
+        if (e.key === 'Escape') {
+            e.preventDefault();
+
+            if (elem.dataset.valorOriginal !== undefined) {
+                elem.value = elem.dataset.valorOriginal;
+
+                if (campoActual === 'uni') {
+                    ajustarPorUnidades(elem);
+                } else if (['pre', 'emp', 'costo'].includes(campoActual)) {
+                    calcularFila(elem);
+                }
+            }
+
+            elem.blur();
+            desseleccionarCeldas();
+            e.stopPropagation();
+            return;
+        }
+
+        // --- LÓGICA ACTUALIZADA PARA ENTER ---
         if (e.key === 'Enter') {
             e.preventDefault();
             const tr = elem.closest('tr');
 
             if (campoActual === 'codigo') {
+                // Al presionar Enter en Código, salta directamente a Empaque (emp.)
                 consultarProductoCodigo(elem).then(() => {
-                    tr.querySelector('.inp-pre').focus();
-                    tr.querySelector('.inp-pre').select();
+                    tr.querySelector('.inp-emp').focus();
                 });
+
             } else if (campoActual === 'pre') {
                 tr.querySelector('.inp-emp').focus();
-                tr.querySelector('.inp-emp').select();
+
             } else if (campoActual === 'emp') {
-                tr.querySelector('.inp-uni').focus();
-                tr.querySelector('.inp-uni').select();
+                // Al presionar Enter en Empaque, salta al Código de la siguiente fila
+                let sigTr = tr.nextElementSibling;
+
+                // Si no hay más filas abajo, crea una nueva automáticamente
+                if (!sigTr) {
+                    sigTr = agregarFilaAnalisis();
+                }
+
+                const inpCod = sigTr.querySelector('.inp-codigo');
+                inpCod.focus();
+
             } else if (campoActual === 'uni') {
                 tr.querySelector('.inp-costo').focus();
-                tr.querySelector('.inp-costo').select();
+
             } else if (campoActual === 'costo') {
                 let sigTr = tr.nextElementSibling;
                 if (!sigTr) {
@@ -1151,7 +1185,6 @@
                 }
                 const inpCod = sigTr.querySelector('.inp-codigo');
                 inpCod.focus();
-                inpCod.select();
             }
         }
     }
@@ -1302,6 +1335,11 @@
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    }
+    // Guarda el valor original y selecciona el texto para sobreescribir al teclear
+    function iniciarEdicion(elem) {
+        elem.dataset.valorOriginal = elem.value;
+        elem.select();
     }
 </script>
 
