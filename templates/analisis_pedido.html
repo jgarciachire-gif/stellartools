@@ -684,11 +684,11 @@
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-blue-50/40 transition text-xs';
 
-        // Estructura de celdas con bordes tipo cuadrícula (border-slate-200) e inputs planos sin border-radius
+        // Estructura de celdas con bordes tipo cuadrícula e inputs habilitados para pegado múltiple por columna
         tr.innerHTML = `
             <td class="border border-slate-200 p-0">
                 <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
-                    placeholder="" onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)">
+                    placeholder="" onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)" onpaste="manejarPegadoCodigo(event, this)">
             </td>
             <td class="border border-slate-200 p-0">
                 <input type="text" readonly tabindex="-1" class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
@@ -696,19 +696,19 @@
             </td>
             <td class="border border-slate-200 p-0">
                 <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
-                    onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)">
+                    onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'pre')">
             </td>
             <td class="border border-slate-200 p-0">
                 <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
-                    onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)">
+                    onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')">
             </td>
             <td class="border border-slate-200 p-0">
                 <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
-                    onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)">
+                    onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')">
             </td>
             <td class="border border-slate-200 p-0">
                 <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:ring-1 focus:ring-blue-500 focus:outline-none bg-transparent"
-                    onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)">
+                    onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'costo')">
             </td>
             <td class="border border-slate-200 px-2 py-1.5 text-right font-normal text-slate-700 bg-slate-50/50">
                 <span class="txt-subtotal">$ 0,00</span>
@@ -722,6 +722,82 @@
 
         tbody.appendChild(tr);
         return tr;
+    }
+    // Maneja el pegado masivo de códigos desde Excel de forma asíncrona y ordenada
+    async function manejarPegadoCodigo(e, inputActual) {
+        // Obtiene el texto pegado desde el portapapeles
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const pastedData = clipboardData.getData('Text');
+
+        // Separa el texto pegado por saltos de línea y elimina filas vacías
+        const lineas = pastedData.split(/\r\n|\n|\r/).map(l => l.trim()).filter(l => l.length > 0);
+
+        // Si es solo un código, permite el pegado normal por defecto
+        if (lineas.length <= 1) return;
+
+        // Detiene el pegado por defecto en un solo campo cuando son múltiples filas
+        e.preventDefault();
+
+        let trActual = inputActual.closest('tr');
+
+        // Recorre cada código esperando la respuesta de la API antes de consultar el siguiente
+        for (const codigo of lineas) {
+            // Si no existen más filas creadas en la tabla, genera una nueva automáticamente
+            if (!trActual) {
+                trActual = agregarFilaAnalisis();
+            }
+
+            const inpCodigo = trActual.querySelector('.inp-codigo');
+            if (inpCodigo) {
+                inpCodigo.value = codigo;
+                // Espera la resolución de la consulta HTTP sin saturar la red
+                await consultarProductoCodigo(inpCodigo);
+            }
+
+            // Se desplaza a la siguiente fila de la tabla
+            trActual = trActual.nextElementSibling;
+        }
+    }
+    // Maneja el pegado masivo de datos numéricos por columna desde Excel
+    function manejarPegadoColumna(e, inputActual, tipo) {
+        // Obtiene el texto pegado desde el portapapeles
+        const clipboardData = e.clipboardData || window.clipboardData;
+        const pastedData = clipboardData.getData('Text');
+
+        // Separa las líneas pegadas y descarta filas vacías
+        const lineas = pastedData.split(/\r\n|\n|\r/).map(l => l.trim()).filter(l => l.length > 0);
+
+        // Si solo contiene un valor, permite el pegado nativo por defecto
+        if (lineas.length <= 1) return;
+
+        // Evita el comportamiento predeterminado para evitar pegar todo en una sola celda
+        e.preventDefault();
+
+        let trActual = inputActual.closest('tr');
+
+        lineas.forEach(valor => {
+            // Si no existen suficientes filas en la tabla, agrega una nueva automáticamente
+            if (!trActual) {
+                trActual = agregarFilaAnalisis();
+            }
+
+            const inputDestino = trActual.querySelector(`.inp-${tipo}`);
+            if (inputDestino) {
+                // Reemplaza comas por puntos para compatibilidad con el input tipo number de HTML
+                const valorLimpio = valor.replace(',', '.');
+                inputDestino.value = isNaN(parseFloat(valorLimpio)) ? 0 : valorLimpio;
+
+                // Ejecuta la lógica de recálculo según el tipo de columna
+                if (tipo === 'uni') {
+                    ajustarPorUnidades(inputDestino);
+                } else {
+                    calcularFila(inputDestino);
+                }
+            }
+
+            // Pasa a la fila siguiente
+            trActual = trActual.nextElementSibling;
+        });
     }
 
     // Formatea el código a 6 dígitos agregando ceros a la izquierda antes de consultar la API
@@ -892,7 +968,10 @@
 
     // Cargar 1 filas iniciales al abrir la vista
     document.addEventListener('DOMContentLoaded', () => {
-        agregarFilaAnalisis();
+        const cantidadFilasIniciales = 20;
+        for (let i = 0; i < cantidadFilasIniciales; i++) {
+            agregarFilaAnalisis();
+        }
     });
 
     // --- LÓGICA DE ORDENACIÓN DE COLUMNAS ---
