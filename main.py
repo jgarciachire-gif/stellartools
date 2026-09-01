@@ -1556,3 +1556,45 @@ def api_importar_productos_analisis(
         }
         for p in productos
     ]
+# Endpoint para consultar el detalle completo de una orden por su número
+@app.get("/ordenes/obtener_detalle/{numero_orden}")
+async def obtener_detalle_oc(numero_orden: str, access_token: str = Cookie(None)):
+    # Valida la sesión del usuario activo
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return {"status": "error", "mensaje": "No autorizado", "productos": []}
+
+    # Consulta la orden y sus detalles asociados en Supabase
+    res = supabase.table("ordenes_compra").select("*, detalles_productos(*)").eq("numero_orden", numero_orden).eq("usuario_id", user.id).execute()
+    
+    # Si la orden no existe en la base de datos, retorna error
+    if not res.data:
+        return {"status": "error", "mensaje": "Orden no encontrada", "productos": []}
+    
+    orden = res.data[0]
+    detalles = orden.get("detalles_productos") or []
+    
+    # Estructura la lista de productos para el modal
+    productos_list = []
+    for dp in detalles:
+        productos_list.append({
+            # Extrae el código del producto
+            "codigo": dp.get("codigo") or dp.get("codigo_producto") or "-",
+            # Extrae la descripción del producto
+            "descripcion": dp.get("descripcion") or dp.get("nombre_producto") or "Sin descripción",
+            # Extrae la presentación/unidad de manejo (fallback en 1)
+            "pre": dp.get("pre") if dp.get("pre") is not None else dp.get("unidad_manejo", 1),
+            # Extrae el número de empaques (fallback en 0)
+            "emp": dp.get("emp") if dp.get("emp") is not None else dp.get("empaques", 0),
+            # Extrae la cantidad total
+            "cantidad": dp.get("cantidad", 0),
+            # Extrae el precio unitario
+            "precio_unitario": float(dp.get("precio_unitario") or 0.0)
+        })
+            
+    # Retorna la respuesta JSON procesada
+    return {
+        "status": "ok",
+        "numero_orden": orden.get("numero_orden"),
+        "productos": productos_list
+    }

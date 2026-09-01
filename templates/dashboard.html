@@ -76,7 +76,8 @@
         </div>
 
         <div class="divide-y divide-slate-100" id="contenedor_proveedores">
-            {% for prov_nombre, tiendas in proveedores_desglose.items() %}
+            <!-- 1. Orden alfabético A-Z por nombre de proveedor mediante Jinja2 -->
+            {% for prov_nombre, tiendas in proveedores_desglose|dictsort %}
             <details class="group prov-group" data-prov="{{ prov_nombre }}">
                 <summary
                     class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
@@ -103,7 +104,17 @@
                             <tr class="hover:bg-slate-50 tienda-row" data-tienda="{{ tienda_nombre }}"
                                 data-estatus-inv="{{ t_info.estatus_inv }}">
                                 <td class="py-3 px-3 font-bold text-slate-800">{{ tienda_nombre }}</td>
-                                <td class="py-3 px-3 text-slate-700">{{ t_info.ultima_oc }}</td>
+
+                                <!-- 2. Número de orden clickeable para abrir el modal flotante -->
+                                <td class="py-3 px-3 font-semibold font-medium">
+                                    <button type="button"
+                                        onclick="abrirModalOC('{{ t_info.ultima_oc }}', '{{ prov_nombre }}', '{{ tienda_nombre }}', '{{ t_info.dias_inventario }}', '{{ t_info.estatus_inv }}')"
+                                        class="text-blue-600 hover:text-blue-800 hover:underline focus:outline-none transition-colors cursor-pointer"
+                                        title="Ver detalle de {{ t_info.ultima_oc }}">
+                                        {{ t_info.ultima_oc }}
+                                    </button>
+                                </td>
+
                                 <td class="py-3 px-3 text-slate-600">{{ t_info.fecha_recepcion }}</td>
                                 <td class="py-3 px-3"><span
                                         class="px-2 py-1 rounded text-xs font-medium {{ t_info.color_oc }}">
@@ -255,5 +266,142 @@
             if (dropdownEstatus) dropdownEstatus.classList.add('hidden');
         });
     });
+
 </script>
+<!-- MODAL FLOTANTE DE DETALLE DE ORDEN DE COMPRA -->
+<div id="modal-detalle-oc"
+    class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div
+        class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 text-slate-800 space-y-4 max-h-[90vh] flex flex-col">
+
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+                <h3 id="modal-oc-numero" class="text-lg font-bold text-slate-800">Orden de Compra: -</h3>
+                <p id="modal-oc-proveedor" class="text-xs font-semibold text-blue-600">Proveedor: -</p>
+            </div>
+            <button type="button" onclick="cerrarModalOC()" class="text-slate-400 hover:text-slate-600 p-1">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <div id="modal-oc-contenido" class="overflow-y-auto flex-1 space-y-3 pr-1">
+            <div class="text-center py-8 text-slate-400">
+                <i class="fa-solid fa-spinner fa-spin text-2xl text-blue-600"></i>
+                <p class="text-xs mt-2">Cargando detalle de productos...</p>
+            </div>
+        </div>
+
+        <div class="pt-3 border-t border-slate-100 flex justify-between items-center text-xs">
+            <span id="modal-oc-tienda" class="font-semibold text-slate-500">Tienda: -</span>
+            <button type="button" onclick="cerrarModalOC()"
+                class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition">
+                Cerrar
+            </button>
+        </div>
+    </div>
+</div>
+<script>
+    // Colocar dentro de la etiqueta <script> reemplazando abrirModalOC y cerrarModalOC existentes
+
+    // Función para formatear montos en formato moneda ($0,00)
+    function formatearMoneda(valor) {
+        const num = parseFloat(valor) || 0;
+        return '$' + num.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    }
+
+    // Función asíncrona para consultar el detalle de la OC desde el backend y renderizar la tabla
+    async function abrirModalOC(ultima_oc, proveedor, tienda, dias, estatus) {
+        // 1. Asignar datos del encabezado
+        document.getElementById('modal-oc-numero').textContent = `Orden de Compra: ${ultima_oc}`;
+        document.getElementById('modal-oc-proveedor').textContent = `Proveedor: ${proveedor}`;
+        document.getElementById('modal-oc-tienda').textContent = `Tienda: ${tienda}`;
+
+        const contenedor = document.getElementById('modal-oc-contenido');
+
+        // 2. Mostrar estado de carga (Spinner)
+        contenedor.innerHTML = `
+        <div class="text-center py-8 text-slate-400">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-blue-600"></i>
+            <p class="text-xs mt-2">Cargando detalle de productos...</p>
+        </div>
+    `;
+
+        // 3. Abrir modal
+        document.getElementById('modal-detalle-oc').classList.remove('hidden');
+
+        try {
+            // Consultar el endpoint del backend que retorna el detalle JSON de la orden
+            const response = await fetch(`/ordenes/obtener_detalle/${ultima_oc}`);
+            const data = await response.json();
+
+            if (data.status === 'ok' && data.productos && data.productos.length > 0) {
+                let filasHtml = '';
+                let totalGeneral = 0;
+
+                data.productos.forEach(dp => {
+                    const codigo = dp.codigo || dp.codigo_producto || dp.producto_id || '-';
+                    const descripcion = dp.descripcion || dp.nombre_producto || 'Sin descripción';
+                    const pre = parseInt(dp.pre ?? dp.unidad_manejo ?? 1);
+                    const emp = parseInt(dp.emp ?? dp.empaques ?? 0);
+                    const cantidad = parseFloat(dp.cantidad) || 0;
+                    const precio = parseFloat(dp.precio_unitario) || 0;
+                    const subtotal = cantidad * precio;
+
+                    totalGeneral += subtotal;
+
+                    filasHtml += `
+                    <tr class="hover:bg-slate-50">
+                        <td class="p-2 font-semibold text-blue-800">${codigo}</td>
+                        <td class="p-2 text-slate-700 font-medium">${descripcion}</td>
+                        <td class="p-2 text-right font-semibold text-slate-700">${pre}</td>
+                        <td class="p-2 text-right font-semibold text-slate-700">${emp}</td>
+                        <td class="p-2 text-right font-semibold text-slate-800">${parseInt(cantidad)}</td>
+                        <td class="p-2 text-right font-semibold text-slate-800">${formatearMoneda(precio)}</td>
+                        <td class="p-2 text-right font-semibold text-slate-800">${formatearMoneda(subtotal)}</td>
+                    </tr>
+                `;
+                });
+
+                // Inyectar tabla con estructura idéntica a ordenes.html
+                contenedor.innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs">
+                        <thead>
+                            <tr class="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
+                                <th class="p-2">Código</th>
+                                <th class="p-2">Descripción</th>
+                                <th class="p-2 text-right">Cantidad/Pre.</th>
+                                <th class="p-2 text-right">Cantidad/Emp.</th>
+                                <th class="p-2 text-right">Cantidad/Und.</th>
+                                <th class="p-2 text-right">Costo/Und.</th>
+                                <th class="p-2 text-right">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100">
+                            ${filasHtml}
+                        </tbody>
+                        <tfoot class="border-t-2 border-slate-200 bg-slate-50/80">
+                            <tr>
+                                <td colspan="6" class="p-2 text-right font-bold text-[11px] tracking-wider text-slate-600">Total:</td>
+                                <td class="p-2 text-right font-bold text-blue-900 text-sm">${formatearMoneda(totalGeneral)}</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            `;
+            } else {
+                contenedor.innerHTML = `<p class="text-xs text-slate-400 italic py-4 text-center">Sin ítems o detalle registrado para esta orden.</p>`;
+            }
+        } catch (error) {
+            console.error("Error al obtener detalle de OC:", error);
+            contenedor.innerHTML = `<p class="text-xs text-red-500 italic py-4 text-center">Error al cargar el detalle de la orden de compra.</p>`;
+        }
+    }
+
+    function cerrarModalOC() {
+        document.getElementById('modal-detalle-oc').classList.add('hidden');
+    }
+</script>
+
+
 {% endblock %}
