@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="home-grid" class="max-w-3xl mx-auto py-8 opacity-0 scale-95 transition-all duration-300 ease-out">
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+
+        <a href="/dashboard"
+            class="group flex flex-col items-center justify-center p-5 bg-white rounded-2xl shadow-sm border border-slate-200/80 hover:shadow-xl hover:border-sky-500/30 hover:-translate-y-1 transition-all duration-200">
+            <div
+                class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-600 to-blue-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-sky-500/30 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-chart-line"></i>
+            </div>
+            <span
+                class="mt-3 text-sm font-semibold text-slate-700 group-hover:text-sky-600 transition-colors text-center">Dashboard</span>
+        </a>
+
+        <a href="/ordenes"
+            class="group flex flex-col items-center justify-center p-5 bg-white rounded-2xl shadow-sm border border-slate-200/80 hover:shadow-xl hover:border-blue-500/30 hover:-translate-y-1 transition-all duration-200">
+            <div
+                class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-receipt"></i>
+            </div>
+            <span
+                class="mt-3 text-sm font-semibold text-slate-700 group-hover:text-blue-600 transition-colors text-center">Órdenes</span>
+        </a>
+
+        <a href="/analisis-pedido"
+            class="group flex flex-col items-center justify-center p-5 bg-white rounded-2xl shadow-sm border border-slate-200/80 hover:shadow-xl hover:border-emerald-500/30 hover:-translate-y-1 transition-all duration-200">
+            <div
+                class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-calculator"></i>
+            </div>
+            <span
+                class="mt-3 text-sm font-semibold text-slate-700 group-hover:text-emerald-600 transition-colors text-center">Análisis</span>
+        </a>
+
+        <a href="/proveedores"
+            class="group flex flex-col items-center justify-center p-5 bg-white rounded-2xl shadow-sm border border-slate-200/80 hover:shadow-xl hover:border-amber-500/30 hover:-translate-y-1 transition-all duration-200">
+            <div
+                class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-400 flex items-center justify-center text-white text-2xl shadow-lg shadow-amber-500/30 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-truck-field"></i>
+            </div>
+            <span
+                class="mt-3 text-sm font-semibold text-slate-700 group-hover:text-amber-600 transition-colors text-center">Proveedores</span>
+        </a>
+
+        <a href="/productos"
+            class="group flex flex-col items-center justify-center p-5 bg-white rounded-2xl shadow-sm border border-slate-200/80 hover:shadow-xl hover:border-purple-500/30 hover:-translate-y-1 transition-all duration-200">
+            <div
+                class="w-16 h-16 rounded-2xl bg-gradient-to-tr from-purple-600 to-violet-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-boxes-stacked"></i>
+            </div>
+            <span
+                class="mt-3 text-sm font-semibold text-slate-700 group-hover:text-purple-600 transition-colors text-center">Productos</span>
+        </a>
+    </div>
+</div>
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const grid = document.getElementById("home-grid");
+
+        // Aplica animación de entrada al cargar la vista
+        requestAnimationFrame(() => {
+            grid.classList.remove("opacity-0", "scale-95");
+            grid.classList.add("opacity-100", "scale-100");
+        });
+
+        // Intercepta los clics en las tarjetas para animar la salida antes de cambiar de página
+        grid.querySelectorAll("a").forEach(link => {
+            link.addEventListener("click", (e) => {
+                e.preventDefault(); // Detiene la navegación inmediata
+                const targetUrl = link.getAttribute("href"); // Captura la URL destino
+
+                // Anima el grid encogiéndolo y haciéndolo transparente
+                grid.classList.remove("opacity-100", "scale-100");
+                grid.classList.add("opacity-0", "scale-95");
+
+                // Redirige a la aplicación después de completar la animación (250ms)
+                setTimeout(() => {
+                    window.location.href = targetUrl;
+                }, 250);
+            });
+        });
+    });
+</script>
+{% endblock %}

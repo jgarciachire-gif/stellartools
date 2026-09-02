@@ -3,7 +3,13 @@
 <div class="max-w-[1800px] mx-auto space-y-6">
     <!-- Encabezado con título, buscador unificado estilo Odoo y menú de opciones -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-10">
-        <h1 class="text-2xl font-bold text-slate-800">Diario de Órdenes de Compra</h1>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <div
+                class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-500 to-indigo-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-blue-500/30 group-hover:scale-105 transition-transform">
+                <i class="fa-solid fa-receipt"></i>
+            </div>
+            <span>Órdenes de Compra</span>
+        </h1>
 
         <div class="flex items-center gap-3 w-full sm:w-auto">
             <!-- Contenedor del Buscador -->

@@ -3,7 +3,13 @@
 
 <!-- ENCABEZADO -->
 <div class="flex items-center justify-between mb-4">
-    <h1 class="text-2xl font-bold text-slate-800">Catálogo de Productos</h1>
+    <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+        <div
+            class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-purple-600 to-violet-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30 group-hover:scale-105 transition-transform">
+            <i class="fa-solid fa-boxes-stacked"></i>
+        </div>
+        <span>Listado de Productos</span>
+    </h1>
 
     <div class="relative">
         <button type="button" onclick="toggleMenuOpciones()"
@@ -30,7 +36,7 @@
     <!-- Columna Izquierda: Buscador y Lista de Productos -->
     <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-1">
         <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <i class="fa-solid fa-boxes-stacked text-blue-600"></i> Catálogo
+            <i class="fa-solid fa-magnifying-glass text-slate-500"></i> Búsqueda
         </h3>
 
         <!-- Buscador de Productos -->

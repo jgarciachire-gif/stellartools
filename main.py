@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from supabase import create_client, Client, ClientOptions
-
+from starlette.middleware.sessions import SessionMiddleware
 from pdf_processor import extraer_datos_oc
 
 # ==========================================
@@ -43,6 +43,7 @@ supabase: Client = create_client(
 )
 
 app = FastAPI(title="Control de Compras", version="2.0")
+app.add_middleware(SessionMiddleware, secret_key="clave_secreta_para_sesiones")
 
 # ==========================================
 # 2. Configuración de Plantillas y Filtros
@@ -238,29 +239,64 @@ def cerrar_sesion():
     response.delete_cookie("refresh_token")
     return response
 
+@app.middleware("http")
+async def cargar_perfil_middleware(request: Request, call_next):
+    request.state.perfil = None
+    access_token = request.cookies.get("access_token")
+    
+    if access_token:
+        user = obtener_usuario_actual(access_token)  
+        if user:
+            res = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+            request.state.perfil = res.data if res and res.data else None  
+            
+    response = await call_next(request)
+    return response
+  
 @app.get("/")
-def dashboard(request: Request):
-    token = request.cookies.get("access_token")
-    user = obtener_usuario_actual(token)
+@app.get("/aplicaciones") 
+def vista_aplicaciones(
+    request: Request, 
+    access_token: str = Cookie(None), 
+    refresh_token: str = Cookie(None)
+): 
+    user = obtener_usuario_actual(access_token, refresh_token) 
+    if not user: 
+        return RedirectResponse(url="/login", status_code=303) 
+    return templates.TemplateResponse(request=request, name="index.html", context={})
+
+@app.get("/dashboard")
+@app.get("/inicio") 
+def dashboard(
+    request: Request, 
+    access_token: str = Cookie(None),  
+    refresh_token: str = Cookie(None)  
+):
+    user = obtener_usuario_actual(access_token, refresh_token)
     if not user:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(url="/login", status_code=303)  
 
     res_oc = supabase.table("ordenes_compra").select("*, proveedores(nombre)").eq("usuario_id", user.id).order("id", desc=False).execute()
     
     proveedores_desglose = {}
-    hoy = datetime.now().date()
-
+    hoy = datetime.now().date()  
     if res_oc.data:
         agrupado = {}
         for row in res_oc.data:
             prov_obj = row.get("proveedores")
-            prov = prov_obj["nombre"] if prov_obj else (row.get('proveedor') or "Sin Proveedor")
+            if isinstance(prov_obj, dict) and prov_obj.get("nombre"):
+                prov = prov_obj.get("nombre")
+            elif isinstance(prov_obj, list) and len(prov_obj) > 0 and isinstance(prov_obj[0], dict):
+                prov = prov_obj[0].get("nombre")
+            else:
+                prov = row.get('proveedor') or "Sin Proveedor"
+
             tienda = row.get('tienda_destino') or "Sin Tienda Asignada"
             
             key = (prov, tienda)
             if key not in agrupado:
                 agrupado[key] = []
-            agrupado[key].append(row)
+            agrupado[key].append(row) 
 
         for (prov, tienda), lista_ocs in agrupado.items():
             if prov not in proveedores_desglose:
