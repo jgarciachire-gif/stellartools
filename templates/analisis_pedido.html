@@ -661,12 +661,22 @@
             }
 
             // Inserta cada producto extraído en la cuadrícula
+            // ... dentro del forEach donde se insertan los productos
             productos.forEach(prod => {
                 const tr = agregarFilaAnalisis();
                 tr.querySelector('.inp-codigo').value = prod.codigo || '';
                 tr.querySelector('.inp-desc').value = prod.descripcion || '';
-                tr.querySelector('.inp-pre').value = prod.unidad_manejo || 1;
-                tr.querySelector('.inp-costo').value = (prod.precio || 0).toFixed(2);
+
+                const inpPre = tr.querySelector('.inp-pre');
+                const inpCosto = tr.querySelector('.inp-costo');
+
+                inpPre.value = prod.unidad_manejo || 1;
+                inpCosto.value = (prod.precio || 0).toFixed(2);
+
+                // Guardar los valores originales
+                inpPre.dataset.original = prod.unidad_manejo || 1;
+                inpCosto.dataset.original = (prod.precio || 0).toFixed(2);
+
                 tr.querySelector('.inp-emp').value = 0;
                 calcularFila(tr.querySelector('.inp-codigo'));
             });
@@ -1020,6 +1030,12 @@
         if (!codigo) {
             inpDesc.value = '';
             inpCosto.value = '0.00';
+            inpPre.value = '1';
+
+            // Limpiamos los dataset también
+            delete inpCosto.dataset.original;
+            delete inpPre.dataset.original;
+
             calcularFila(inputCodigo);
             return;
         }
@@ -1034,25 +1050,31 @@
             const res = await fetch(`/api/productos/buscar-codigo/${encodeURIComponent(codigo)}`);
             const data = await res.json();
 
-            if (data.encontrado) {
+            if (data && data.descripcion) {
                 inpDesc.value = data.descripcion;
-                inpCosto.value = data.precio.toFixed(2);
 
-                // Intenta extraer número de la unidad de manejo si aplica
+                // Asignamos el valor del costo
+                inpCosto.value = Number(data.precio || 0).toFixed(2);
+
+                // Verificamos y asignamos la unidad de manejo
                 const numManejo = parseInt(data.unidad_manejo);
                 if (!isNaN(numManejo) && numManejo > 0) {
                     inpPre.value = numManejo;
                 }
 
-                // Bloquea la celda de código tras cargar los datos
-                bloquearCeldaCodigo(inputCodigo);
+                inpPre.dataset.original = inpPre.value;
+                inpCosto.dataset.original = inpCosto.value;
 
+                bloquearCeldaCodigo(inputCodigo);
             } else {
                 inpDesc.value = 'PRODUCTO NO ENCONTRADO';
                 inpCosto.value = '0.00';
+                inpPre.value = '1';
             }
         } catch (e) {
             inpDesc.value = 'ERROR DE CONEXIÓN';
+            inpCosto.value = '0.00';
+            inpPre.value = '1';
         }
 
         calcularFila(inputCodigo);
@@ -1341,6 +1363,97 @@
         elem.dataset.valorOriginal = elem.value;
         elem.select();
     }
+    function obtenerProductosModificados() {
+        const modificados = [];
+        const filas = document.querySelectorAll('#filas-tabla-analisis tr');
+
+        filas.forEach(tr => {
+            const inpCod = tr.querySelector('.inp-codigo');
+            const inpPre = tr.querySelector('.inp-pre');
+            const inpCosto = tr.querySelector('.inp-costo');
+
+            // Solo evaluamos si la fila tiene un código válido escrito
+            if (inpCod && inpCod.value.trim() !== '') {
+
+                // Si el dataset.original es undefined, tomamos el valor actual del input como fallback
+                const originalPreTxt = inpPre.dataset.original !== undefined ? inpPre.dataset.original : inpPre.value;
+                const originalCostoTxt = inpCosto.dataset.original !== undefined ? inpCosto.dataset.original : inpCosto.value;
+
+                const originalPre = parseFloat(originalPreTxt) || 1;
+                const originalCosto = parseFloat(originalCostoTxt) || 0;
+                const nuevoPre = parseFloat(inpPre.value) || 1;
+                const nuevoCosto = parseFloat(inpCosto.value) || 0;
+
+                // Evaluamos si alguno de los dos es diferente
+                if (originalPre !== nuevoPre || originalCosto !== nuevoCosto) {
+                    modificados.push({
+                        codigo: inpCod.value.trim(),
+                        unidad_manejo: nuevoPre,
+                        precio: nuevoCosto
+                    });
+                }
+            }
+        });
+
+        return modificados;
+    }
+
+    // Función para enviar los datos al servidor
+    async function guardarDatosModificados(modificados) {
+        try {
+            console.log("Enviando este payload a FastAPI:", JSON.stringify(modificados));
+
+            const response = await fetch('/api/productos/actualizar-analisis', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(modificados)
+            });
+
+            if (!response.ok) {
+                // Si hay error (como el 422), capturamos el detalle que envía FastAPI
+                const errorData = await response.json();
+                console.error('❌ Error 422 - Detalle de FastAPI:', JSON.stringify(errorData, null, 2));
+                alert('Error al guardar en base de datos. Revisa la consola para ver el detalle.');
+            } else {
+                console.log('✅ Datos guardados en la base de datos correctamente.');
+            }
+        } catch (e) {
+            console.error('❌ Error de conexión al actualizar productos:', e);
+        }
+    }
+
+    // Interceptar clics en enlaces para salir de la página
+    document.addEventListener('click', async (e) => {
+        const link = e.target.closest('a');
+
+        // Si se hizo clic en un enlace que cambia de página (navegación interna)
+        if (link && link.href && !link.target && !link.href.startsWith('javascript:') && !link.href.includes('#')) {
+            const modificados = obtenerProductosModificados();
+
+            if (modificados.length > 0) {
+                e.preventDefault(); // Pausar la navegación
+
+                // Alerta de confirmación nativa
+                const confirmar = confirm('Se modificaron datos de "Pre." o "Costo Uni.". ¿Desea actualizar estos datos en la base de datos antes de salir?');
+
+                if (confirmar) {
+                    await guardarDatosModificados(modificados);
+                }
+
+                // Reanudar la navegación a la URL solicitada
+                window.location.href = link.href;
+            }
+        }
+    });
+
+    // Interceptar el cierre directo de la pestaña o recarga del navegador (F5)
+    window.addEventListener('beforeunload', (e) => {
+        if (obtenerProductosModificados().length > 0) {
+            e.preventDefault();
+            // Los navegadores modernos muestran un mensaje genérico por seguridad, no se puede personalizar el texto aquí
+            e.returnValue = '';
+        }
+    });
 </script>
 
 {% endblock %}

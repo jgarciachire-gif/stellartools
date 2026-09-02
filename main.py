@@ -1,51 +1,103 @@
+import os
+import sys
+import io
 import re
 import socket
+import json
+import traceback
+import urllib.parse
+from typing import List, Optional
+from datetime import datetime, timedelta, date
+import xml.etree.ElementTree as ET
+
 import httpx
-socket.setdefaulttimeout(30.0)
-httpx._config.DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(30.0)
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Response, Cookie, Depends
+import pandas as pd
+from fastapi import FastAPI, Request, Form, UploadFile, File, HTTPException, Response, Cookie, Depends, status
 from fastapi.responses import RedirectResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from typing import List, Optional
-import pandas as pd
-from datetime import datetime, timedelta, date
-from pdf_processor import extraer_datos_oc
-import os
-import io
-import xml.etree.ElementTree as ET
-import json
-from fastapi import Form
-import traceback
+from pydantic import BaseModel
 from supabase import create_client, Client, ClientOptions
 
-SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
-SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
+from pdf_processor import extraer_datos_oc
 
-# 1. Ajusta los tiempos de espera globales en httpx para todas las solicitudes HTTP (incluyendo Auth)
+# ==========================================
+# 1. Configuración global y clientes HTTP
+# ==========================================
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+socket.setdefaulttimeout(30.0)
 httpx._config.DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(timeout=60.0, connect=30.0)
 
-SUPABASE_URL = "https://wrcbuseidkupjndpovdd.supabase.co"
-SUPABASE_KEY = "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA"
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wrcbuseidkupjndpovdd.supabase.co")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA")
 
-# 2. Inicializa el cliente asignando los límites de tiempo de espera
 supabase: Client = create_client(
     SUPABASE_URL, 
     SUPABASE_KEY,
     options=ClientOptions(
-        postgrest_client_timeout=60, # Tiempo de espera para consultas a la base de datos
-        storage_client_timeout=60    # Tiempo de espera para subida y descarga de archivos
+        postgrest_client_timeout=60,
+        storage_client_timeout=60
     )
 )
 
 app = FastAPI(title="Control de Compras", version="2.0")
-@app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
-async def chrome_devtools_silencer():
-    return Response(status_code=204) 
+
+# ==========================================
+# 2. Configuración de Plantillas y Filtros
+# ==========================================
+templates = Jinja2Templates(directory="templates")
+
+def formato_moneda_latina(valor):
+    if valor is None:
+        return "0,00"
+    return f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+
+def limpiar_cantidad(valor):
+    if valor is None:
+        return 0.0
+    if isinstance(valor, (int, float)):
+        return float(valor)
+    val_limpio = str(valor).replace(",", "").strip()
+    try:
+        return float(val_limpio)
+    except ValueError:
+        return 0.0
+
+templates.env.filters["moneda"] = formato_moneda_latina
+templates.env.filters["limpiar_cantidad"] = limpiar_cantidad
+
+# ==========================================
+# 3. Funciones Helper Globales
+# ==========================================
+def sanitizar_numero(val):
+    if val is None:
+        return 0.0
+    if isinstance(val, (int, float)):
+        return float(val)
+    val_str = str(val).strip()
+    if "." in val_str and "," in val_str:
+        val_str = val_str.replace(".", "").replace(",", ".")
+    elif "." in val_str and len(val_str.split(".")[-1]) == 3:
+        val_str = val_str.replace(".", "")
+    elif "," in val_str:
+        val_str = val_str.replace(",", "")
+    try:
+        return float(val_str)
+    except ValueError:
+        return 0.0
+
+def limpiar_monto_decimal(valor_str):
+    texto = str(valor_str).strip().replace('$', '')
+    if ',' in texto and '.' in texto:
+        texto = texto.replace(',', '')
+    elif ',' in texto:
+        texto = texto.replace(',', '.')
+    try:
+        return round(float(texto), 2)
+    except ValueError:
+        return 0.0
 
 def obtener_usuario_actual(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
     if not access_token and not refresh_token:
@@ -63,7 +115,6 @@ def obtener_usuario_actual(access_token: str = Cookie(None), refresh_token: str 
         return None
 
 def script_alerta_error(mensaje: str, redireccionar: str = None) -> HTMLResponse:
-    
     msj_limpio = mensaje.replace("'", "\\'").replace("\n", " ")
     if redireccionar:
         js = f"<script>alert('{msj_limpio}'); window.location.href='{redireccionar}';</script>"
@@ -72,22 +123,35 @@ def script_alerta_error(mensaje: str, redireccionar: str = None) -> HTMLResponse
     return HTMLResponse(content=js)
 
 def script_alerta_modal(tipo: str, titulo: str, mensaje: str, redireccionar: str = "/login") -> RedirectResponse:
-    import urllib.parse
     msj_enc = urllib.parse.quote(mensaje)
     tit_enc = urllib.parse.quote(titulo)
     return RedirectResponse(url=f"{redireccionar}?msg_tipo={tipo}&msg_titulo={tit_enc}&msg_texto={msj_enc}", status_code=303)
+
+# ==========================================
+# 4. Modelos de Datos (Pydantic)
+# ==========================================
+class ProductoModificado(BaseModel):
+    codigo: str
+    unidad_manejo: int
+    precio: float
+
+# ==========================================
+# 5. Endpoints del Sistema
+# ==========================================
+@app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
+async def chrome_devtools_silencer():
+    return Response(status_code=204) 
 
 @app.get("/login")
 def vista_login(request: Request):
     token = request.cookies.get("access_token")
     if obtener_usuario_actual(token):
         return RedirectResponse(url="/", status_code=303)
-    return templates.TemplateResponse(request, "login.html", {})
+    return templates.TemplateResponse(request=request, name="login.html", context={})
 
 @app.post("/registro")
 def procesar_registro(email: str = Form(...), password: str = Form(...)):
     try:
-        # Supabase envía automáticamente el correo de confirmación
         supabase.auth.sign_up({"email": email, "password": password})
         return script_alerta_modal(
             tipo="exito", 
@@ -104,11 +168,9 @@ def procesar_registro(email: str = Form(...), password: str = Form(...)):
 @app.post("/login")
 def procesar_login(email: str = Form(...), password: str = Form(...)):
     try:
-        # Sanea el correo e inicia sesión en Supabase
         auth_res = supabase.auth.sign_in_with_password({"email": email.strip(), "password": password})
         response = RedirectResponse(url="/", status_code=303)
         
-        # Guarda los tokens en cookies compatibles con HTTP local
         response.set_cookie(
             key="access_token", 
             value=auth_res.session.access_token, 
@@ -127,10 +189,7 @@ def procesar_login(email: str = Form(...), password: str = Form(...)):
         )
         return response
     except Exception as e:
-        # Muestra la causa exacta del rechazo en la terminal
         print(f"\n[DETALLE ERROR SUPABASE]: {e}\n")
-        
-        # Muestra la respuesta de error enviada por Supabase en el modal
         res_error = script_alerta_modal(
             tipo="error", 
             titulo="Error de Acceso", 
@@ -159,7 +218,7 @@ def enviar_recuperacion(request: Request, email: str = Form(...)):
 
 @app.get("/reset-password")
 def vista_reset_password(request: Request):
-    return templates.TemplateResponse(request, "login.html", {"reset_mode": True})
+    return templates.TemplateResponse(request=request, name="login.html", context={"reset_mode": True})
 
 @app.post("/reset-password")
 def procesar_reset_password(access_token: str = Cookie(None), nueva_password: str = Form(...)):
@@ -178,30 +237,6 @@ def cerrar_sesion():
     response.delete_cookie("access_token")
     response.delete_cookie("refresh_token")
     return response
-
-templates = Jinja2Templates(directory="templates")
-def formato_moneda_latina(valor):
-    if valor is None:
-        return "0,00"
-    return f"{float(valor):,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-
-templates.env.filters["moneda"] = formato_moneda_latina
-
-# Función para limpiar cantidades con separador de miles en coma (ej: "1,440.00" -> 1440.0)
-def limpiar_cantidad(valor):
-    if valor is None: # Retorna 0.0 si el valor recibido está vacío
-        return 0.0
-    if isinstance(valor, (int, float)): # Si ya es número, lo retorna directamente
-        return float(valor)
-    # Elimina la coma de miles y limpia espacios antes de convertir
-    val_limpio = str(valor).replace(",", "").strip()
-    try:
-        return float(val_limpio) # Convierte el texto numérico limpio a float
-    except ValueError:
-        return 0.0 # En caso de texto no numérico, evita colapsos retornando 0.0
-
-# Registra la función como un filtro reutilizable en las plantillas HTML
-templates.env.filters["limpiar_cantidad"] = limpiar_cantidad
 
 @app.get("/")
 def dashboard(request: Request):
@@ -231,7 +266,6 @@ def dashboard(request: Request):
             if prov not in proveedores_desglose:
                 proveedores_desglose[prov] = {}
 
-            # 1. Separar OCs con recepción y OCs solo enviadas
             ocs_recibidas = []
             ocs_enviadas = []
             
@@ -243,19 +277,15 @@ def dashboard(request: Request):
                 else:
                     ocs_enviadas.append(oc)
 
-            # Determinamos la OC activa a mostrar según prioridad
             if ocs_recibidas:
-                oc_seleccionada = ocs_recibidas[-1] # Obtiene la última OC con recepción confirmada
-                
-                # Comprueba si existe alguna OC enviada cuyo ID sea mayor (creada después) que la recibida
+                oc_seleccionada = ocs_recibidas[-1]
                 hay_nueva_enviada = any(oc.get('id', 0) > oc_seleccionada.get('id', 0) for oc in ocs_enviadas)
                 
                 if hay_nueva_enviada:
-                    estatus_oc = "Nueva OC enviada" # Hay un nuevo pedido posterior pendiente por recibir
+                    estatus_oc = "Nueva OC enviada"
                 else:
-                    estatus_oc = "Despacho Recibido" # La última OC activa ya fue completada
+                    estatus_oc = "Despacho Recibido"
             else:
-                # No hay recepciones registradas aún para esta tienda/proveedor
                 oc_seleccionada = ocs_enviadas[-1]
                 estatus_oc = "Enviada"
 
@@ -310,44 +340,42 @@ def dashboard(request: Request):
                 "color_inv": color_inv
             }
 
-    return templates.TemplateResponse(request, "dashboard.html", {
+    return templates.TemplateResponse(request=request, name="dashboard.html", context={
         "proveedores_desglose": proveedores_desglose
     })
 
 @app.get("/ordenes")
 def listar_ordenes(request: Request):
-    token = request.cookies.get("access_token") # Obtiene el token de cookie del navegador
-    user = obtener_usuario_actual(token) # Obtiene la información del usuario autenticado
+    token = request.cookies.get("access_token")
+    user = obtener_usuario_actual(token)
     if not user:
-        return RedirectResponse(url="/login", status_code=303) # Redirige al login si no hay usuario
+        return RedirectResponse(url="/login", status_code=303)
 
-    # Consulta las órdenes de compra asociadas al usuario con sus productos y proveedor
     res = supabase.table("ordenes_compra").select("*, proveedores(nombre, dias_credito), detalles_productos(*)").eq("usuario_id", user.id).order("fecha_envio", desc=True).execute()
     
-    hoy = datetime.now().date() # Captura la fecha actual
+    hoy = datetime.now().date()
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     ordenes_agrupadas = {}
     
-    if res.data: # Si la consulta devuelve registros
-        for row in res.data: # Recorre cada orden de compra
-            o = row.copy() # Crea una copia del diccionario de la orden
+    if res.data:
+        for row in res.data:
+            o = row.copy()
             
-            # Convierte la estructura de detalles_productos si viene en formato texto JSON
             dp_raw = o.get("detalles_productos")
             if isinstance(dp_raw, str):
                 try:
-                    o['detalles_productos'] = json.loads(dp_raw) # Convierte texto JSON a lista de Python
+                    o['detalles_productos'] = json.loads(dp_raw)
                 except (json.JSONDecodeError, TypeError):
-                    o['detalles_productos'] = [] # Asigna lista vacía si hay error de formato
+                    o['detalles_productos'] = []
             elif not isinstance(dp_raw, list):
-                o['detalles_productos'] = [] # Asegura lista vacía si viene como None
+                o['detalles_productos'] = []
             
             prov_obj = o.get("proveedores")
             if prov_obj:
-                o['proveedor'] = prov_obj.get("nombre") # Extrae nombre del proveedor
-                dias_credito = prov_obj.get("dias_credito") # Extrae días de crédito
+                o['proveedor'] = prov_obj.get("nombre")
+                dias_credito = prov_obj.get("dias_credito")
             else:
-                dias_credito = 30 # Valor por defecto si no existe proveedor registrado
+                dias_credito = 30
 
             f_rec_raw = str(o.get('fecha_recepcion') or "").strip()
             tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
@@ -360,28 +388,28 @@ def listar_ordenes(request: Request):
             
             if tiene_fecha_rec and dias_credito:
                 try:
-                    f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date() # Formatea fecha de recepción
-                    venc_date = f_rec + timedelta(days=int(dias_credito)) # Calcula fecha de vencimiento
-                    o['vencimiento_factura_str'] = venc_date.strftime("%d/%m/%Y") # Formatea fecha a DD/MM/AAAA
-                    dias_restantes = (venc_date - hoy).days # Calcula días restantes para el pago
+                    f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
+                    venc_date = f_rec + timedelta(days=int(dias_credito))
+                    o['vencimiento_factura_str'] = venc_date.strftime("%d/%m/%Y")
+                    dias_restantes = (venc_date - hoy).days
                     
                     if dias_restantes < 0:
                         o['alerta_text'] = f"Vencido ({abs(dias_restantes)}d)"
-                        o['alerta_color'] = "bg-red-500" # Indicador rojo para facturas vencidas
+                        o['alerta_color'] = "bg-red-500"
                     elif dias_restantes <= 3:
                         o['alerta_text'] = f"Por vencer ({dias_restantes}d)"
-                        o['alerta_color'] = "bg-yellow-400" # Indicador amarillo para facturas por vencer
+                        o['alerta_color'] = "bg-yellow-400"
                     else:
                         o['alerta_text'] = "Vigente"
-                        o['alerta_color'] = "bg-green-500" # Indicador verde para facturas vigentes
+                        o['alerta_color'] = "bg-green-500"
                 except ValueError:
                     pass
             
             fecha_agrupar_raw = str(o.get('fecha_envio') or "").strip()
             if fecha_agrupar_raw and fecha_agrupar_raw.lower() not in ['none', 'nan', 'nat', 'null']:
                 try:
-                    dt = datetime.strptime(fecha_agrupar_raw, "%Y-%m-%d") # Convierte fecha de envío
-                    mes_anio = f"{meses_espanol[dt.month - 1]} {dt.year}" # Formatea el agrupador a "Mes Año"
+                    dt = datetime.strptime(fecha_agrupar_raw, "%Y-%m-%d")
+                    mes_anio = f"{meses_espanol[dt.month - 1]} {dt.year}"
                 except ValueError:
                     mes_anio = "Fecha Inválida"
             else:
@@ -389,9 +417,9 @@ def listar_ordenes(request: Request):
                 
             if mes_anio not in ordenes_agrupadas:
                 ordenes_agrupadas[mes_anio] = []
-            ordenes_agrupadas[mes_anio].append(o) # Agrupa la orden según su mes de envío
+            ordenes_agrupadas[mes_anio].append(o)
             
-    return templates.TemplateResponse(request, "ordenes.html", {"ordenes_agrupadas": ordenes_agrupadas}) # Retorna la plantilla cargada
+    return templates.TemplateResponse(request=request, name="ordenes.html", context={"ordenes_agrupadas": ordenes_agrupadas})
 
 @app.post("/ordenes/actualizar/{orden_id}")
 async def actualizar_orden(
@@ -401,7 +429,6 @@ async def actualizar_orden(
     fecha_recepcion: str = Form(None),
     access_token: str = Cookie(None)
 ):
-    # Validar sesión de usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
@@ -412,20 +439,17 @@ async def actualizar_orden(
     f_env = fecha_envio if fecha_envio else None
     estatus = "Despacho Recibido" if f_rec else "Enviada"
 
-    # Actualizar fecha y estatus en base de datos
     supabase.table("ordenes_compra").update({
         "estatus": estatus,
         "fecha_envio": f_env,
         "fecha_recepcion": f_rec
     }).eq("id", orden_id).eq("usuario_id", user.id).execute()
     
-    # Respuesta asíncrona JSON para actualizar la interfaz sin recargar
     if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
         vencimiento_str = ""
         alerta_text = ""
         alerta_color = "transparent"
 
-        # Calcular vencimiento de la factura y estado de alerta si hay fecha de recepción
         if f_rec:
             res_oc = supabase.table("ordenes_compra").select("pagada, proveedores(dias_credito)").eq("id", orden_id).execute()
             if res_oc.data:
@@ -498,27 +522,23 @@ async def eliminar_ordenes_masivo(request: Request, access_token: str = Cookie(N
         ids = [int(i) for i in raw_ids if str(i).isdigit()]
         
         if ids:
-            # Ejecuta la eliminación en Supabase
             resultado = supabase.table("ordenes_compra").delete().in_("id", ids).eq("usuario_id", user.id).execute()
             print(f"[DEBUG ELIMINAR] Respuesta de Supabase: {resultado}")
             
         return {"success": True, "message": f"{len(ids)} orden(es) eliminada(s)"}
     except Exception as e:
-        print(f"[DEBUG ELIMINAR ERROR]:\n{traceback.format_exc()}") # Imprime la traza completa del error en la terminal
+        print(f"[DEBUG ELIMINAR ERROR]:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"success": False, "message": str(e)})
 
-# Modifica el endpoint GET de proveedores para incluir etiquetas y trazabilidad
 @app.get("/proveedores")
 def vista_proveedores(request: Request, select: int = None, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Obtenemos lista de proveedores
     res = supabase.table("proveedores").select("*").order("nombre").execute()
     proveedores = res.data if res and res.data else []
 
-    # Obtenemos la lista global de categorías/etiquetas disponibles para autocompletar o asignar
     res_cats = supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
     categorias_disponibles = res_cats.data if res_cats and res_cats.data else []
 
@@ -528,7 +548,7 @@ def vista_proveedores(request: Request, select: int = None, access_token: str = 
         if res_sel and res_sel.data:
             prov_obj = res_sel.data
 
-    return templates.TemplateResponse(request, "proveedores.html", {
+    return templates.TemplateResponse(request=request, name="proveedores.html", context={
         "proveedores": proveedores,
         "prov_obj": prov_obj,
         "categorias_disponibles": categorias_disponibles
@@ -566,58 +586,54 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
     except ET.ParseError:
         return HTMLResponse("<script>alert('Error: El archivo XML no tiene un formato válido.'); window.location.href='/proveedores';</script>")
 
-# Endpoint para generar y descargar el reporte de proveedores en formato XML
 @app.get("/proveedores/exportar-xml")
-def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None)): # Define la ruta GET y obtiene el token de sesión
-    user = obtener_usuario_actual(access_token) # Valida el usuario autenticado
-    if not user: # Redirige si la sesión expiró o no existe
-        return RedirectResponse(url="/login", status_code=303) # Redirección limpia al login
-
-    res = supabase.table("proveedores").select("*").order("nombre").execute() # Consulta todos los proveedores de la base de datos
-    proveedores = res.data if res and res.data else [] # Extrae el listado de proveedores
-
-    root = ET.Element("Proveedores") # Crea el nodo raíz principal del documento XML
-    for p in proveedores: # Itera sobre cada registro de proveedor
-        item = ET.SubElement(root, "Proveedor") # Subnodo individual por cada proveedor
-        ET.SubElement(item, "Codigo").text = str(p.get("codigo") or "") # Agrega nodo Código
-        ET.SubElement(item, "Nombre").text = str(p.get("nombre") or "") # Agrega nodo Nombre / Razón Social
-        ET.SubElement(item, "Contacto").text = str(p.get("contacto") or "") # Agrega nodo Contacto / Atención
-        ET.SubElement(item, "Telefono").text = str(p.get("telefono") or "") # Agrega nodo Teléfono
-        ET.SubElement(item, "Email").text = str(p.get("email") or "") # Agrega nodo Correo Electrónico
-        ET.SubElement(item, "DiasCredito").text = str(p.get("dias_credito") if p.get("dias_credito") is not None else 0) # Agrega Días de Crédito
-        ET.SubElement(item, "FrecuenciaPedidos").text = str(p.get("dias_despacho") if p.get("dias_despacho") is not None else 3) # Agrega Frecuencia de Pedidos
-        
-        cats = p.get("categorias") or [] # Obtiene la lista de categorías o asigna lista vacía
-        if isinstance(cats, list): # Verifica si es una lista
-            cats_str = ", ".join([str(c) for c in cats]) # Une las etiquetas separadas por coma en una sola celda/texto
-        else:
-            cats_str = str(cats) # Convierte a texto si ya venía como string
-        ET.SubElement(item, "Categorias").text = cats_str # Agrega nodo Categorías / Etiquetas unificadas
-
-    xml_data = ET.tostring(root, encoding="utf-8", method="xml") # Genera el contenido XML en bytes codificados
-    
-    return Response( # Devuelve la respuesta para la descarga del archivo en el navegador
-        content=xml_data, # Contenido binario del XML
-        media_type="application/xml", # Cabecera MIME type XML
-        headers={"Content-Disposition": "attachment; filename=proveedores.xml"} # Fuerza la descarga con el nombre proveedores.xml
-    )
-
-@app.get("/perfil")
-def vista_perfil(request: Request, access_token: str = Cookie(None)):
-    # Valida la sesión activa del usuario
+def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Consulta el perfil usando el método .maybe_single() para evitar errores si no existe el registro
+    res = supabase.table("proveedores").select("*").order("nombre").execute()
+    proveedores = res.data if res and res.data else []
+
+    root = ET.Element("Proveedores")
+    for p in proveedores:
+        item = ET.SubElement(root, "Proveedor")
+        ET.SubElement(item, "Codigo").text = str(p.get("codigo") or "")
+        ET.SubElement(item, "Nombre").text = str(p.get("nombre") or "")
+        ET.SubElement(item, "Contacto").text = str(p.get("contacto") or "")
+        ET.SubElement(item, "Telefono").text = str(p.get("telefono") or "")
+        ET.SubElement(item, "Email").text = str(p.get("email") or "")
+        ET.SubElement(item, "DiasCredito").text = str(p.get("dias_credito") if p.get("dias_credito") is not None else 0)
+        ET.SubElement(item, "FrecuenciaPedidos").text = str(p.get("dias_despacho") if p.get("dias_despacho") is not None else 3)
+        
+        cats = p.get("categorias") or []
+        if isinstance(cats, list):
+            cats_str = ", ".join([str(c) for c in cats])
+        else:
+            cats_str = str(cats)
+        ET.SubElement(item, "Categorias").text = cats_str
+
+    xml_data = ET.tostring(root, encoding="utf-8", method="xml")
+    
+    return Response(
+        content=xml_data,
+        media_type="application/xml",
+        headers={"Content-Disposition": "attachment; filename=proveedores.xml"}
+    )
+
+@app.get("/perfil")
+def vista_perfil(request: Request, access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        return RedirectResponse(url="/login", status_code=303)
+
     res_perfil = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
     perfil = res_perfil.data if res_perfil and res_perfil.data else {"nombre_comprador": "", "cargo": ""}
 
-    # Consulta las categorías asignadas
     res_cats = supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
     categorias = res_cats.data if res_cats and res_cats.data else []
 
-    return templates.TemplateResponse(request, "perfil.html", {
+    return templates.TemplateResponse(request=request, name="perfil.html", context={
         "user": user,
         "perfil": perfil,
         "categorias": categorias
@@ -629,12 +645,10 @@ def guardar_perfil(
     cargo: str = Form(""),
     access_token: str = Cookie(None)
 ):
-    # Valida la sesión
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Verifica si el perfil ya existe para actualizarlo o crearlo
     res = supabase.table("perfiles").select("id").eq("usuario_id", user.id).execute()
     
     if res.data:
@@ -650,15 +664,14 @@ def guardar_perfil(
         }).execute()
 
     return RedirectResponse(url="/perfil", status_code=303)
+
 @app.post("/perfil/cambiar-clave")
 def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(None)):
-    # Valida la sesión activa del usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
     try:
-        # Actualiza la clave del usuario autenticado directamente en Supabase Auth
         supabase.auth.update_user({"password": nueva_password})
         return script_alerta_error("¡Contraseña actualizada con éxito!", redireccionar="/perfil")
     except Exception as e:
@@ -666,12 +679,10 @@ def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(No
     
 @app.post("/perfil/categorias/crear")
 def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(None)):
-    # Valida la sesión
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Inserta nueva etiqueta si el nombre no está vacío
     if nombre.strip():
         supabase.table("categorias").insert({
             "usuario_id": user.id,
@@ -679,20 +690,20 @@ def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(None)):
         }).execute()
 
     return RedirectResponse(url="/perfil", status_code=303)
-@app.post("/perfil/categorias/actualizar/{cat_id}") # Ruta POST para modificar una categoría específica
-def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_token: str = Cookie(None)): # Recibe ID de la categoría y nuevo nombre
-    user = obtener_usuario_actual(access_token) # Verifica la sesión del usuario
+
+@app.post("/perfil/categorias/actualizar/{cat_id}")
+def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    if nombre.strip(): # Valida que el texto no esté vacío
-        supabase.table("categorias").update({"nombre": nombre.strip()}).eq("id", cat_id).eq("usuario_id", user.id).execute() # Actualiza el nombre asegurando propiedad del usuario
+    if nombre.strip():
+        supabase.table("categorias").update({"nombre": nombre.strip()}).eq("id", cat_id).eq("usuario_id", user.id).execute()
 
-    return RedirectResponse(url="/perfil", status_code=303) # Redirige de vuelta a la vista de perfil
+    return RedirectResponse(url="/perfil", status_code=303)
 
 @app.post("/perfil/categorias/eliminar/{cat_id}")
 def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
-    # Valida la sesión y restringe eliminación solo a registros propios
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
@@ -701,45 +712,37 @@ def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
 
     return RedirectResponse(url="/perfil", status_code=303)
 
-
-# Colocar en main.py antes de @app.post("/proveedores/eliminar/{prov_id}")
 @app.post("/proveedores/guardar")
 def guardar_proveedor(
-    id: Optional[str] = Form(None), # Recibe el ID como texto opcional para evitar error 422 si viene ""
-    codigo: str = Form(""), # Código de proveedor opcional
-    nombre: Optional[str] = Form(""), # Recibe el nombre como opcional para evitar rechazos 422 si llega vacío
-    contacto: str = Form(""), # Contacto de atención opcional
-    telefono: str = Form(""), # Teléfono opcional
-    email: str = Form(""), # Correo electrónico opcional
-    dias_credito: Optional[str] = Form("0"), # Días de crédito recibidos como texto seguro
-    dias_despacho: Optional[str] = Form("3"), # Días de despacho recibidos como texto seguro
-    categorias: str = Form("[]"), # Arreglo de etiquetas en formato JSON
-    access_token: str = Cookie(None) # Token de autenticación del usuario
+    id: Optional[str] = Form(None),
+    codigo: str = Form(""),
+    nombre: Optional[str] = Form(""),
+    contacto: str = Form(""),
+    telefono: str = Form(""),
+    email: str = Form(""),
+    dias_credito: Optional[str] = Form("0"),
+    dias_despacho: Optional[str] = Form("3"),
+    categorias: str = Form("[]"),
+    access_token: str = Cookie(None)
 ):
-    # Verifica la sesión activa del usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Convierte el ID de texto a entero solo si contiene un número válido
     prov_id = int(id) if id and id.strip().isdigit() else None
 
-    # Convierte los campos numéricos de forma segura evitando excepciones
     credito_num = int(dias_credito) if dias_credito and dias_credito.strip().isdigit() else 0
     despacho_num = int(dias_despacho) if dias_despacho and dias_despacho.strip().isdigit() else 3
 
-    # Decodifica la cadena JSON de categorías
     try:
         lista_categorias = json.loads(categorias)
     except Exception:
         lista_categorias = []
 
-    # Genera la traza de auditoría con fecha actual y correo del usuario
     fecha_actual = datetime.now().strftime("%d-%m-%Y")
     usuario_str = user.email if user and hasattr(user, 'email') else "Usuario"
     historial_mod = f"Última modificación hecha por {usuario_str} el {fecha_actual}."
 
-    # Estructura de datos limpia y saneada para Supabase
     datos_payload = {
         "codigo": codigo,
         "nombre": nombre,
@@ -752,7 +755,6 @@ def guardar_proveedor(
         "ultima_modificacion": historial_mod
     }
 
-    # Si prov_id tiene un entero válido, actualiza; de lo contrario, inserta nuevo registro
     if prov_id:
         supabase.table("proveedores").update(datos_payload).eq("id", prov_id).execute()
         redirect_url = f"/proveedores?select={prov_id}"
@@ -767,7 +769,6 @@ def guardar_proveedor(
             
     return RedirectResponse(url=redirect_url, status_code=303)
 
-
 @app.post("/proveedores/eliminar/{prov_id}")
 def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
@@ -775,12 +776,10 @@ def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
         return RedirectResponse(url="/login", status_code=303)
 
     try:
-        # Intenta eliminar directamente el registro
         res = supabase.table("proveedores").delete().eq("id", prov_id).execute()
         if not res.data:
             return script_alerta_error("No se pudo eliminar el proveedor. Es posible que ya no exista.", redireccionar="/proveedores")
-    except Exception as e:
-        # Manejo de restricción por Clave Foránea en Base de Datos
+    except Exception:
         return script_alerta_error("No se puede eliminar el proveedor porque tiene Órdenes de Compra asociadas a su registro.", redireccionar=f"/proveedores?select={prov_id}")
 
     return RedirectResponse(url="/proveedores", status_code=303)
@@ -824,7 +823,6 @@ async def procesar_recepciones_xml(
                 nro_oc_limpio = str(nro_oc_raw.lstrip('0'))
 
                 if nro_oc_limpio and fecha_rec_raw:
-                    import re
                     fecha_formateada = None
                     dia, mes, anio = "", "", ""
                     
@@ -882,9 +880,9 @@ async def procesar_recepciones_xml(
             })
 
         return templates.TemplateResponse(
-            request,
-            "resumen_xml.html",
-            {
+            request=request,
+            name="resumen_xml.html",
+            context={
                 "procesados": procesados_exito,
                 "no_encontrados": no_encontrados,
                 "total_procesados": len(procesados_exito),
@@ -907,7 +905,7 @@ def vista_escanear(request: Request, access_token: str = Cookie(None)):
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse(request, "escanear.html", {"lista_datos": None})
+    return templates.TemplateResponse(request=request, name="escanear.html", context={"lista_datos": None})
 
 @app.post("/escanear/procesar")
 async def procesar_pdf(
@@ -930,62 +928,55 @@ async def procesar_pdf(
         contenido_bytes = await archivo.read()
         pdf_en_memoria = io.BytesIO(contenido_bytes)
         datos_extraidos = extraer_datos_oc(pdf_en_memoria)
-        # Enriquecer productos extraídos consultando la base de datos 'productos'
+        
         prods_procesados = []
         monto_calculado_total = 0.0
         
-        # Recorre los productos extraídos del PDF e inserta cada ítem dentro de la lista procesada
-        # Recorre los productos extraídos del PDF e inserta cada ítem dentro de la lista procesada
         for p in datos_extraidos.get("productos", []):
-            cod_st = str(p.get("codigo", "")).strip()  # Extrae y limpia el código del producto
-            desc = p.get("descripcion", "")  # Obtiene la descripción actual del producto
+            cod_st = str(p.get("codigo", "")).strip()
+            desc = p.get("descripcion", "")
         
-            # Limpia valores de presentación y empaque pegados al final del texto (ej. "24.00 70.00")
             match_extra = re.search(r'^(.*?)\s+(\d+(?:\.\d+)?)\s+(\d+(?:\.\d+)?)$', desc)
             if match_extra:
-                desc = match_extra.group(1).strip()  # Guarda solo el nombre limpio del producto
+                desc = match_extra.group(1).strip()
                 p["descripcion"] = desc
-                p["pre"] = int(float(match_extra.group(2)))  # Extrae la presentación
-                p["emp"] = int(float(match_extra.group(3)))  # Extrae los empaques
-                p["empaques"] = p["emp"]  # Sincroniza la clave empaques
+                p["pre"] = int(float(match_extra.group(2)))
+                p["emp"] = int(float(match_extra.group(3)))
+                p["empaques"] = p["emp"]
 
-            emp = p.get("emp", 0)  # Obtiene empaques de forma segura
-            pre = p.get("pre", 1)  # Obtiene presentación de forma segura
+            emp = p.get("emp", 0)
+            pre = p.get("pre", 1)
 
-            # Recalcula la cantidad de unidades en base a empaques y presentación o cantidad directa
             if emp > 0 and pre > 0:
-                cant = int(emp * pre)  # Multiplica empaques por presentación
+                cant = int(emp * pre)
             else:
-                cant = int(round(sanitizar_numero(p.get("cantidad", 0))))  # Usa la cantidad directa si no hay empaques
+                cant = int(round(sanitizar_numero(p.get("cantidad", 0))))
 
-            precio_unitario = float(p.get("precio_unitario") or 0.0)  # Obtiene precio unitario
+            precio_unitario = float(p.get("precio_unitario") or 0.0)
             
-            # Consulta el catálogo oficial para recuperar datos faltantes
             res_p = supabase.table("productos").select("descripcion, precio").eq("codigo_st", cod_st).execute()
             if res_p.data and len(res_p.data) > 0:
-                desc = res_p.data[0].get("descripcion") or desc  # Aplica descripción guardada en BD
+                desc = res_p.data[0].get("descripcion") or desc
                 if precio_unitario == 0.0:
-                    precio_unitario = float(res_p.data[0].get("precio") or 0.0)  # Aplica precio registrado en BD si viene en cero
+                    precio_unitario = float(res_p.data[0].get("precio") or 0.0)
             
-            subtotal = round(cant * precio_unitario, 2)  # Calcula subtotal del renglón
-            monto_calculado_total += subtotal  # Acumula al total general de la orden
+            subtotal = round(cant * precio_unitario, 2)
+            monto_calculado_total += subtotal
 
-            # Agrega cada producto procesado dentro del bucle
             prods_procesados.append({
-                "codigo": cod_st,  # Código ST principal
-                "codigo_producto": cod_st,  # Código de producto
-                "descripcion": desc,  # Descripción limpia y validada
-                "pre": pre,  # Presentación
-                "unidad_manejo": pre,  # Unidades por empaque
-                "emp": emp,  # Cantidad de empaques
-                "empaques": emp,  # Alias de empaques
-                "cantidad": cant,  # Cantidad total de unidades
-                "precio_unitario": precio_unitario,  # Precio por unidad
-                "subtotal": subtotal  # Subtotal del ítem
+                "codigo": cod_st,
+                "codigo_producto": cod_st,
+                "descripcion": desc,
+                "pre": pre,
+                "unidad_manejo": pre,
+                "emp": emp,
+                "empaques": emp,
+                "cantidad": cant,
+                "precio_unitario": precio_unitario,
+                "subtotal": subtotal
             })
         
-        datos_extraidos["productos"] = prods_procesados  # Asigna la lista completa de productos procesados
-        # Si el PDF no tenía total de cabecera, asignar el monto total calculado por los productos
+        datos_extraidos["productos"] = prods_procesados
         if monto_calculado_total > 0 and datos_extraidos.get("monto_total", 0.0) == 0.0:
             datos_extraidos["monto_total"] = monto_calculado_total
         if not datos_extraidos:
@@ -1015,38 +1006,8 @@ async def procesar_pdf(
     if es_ajax:
         return JSONResponse(content={"success": True, "ordenes": lista_datos})
 
-    return templates.TemplateResponse(request, "escanear.html", {
-        "lista_datos": lista_datos
-    })
-def limpiar_monto_decimal(valor_str):
-    # Convierte el valor a texto y elimina espacios o símbolos de moneda
-    texto = str(valor_str).strip().replace('$', '')
-    # Normaliza separadores numéricos para formato decimal
-    if ',' in texto and '.' in texto:
-        texto = texto.replace(',', '')  # Elimina la coma de miles
-    elif ',' in texto:
-        texto = texto.replace(',', '.')  # Cambia la coma decimal a punto
-    # Retorna el flotante redondeado a 2 decimales para PostgreSQL
-    return round(float(texto), 2)
-    # Función helper para procesar números que vienen con formato latino de miles ("1.440") o cadenas ambiguas
-def sanitizar_numero(val):
-    if val is None:
-        return 0.0 # Devuelve 0.0 si el valor es nulo
-    if isinstance(val, (int, float)):
-        return float(val) # Si ya es numérico, lo convierte a float
-    val_str = str(val).strip() # Limpia espacios en blanco
-    if "." in val_str and "," in val_str:
-        val_str = val_str.replace(".", "").replace(",", ".") # Convierte "1.440,00" -> "1440.00"
-    elif "." in val_str and len(val_str.split(".")[-1]) == 3:
-        val_str = val_str.replace(".", "") # Detecta punto de miles "1.440" -> "1440"
-    elif "," in val_str:
-        val_str = val_str.replace(",", "") # Elimina comas de miles "1,440" -> "1440"
-    try:
-        return float(val_str) # Retorna el valor en flotante válido
-    except ValueError:
-        return 0.0 # Evita caídas 500 retornando 0.0 en caso de error
+    return templates.TemplateResponse(request=request, name="escanear.html", context={"lista_datos": lista_datos})
 
-# Endpoint para procesar y guardar la creación de una orden de compra
 @app.post("/ordenes/crear")
 async def crear_orden(
     request: Request,
@@ -1060,27 +1021,23 @@ async def crear_orden(
     productos_json: str = Form("[]"),
     access_token: str = Cookie(None)
 ):
-    # Validar sesión activa del usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return JSONResponse(status_code=401, content={"status": "error", "mensaje": "No autorizado"})
 
     try:
-        # Sanitizar y normalizar datos numéricos recibidos del formulario
         monto_total_val = sanitizar_numero(monto_total)
         dias_inv_val = int(sanitizar_numero(dias_inventario)) if dias_inventario else 15
 
-        # Saneamiento de fechas para evitar cadenas vacías que rompan PostgreSQL
         f_emision = fecha_emision.strip() if fecha_emision and fecha_emision.strip() else datetime.now().strftime("%Y-%m-%d")
         f_envio = fecha_envio.strip() if fecha_envio and fecha_envio.strip() else f_emision
-        # Validar si la orden de compra ya existe registrada para el usuario
-        num_oc = numero_orden.strip() # Limpia espacios en blanco del número de orden
-        if num_oc: # Verifica que se haya proporcionado un número de orden
-            res_existente = supabase.table("ordenes_compra").select("id").eq("numero_orden", num_oc).eq("usuario_id", user.id).execute() # Consulta si la OC ya existe en la BD
-            if res_existente.data: # Si existen registros previos con el mismo número
-                return JSONResponse(status_code=400, content={"status": "error", "mensaje": f"La Orden de Compra N° {num_oc} ya se encuentra registrada."}) # Cancela la operación y devuelve respuesta de error
+        
+        num_oc = numero_orden.strip()
+        if num_oc:
+            res_existente = supabase.table("ordenes_compra").select("id").eq("numero_orden", num_oc).eq("usuario_id", user.id).execute()
+            if res_existente.data:
+                return JSONResponse(status_code=400, content={"status": "error", "mensaje": f"La Orden de Compra N° {num_oc} ya se encuentra registrada."})
 
-        # Buscar o registrar el proveedor de forma segura
         prov_nombre = proveedor.strip()
         res_prov = supabase.table("proveedores").select("id").eq("nombre", prov_nombre).execute()
         if res_prov.data:
@@ -1091,7 +1048,6 @@ async def crear_orden(
                 return JSONResponse(status_code=500, content={"status": "error", "mensaje": "Error al registrar el proveedor en la base de datos."})
             proveedor_id = res_ins.data[0]["id"]
 
-        # Insertar cabecera de la orden de compra
         res_oc = supabase.table("ordenes_compra").insert({
             "usuario_id": user.id,
             "numero_orden": numero_orden.strip(),
@@ -1109,7 +1065,6 @@ async def crear_orden(
 
         orden_id = res_oc.data[0]["id"]
 
-        # Decodificar lista de productos enviada en JSON
         try:
             productos = json.loads(productos_json) if isinstance(productos_json, str) else productos_json
         except Exception:
@@ -1121,7 +1076,6 @@ async def crear_orden(
             codigo_raw = prod.get("codigo") or prod.get("codigo_producto") or prod.get("codigo_st")
             descripcion = prod.get("descripcion") or prod.get("nombre_producto") or "Sin descripción"
 
-            # Recolectar posibles candidatos de precio
             candidatos_precio = []
             for key in ["precio_unitario", "precio", "costo_unitario", "costo", "precio_nuevo"]:
                 val = prod.get(key)
@@ -1139,7 +1093,6 @@ async def crear_orden(
                 codigo = str(codigo_raw).strip()
                 codigo_sin_ceros = codigo.lstrip("0")
 
-                # Consultar producto en catálogo global
                 res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo).execute()
                 if not res_prod.data and codigo != codigo_sin_ceros:
                     res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo_sin_ceros).execute()
@@ -1149,7 +1102,6 @@ async def crear_orden(
                     target_codigo = prod_db["codigo_st"]
                     precio_db = float(prod_db.get("precio") or 0.0)
 
-                    # Verificar cambio de precio
                     precio_nuevo_detectado = None
                     for c in candidatos_precio:
                         if abs(c - precio_db) > 0.001:
@@ -1170,21 +1122,17 @@ async def crear_orden(
                         "precio": precio_extraido
                     }).execute()
 
-            # Sanitizar empaques y presentación a números enteros
             emp_val = int(float(sanitizar_numero(prod.get("empaques") or prod.get("emp") or 0)))
             pre_val = int(float(sanitizar_numero(prod.get("unidad_manejo") or prod.get("pre") or 1)))
 
-            # Procesar cantidad y garantizar un entero estricto para PostgreSQL
             cant_raw = float(sanitizar_numero(prod.get("cantidad") or 0))
             if emp_val > 0 and pre_val > 0 and cant_raw != (emp_val * pre_val):
                 cant_val = int(emp_val * pre_val)
             else:
                 cant_val = int(round(cant_raw))
 
-            # Garantizar tipo de precio como decimal/float para BD
             precio_final = precio_extraido if precio_extraido > 0 else float(sanitizar_numero(prod.get("precio_unitario") or 0))
 
-            # Guardar ítem del detalle con sangría reestructurada y corregida
             supabase.table("detalles_productos").insert({
                 "orden_id": orden_id,
                 "codigo": str(codigo_raw) if codigo_raw else "",
@@ -1198,7 +1146,6 @@ async def crear_orden(
         return JSONResponse(content={"status": "ok", "mensaje": "Orden guardada y precios actualizados."})
 
     except Exception as e:
-        # Imprime el detalle completo del error en terminal para depuración exacta
         print(f"[DEBUG CREAR ORDEN ERROR]:\n{traceback.format_exc()}")
         return JSONResponse(status_code=500, content={"status": "error", "mensaje": str(e)})
 
@@ -1212,7 +1159,6 @@ def vista_productos(
     select: Optional[str] = None,
     access_token: str = Cookie(None)
 ):
-    # Valida la sesión activa del usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
@@ -1220,59 +1166,58 @@ def vista_productos(
     busqueda_query = request.query_params.get("q", "")
     tags_query = request.query_params.get("tags", "")
     
-    # Inicializa la consulta trayendo los productos y su relación con proveedores
     builder = supabase.table("productos").select("*, proveedores(nombre)")
 
-    # Recopila los términos de búsqueda ingresados
     terminos = []
     if busqueda_query.strip():
         terminos.append(busqueda_query.strip())
     if tags_query.strip():
         terminos.extend([t.strip() for t in tags_query.split(",") if t.strip()])
 
-    # Aplica los filtros acumulativos por cada término
     for term in terminos:
-        palabras = term.strip().split()
+        term_limpio = re.sub(r'[^\w\s-]', '', term).strip()
+        if not term_limpio:
+            continue
+            
+        palabras = term_limpio.split()
         patron_busqueda = f"%{'%'.join(palabras)}%" if palabras else "%"
 
-        # Consulta IDs de proveedores coincidentes
         res_prov = supabase.table("proveedores").select("id").ilike("nombre", patron_busqueda).execute()
         ids_prov = [str(p["id"]) for p in res_prov.data] if res_prov.data else []
 
-        # Lista de condiciones OR en la tabla productos
+        # Solo campos de texto para ILIKE
         condiciones = [
-            f"codigo_st.ilike.{patron_busqueda}",
-            f"codigo_ean.ilike.{patron_busqueda}",
             f"descripcion.ilike.{patron_busqueda}",
             f"marca.ilike.{patron_busqueda}",
             f"departamento.ilike.{patron_busqueda}",
             f"grupo.ilike.{patron_busqueda}"
         ]
 
-        # Filtra por la columna foránea correcta 'proveedor_id' si se hallaron proveedores
+        # Si el término es numérico, usa .eq para los campos tipo INTEGER / BIGINT
+        if term_limpio.isdigit():
+            val_num = int(term_limpio)
+            condiciones.append(f"codigo_st.eq.{val_num}")
+            condiciones.append(f"codigo_ean.eq.{val_num}")
+            condiciones.append(f"proveedor_id.eq.{val_num}")
+
         if ids_prov:
             for pid in ids_prov:
                 condiciones.append(f"proveedor_id.eq.{pid}")
 
-        # Encadena la condición OR al builder actual sin reiniciar la consulta
-        condicion_or = ",".join(condiciones) # Une las condiciones de texto y proveedor
+        condicion_or = ",".join(condiciones)
         builder = builder.or_(condicion_or)
 
-    # Limitar a 200 resultados activos para mantener fluidez visual
     productos_res = builder.order("descripcion", desc=False).limit(200).execute()
     productos = productos_res.data or []
 
-    # Cargar lista de proveedores para la selección
     res_prov = supabase.table("proveedores").select("id, nombre").order("nombre").execute()
     proveedores = res_prov.data if res_prov and res_prov.data else []
 
-    # Obtener el producto seleccionado si existe el parámetro select
     select_id = request.query_params.get("select")
     prov_obj = None
 
     if select_id:
         try:
-            # Convierte a int si es numérico para coincidir con el tipo int8 de Supabase
             query_id = int(select_id) if str(select_id).isdigit() else select_id
             res_sel = supabase.table("productos").select("*").eq("id", query_id).execute()
             if res_sel.data:
@@ -1280,7 +1225,6 @@ def vista_productos(
         except Exception as e:
             print("Error al obtener producto seleccionado:", e)
 
-    # 2. Retornar la plantilla asegurando la clave 'prov_obj'
     return templates.TemplateResponse(
         request=request,
         name="productos.html",
@@ -1308,12 +1252,10 @@ def guardar_producto(
     tags: str = Form(""),
     access_token: str = Cookie(None)
 ):
-    # Verificar usuario autenticado solo por seguridad
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Estructura de datos global (sin usuario_id)
     payload = {
         "codigo_st": codigo_st,
         "codigo_ean": codigo_ean or None,
@@ -1327,7 +1269,6 @@ def guardar_producto(
         "marca": marca.strip(),
     }
 
-    # Actualizar o insertar sin filtrar por usuario
     if id:
         supabase.table("productos").update(payload).eq("id", id).execute()
         prod_id = id
@@ -1335,7 +1276,6 @@ def guardar_producto(
         res = supabase.table("productos").insert(payload).execute()
         prod_id = res.data[0]["id"] if res and res.data else ""
 
-    import urllib.parse
     redirect_url = f"/productos?select={prod_id}"
     if q.strip():
         redirect_url += f"&q={urllib.parse.quote(q.strip())}"
@@ -1350,7 +1290,6 @@ def eliminar_producto(producto_id: str, access_token: str = Cookie(None)):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Eliminar producto por su ID de manera global
     supabase.table("productos").delete().eq("id", producto_id).execute()
 
     return RedirectResponse(url="/productos", status_code=303)
@@ -1360,7 +1299,6 @@ async def cargar_lista_productos(
     archivo: UploadFile = File(...),
     access_token: str = Cookie(None)
 ):
-    # Validar autenticación de usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
@@ -1369,7 +1307,6 @@ async def cargar_lista_productos(
     nombre = archivo.filename.lower()
     filas = []
 
-    # 1. Lectura si el archivo es un Excel (.xlsx)
     if nombre.endswith(".xlsx"):
         df = pd.read_excel(io.BytesIO(contenido))
         for _, r in df.iterrows():
@@ -1383,7 +1320,6 @@ async def cargar_lista_productos(
                 "costo": r.get("CostoActual", 0)
             })
 
-    # 2. Lectura si el archivo es XML (.xml)
     elif nombre.endswith(".xml"):
         root = ET.fromstring(contenido)
         for item in (root.findall(".//Producto") or root):
@@ -1397,7 +1333,6 @@ async def cargar_lista_productos(
                 "costo": item.findtext("CostoActual", "0")
             })
 
-    # 3. Formateo de datos
     payload = []
     for f in filas:
         raw_cod = f["codigo"].split(".")[0].strip()
@@ -1405,7 +1340,6 @@ async def cargar_lista_productos(
 
         desc = f["descripcion"].strip().upper() if f["descripcion"] and f["descripcion"] != "nan" else ""
         marca = f["marca"].strip().upper() if f["marca"] and f["marca"] != "nan" else ""
-        nombre_final = f"{desc} {marca}".strip() if marca else desc
 
         costo_raw = f["costo"]
         precio = 0.0
@@ -1434,7 +1368,6 @@ async def cargar_lista_productos(
                 "precio": precio
             })
 
-    # Upsert global usando solo codigo_st como conflicto
     if payload:
         supabase.table("productos").upsert(
             payload, 
@@ -1443,32 +1376,26 @@ async def cargar_lista_productos(
 
     return RedirectResponse(url="/productos", status_code=303)
 
-    # --- RUTAS DE ANÁLISIS DE PEDIDO ---
-
 @app.get("/analisis-pedido")
 def vista_analisis_pedido(request: Request, access_token: str = Cookie(None)):
-    # Verifica autenticación del usuario
     user = obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Obtiene lista de proveedores para el buscador desplegable
     res_prov = supabase.table("proveedores").select("id, nombre").order("nombre").execute()
     proveedores = res_prov.data if res_prov and res_prov.data else []
 
-    return templates.TemplateResponse(request, "analisis_pedido.html", {
+    return templates.TemplateResponse(request=request, name="analisis_pedido.html", context={
         "proveedores": proveedores
     })
 
 @app.get("/api/productos/buscar-codigo/{codigo}")
 def buscar_producto_por_codigo(codigo: str, access_token: str = Cookie(None)):
-    # Endpoint JSON para consulta fluida sin recargar página
     user = obtener_usuario_actual(access_token)
     if not user:
         return JSONResponse(status_code=401, content={"encontrado": False})
 
     codigo_limpio = codigo.strip()
-    # Busca en Supabase coincidencia exacta por codigo_st
     res = supabase.table("productos").select("*").eq("codigo_st", codigo_limpio).execute()
     
     if res.data and len(res.data) > 0:
@@ -1483,23 +1410,18 @@ def buscar_producto_por_codigo(codigo: str, access_token: str = Cookie(None)):
     
     return {"encontrado": False}
 
-# --- RUTAS API DE CLASIFICACIÓN E IMPORTACIÓN PARA ANÁLISIS DE PEDIDO ---
-
 @app.get("/api/clasificacion")
 def api_obtener_clasificacion(
     proveedor_id: Optional[int] = None, 
     access_token: str = Cookie(None)
 ):
-    """Obtiene las distintas clasificaciones (departamento, grupo, subgrupo) de los productos de un proveedor."""
-    user = obtener_usuario_actual(access_token) # Verifica que exista sesión activa
+    user = obtener_usuario_actual(access_token)
     if not user or not proveedor_id:
         return []
 
-    # Consulta en Supabase solo las columnas de clasificación para el proveedor seleccionado
     res = supabase.table("productos").select("departamento, grupo, subgrupo").eq("proveedor_id", proveedor_id).execute()
     productos = res.data or []
 
-    # Genera lista de clasificaciones únicas filtrando duplicados
     resultado = []
     vistos = set()
     for p in productos:
@@ -1518,7 +1440,6 @@ def api_obtener_clasificacion(
 
     return resultado
 
-
 @app.get("/api/productos/importar-analisis")
 def api_importar_productos_analisis(
     proveedor_id: Optional[int] = None,
@@ -1527,15 +1448,12 @@ def api_importar_productos_analisis(
     subgrupo: Optional[str] = "",
     access_token: str = Cookie(None)
 ):
-    """Retorna los productos de un proveedor filtrados dinámicamente por departamento, grupo o subgrupo."""
-    user = obtener_usuario_actual(access_token) # Verifica sesión activa
+    user = obtener_usuario_actual(access_token)
     if not user or not proveedor_id:
         return []
 
-    # Inicia la consulta filtrando por el proveedor
     query = supabase.table("productos").select("*").eq("proveedor_id", proveedor_id)
 
-    # Aplica filtros opcionales de clasificación si vienen informados
     if departamento and departamento.strip():
         query = query.eq("departamento", departamento.strip())
     if grupo and grupo.strip():
@@ -1546,7 +1464,6 @@ def api_importar_productos_analisis(
     res = query.execute()
     productos = res.data or []
 
-    # Retorna la estructura limpia formateada para la tabla
     return [
         {
             "codigo": p.get("codigo_st") or p.get("codigo", ""),
@@ -1556,45 +1473,48 @@ def api_importar_productos_analisis(
         }
         for p in productos
     ]
-# Endpoint para consultar el detalle completo de una orden por su número
+
 @app.get("/ordenes/obtener_detalle/{numero_orden}")
 async def obtener_detalle_oc(numero_orden: str, access_token: str = Cookie(None)):
-    # Valida la sesión del usuario activo
     user = obtener_usuario_actual(access_token)
     if not user:
         return {"status": "error", "mensaje": "No autorizado", "productos": []}
 
-    # Consulta la orden y sus detalles asociados en Supabase
     res = supabase.table("ordenes_compra").select("*, detalles_productos(*)").eq("numero_orden", numero_orden).eq("usuario_id", user.id).execute()
     
-    # Si la orden no existe en la base de datos, retorna error
     if not res.data:
         return {"status": "error", "mensaje": "Orden no encontrada", "productos": []}
     
     orden = res.data[0]
     detalles = orden.get("detalles_productos") or []
     
-    # Estructura la lista de productos para el modal
     productos_list = []
     for dp in detalles:
         productos_list.append({
-            # Extrae el código del producto
             "codigo": dp.get("codigo") or dp.get("codigo_producto") or "-",
-            # Extrae la descripción del producto
             "descripcion": dp.get("descripcion") or dp.get("nombre_producto") or "Sin descripción",
-            # Extrae la presentación/unidad de manejo (fallback en 1)
             "pre": dp.get("pre") if dp.get("pre") is not None else dp.get("unidad_manejo", 1),
-            # Extrae el número de empaques (fallback en 0)
             "emp": dp.get("emp") if dp.get("emp") is not None else dp.get("empaques", 0),
-            # Extrae la cantidad total
             "cantidad": dp.get("cantidad", 0),
-            # Extrae el precio unitario
             "precio_unitario": float(dp.get("precio_unitario") or 0.0)
         })
             
-    # Retorna la respuesta JSON procesada
     return {
         "status": "ok",
         "numero_orden": orden.get("numero_orden"),
         "productos": productos_list
     }
+
+@app.post("/api/productos/actualizar-analisis")
+def actualizar_productos_desde_analisis(productos: List[ProductoModificado], access_token: str = Cookie(None)):
+    user = obtener_usuario_actual(access_token)
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+    
+    for prod in productos:
+        supabase.table("productos").update({
+            "unidad_manejo": prod.unidad_manejo,
+            "precio": prod.precio
+        }).eq("codigo_st", prod.codigo).execute()
+    
+    return {"status": "success", "mensaje": "Productos actualizados correctamente"}
