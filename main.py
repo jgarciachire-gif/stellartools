@@ -845,14 +845,26 @@ async def procesar_recepciones_xml(
                         no_encontrados.append(nro_oc_limpio)
                         continue
 
-                    res_oc = supabase.table("ordenes_compra").select("id, numero_orden, proveedor, tienda_destino").ilike("numero_orden", f"%{nro_oc_limpio}").eq("usuario_id", user.id).execute()
+                    res_oc = supabase.table("ordenes_compra") \
+                        .select("id, numero_orden, proveedor, tienda_destino, proveedores(nombre)") \
+                        .ilike("numero_orden", f"%{nro_oc_limpio}") \
+                        .eq("usuario_id", user.id) \
+                        .execute()
 
                     if res_oc.data and len(res_oc.data) > 0:
                         orden = res_oc.data[0]
                         orden_id = orden["id"]
-                        num_orden_str = str(orden.get("numero_orden", ""))
-                        prov_str = str(orden.get("proveedor", "N/A"))
-                        tienda_str = str(orden.get("tienda_destino", "N/A"))
+                        num_orden_str = str(orden.get("numero_orden") or "")
+                        
+                        prov_obj = orden.get("proveedores")
+                        if isinstance(prov_obj, dict) and prov_obj.get("nombre"):
+                            prov_str = prov_obj.get("nombre")
+                        elif orden.get("proveedor"):
+                            prov_str = orden.get("proveedor")
+                        else:
+                            prov_str = "Sin Proveedor"
+
+                        tienda_str = str(orden.get("tienda_destino") or "Sin Tienda")
 
                         supabase.table("ordenes_compra").update({
                             "fecha_recepcion": fecha_formateada,
