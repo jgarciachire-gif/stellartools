@@ -6,3 +6,4 @@ python-multipart
 pandas
 pdfplumber
 supabase
+itsdangerous
