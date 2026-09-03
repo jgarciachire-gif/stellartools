@@ -28,7 +28,8 @@
     </style>
 </head>
 
-<body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
+<body class="bg-cover bg-center bg-no-repeat bg-fixed text-slate-800 min-h-screen flex flex-col font-sans antialiased"
+    style="background-image: url('/static/fondo-login.jpg');">
 
     <!-- Banner superior con gradiente elegante de izquierda a derecha -->
     <header
@@ -96,9 +97,11 @@
         </div>
     </header>
 
-    <main class="flex-1 p-4 md:p-6 max-w-[1800px] w-full mx-auto">
+    <main class="flex-1 w-full p-4 md:p-6 bg-slate-100/1 backdrop-blur-sm">
         {% block content %}{% endblock %}
     </main>
+
+    {% block modals %}{% endblock %}
 </body>
 
 </html>

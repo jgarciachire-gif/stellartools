@@ -10,7 +10,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
-<body class="bg-slate-100 flex items-center justify-center min-h-screen p-4">
+<body class="flex items-center justify-center min-h-screen p-4">
 
     <!-- Modal de Alertas (Éxito, Error, Info) -->
     <div id="modal-alerta"
@@ -62,7 +62,7 @@
     <!-- Tarjeta Principal -->
     <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-slate-200">
         <div class="text-center mb-8">
-            <i class="fa-solid fa-boxes-packing text-blue-600 text-5xl mb-3"></i>
+            <i class="fa-solid fa-boxes-packing text-slate-800 text-5xl mb-3"></i>
             <h1 class="text-2xl font-bold text-slate-800">StellarTools+</h1>
             <p class="text-sm text-slate-500">Control de Compras ERP</p>
         </div>
@@ -70,7 +70,7 @@
         <!-- Tabs Login / Registro -->
         <div class="flex border-b border-slate-200 mb-6">
             <button onclick="mostrarFormulario('login')" id="btn-login"
-                class="flex-1 py-2 font-bold text-blue-600 border-b-2 border-blue-600 transition">Ingresar</button>
+                class="flex-1 py-2 font-bold text-slate-600 border-b-2 border-slate-600 transition">Ingresar</button>
             <button onclick="mostrarFormulario('registro')" id="btn-registro"
                 class="flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition">Crear Cuenta</button>
         </div>
@@ -104,17 +104,17 @@
             <div>
                 <label class="block text-xs font-bold text-slate-600 mb-1">Correo Electrónico</label>
                 <input type="email" name="email" required
-                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 focus:outline-none">
             </div>
             <div>
                 <div class="flex justify-between items-center mb-1">
                     <label class="block text-xs font-bold text-slate-600 ">Contraseña</label>
                     <button type="button" onclick="toggleModalReset(true)"
-                        class="text-xs text-blue-600 hover:underline font-semibold">¿Olvidaste tu contraseña?</button>
+                        class="text-xs text-slate-900 hover:underline font-semibold">¿Olvidaste tu contraseña?</button>
                 </div>
                 <div class="relative">
                     <input type="password" id="login-pass" name="password" required
-                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-slate-500 focus:outline-none">
                     <button type="button" onclick="togglePassword('login-pass', 'eye-login')"
                         class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
                         <i id="eye-login" class="fa-solid fa-eye"></i>
@@ -122,7 +122,7 @@
                 </div>
             </div>
             <button type="submit"
-                class="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition mt-2">
+                class="w-full py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl shadow transition mt-2">
                 Iniciar Sesión
             </button>
         </form>
@@ -132,14 +132,14 @@
             <div>
                 <label class="block text-xs font-bold text-slate-600 mb-1">Correo Electrónico</label>
                 <input type="email" name="email" required
-                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-800 focus:outline-none">
             </div>
             <div>
                 <label class="block text-xs font-bold text-slate-600 mb-1">Crea una Contraseña (Mín. 6
                     caracteres)</label>
                 <div class="relative">
                     <input type="password" id="reg-pass" name="password" minlength="6" required
-                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none">
+                        class="w-full px-4 py-2 pr-10 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-emerald-800 focus:outline-none">
                     <button type="button" onclick="togglePassword('reg-pass', 'eye-reg')"
                         class="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600">
                         <i id="eye-reg" class="fa-solid fa-eye"></i>
@@ -147,7 +147,7 @@
                 </div>
             </div>
             <button type="submit"
-                class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition mt-2">
+                class="w-full py-3 bg-emerald-800 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition mt-2">
                 Registrarse
             </button>
         </form>
@@ -163,7 +163,7 @@
 
             if (tipo === 'login') {
                 fLogin.classList.remove('hidden'); fRegistro.classList.add('hidden');
-                bLogin.className = "flex-1 py-2 font-bold text-blue-600 border-b-2 border-blue-600 transition";
+                bLogin.className = "flex-1 py-2 font-bold text-slate-600 border-b-2 border-slate-600 transition";
                 bRegistro.className = "flex-1 py-2 font-bold text-slate-400 hover:text-slate-600 transition";
             } else {
                 fRegistro.classList.remove('hidden'); fLogin.classList.add('hidden');
@@ -215,26 +215,21 @@
 
         function cerrarModalAlerta() {
             document.getElementById('modal-alerta').classList.add('hidden');
-            // Limpia los parámetros URL si los hay
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
-        // Reemplazar la sección window.addEventListener('DOMContentLoaded', ...) antigua por esta:
         window.addEventListener('DOMContentLoaded', () => {
-            // Captura el token hash devuelto por Supabase cuando el usuario abre el enlace del correo
             const hash = window.location.hash;
             if (hash && hash.includes('access_token=')) {
                 const params = new URLSearchParams(hash.replace('#', '?'));
                 const token = params.get('access_token');
                 if (token) {
-                    // Setea el token en las cookies y redirige al modo de reseteo
                     document.cookie = `access_token=${token}; path=/; max-age=3600`;
                     window.location.href = '/reset-password';
                     return;
                 }
             }
 
-            // Muestra el modal de alerta si existen parámetros de notificación en la URL
             const params = new URLSearchParams(window.location.search);
             if (params.has('msg_tipo')) {
                 mostrarModalAlerta(
@@ -242,6 +237,12 @@
                     params.get('msg_titulo') || 'Notificación',
                     params.get('msg_texto') || ''
                 );
+            }
+        });
+
+        window.addEventListener('pageshow', (event) => {
+            if (event.persisted || (performance.navigation && performance.navigation.type === 2)) {
+                window.location.reload();
             }
         });
     </script>

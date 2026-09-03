@@ -93,7 +93,7 @@
                 </button>
 
                 <div id="dropdown-opciones"
-                    class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                    class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50">
                     <!-- Opción para Cargar Órdenes (PDF) -->
                     <button type="button" onclick="abrirModalCargarOC();"
                         class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
@@ -1338,11 +1338,13 @@
         }
     }
 </script>
+{% endblock %}
 
+{% block modals %}
 <!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
 <div id="modal-cargar-oc"
-    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+    <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF)
         </h3>
@@ -1385,8 +1387,8 @@
 
 <!-- Modal 2: Cargar Recepciones (XML) -->
 <div id="modal-cargar-xml"
-    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+    <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML)
         </h3>

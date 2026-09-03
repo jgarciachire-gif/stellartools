@@ -146,9 +146,15 @@ async def chrome_devtools_silencer():
 
 @app.get("/login")
 def vista_login(request: Request):
-    token = request.cookies.get("access_token")
-    if obtener_usuario_actual(token):
+    access_token = request.cookies.get("access_token")
+    refresh_token = request.cookies.get("refresh_token")
+    
+    if not access_token and not refresh_token:
+        return templates.TemplateResponse(request=request, name="login.html", context={})
+
+    if obtener_usuario_actual(access_token, refresh_token):
         return RedirectResponse(url="/", status_code=303)
+
     return templates.TemplateResponse(request=request, name="login.html", context={})
 
 @app.post("/registro")
@@ -236,8 +242,8 @@ def procesar_reset_password(access_token: str = Cookie(None), nueva_password: st
 @app.get("/logout")
 def cerrar_sesion():
     response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie("access_token")
-    response.delete_cookie("refresh_token")
+    response.delete_cookie("access_token", path="/")
+    response.delete_cookie("refresh_token", path="/")
     return response
 
 @app.middleware("http")
@@ -252,6 +258,11 @@ async def cargar_perfil_middleware(request: Request, call_next):
             request.state.perfil = res.data if res and res.data else None  
             
     response = await call_next(request)
+
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
     return response
   
 @app.get("/")

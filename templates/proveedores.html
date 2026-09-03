@@ -305,401 +305,403 @@
         </div>
         {% endif %}
     </div>
-    <!-- Modal para Crear / Editar Proveedor -->
-    <div id="modal-proveedor"
-        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-        <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100">
-            <!-- Título del modal -->
-            <h3 id="titulo-modal-prov" class="text-lg font-bold text-slate-800 mb-4">Crear Nuevo Proveedor</h3>
+</div>
+{% endblock %}
 
-            <!-- Formulario para creación de proveedor -->
-            <form id="form-proveedor-modal" action="/proveedores/guardar" method="POST"
-                onsubmit="sincronizarCategoriasSubmit(this)" class="space-y-4">
+{% block modals %}
+<!-- Modal para Crear / Editar Proveedor -->
+< id="modal-proveedor"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100">
+        <!-- Título del modal -->
+        <h3 id="titulo-modal-prov" class="text-lg font-bold text-slate-800 mb-4">Crear Nuevo Proveedor</h3>
 
-                <!-- ID oculto vacío para indicar inserción de nuevo registro -->
-                <input type="hidden" id="prov_id_modal" name="id" value="">
+        <!-- Formulario para creación de proveedor -->
+        <form id="form-proveedor-modal" action="/proveedores/guardar" method="POST"
+            onsubmit="sincronizarCategoriasSubmit(this)" class="space-y-4">
 
-                <!-- Campo oculto para empaquetar categorías en formato JSON -->
-                <input type="hidden" name="categorias" value="[]">
+            <!-- ID oculto vacío para indicar inserción de nuevo registro -->
+            <input type="hidden" id="prov_id_modal" name="id" value="">
 
-                <!-- Campos de entrada del proveedor (habilitados y sin datos precargados) -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <!-- Campo oculto para empaquetar categorías en formato JSON -->
+            <input type="hidden" name="categorias" value="[]">
+
+            <!-- Campos de entrada del proveedor (habilitados y sin datos precargados) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Código</label>
+                    <input type="text" name="codigo" value="" placeholder="Rif"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Nombre / Razón Social</label>
+                    <input type="text" name="nombre" value="" placeholder="Nombre del proveedor" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Contacto / Atención</label>
+                    <input type="text" name="contacto" value="" placeholder="Persona de contacto"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono</label>
+                    <input type="text" name="telefono" value="" placeholder="Ej. +58 412..."
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                </div>
+                <div class="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+
                     <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Código</label>
-                        <input type="text" name="codigo" value="" placeholder="Rif"
+                        <label class="block text-xs font-medium text-slate-600 mb-1">Correo Electrónico</label>
+                        <input type="email" name="email" value="" placeholder="ejemplo@proveedor.com"
                             class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
                     </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Nombre / Razón Social</label>
-                        <input type="text" name="nombre" value="" placeholder="Nombre del proveedor" required
-                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Contacto / Atención</label>
-                        <input type="text" name="contacto" value="" placeholder="Persona de contacto"
-                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
-                    </div>
-                    <div>
-                        <label class="block text-xs font-medium text-slate-600 mb-1">Teléfono</label>
-                        <input type="text" name="telefono" value="" placeholder="Ej. +58 412..."
-                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
-                    </div>
-                    <div class="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-
+                    <div class="grid grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-xs font-medium text-slate-600 mb-1">Correo Electrónico</label>
-                            <input type="email" name="email" value="" placeholder="ejemplo@proveedor.com"
-                                class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
+                            <label class="block text-xs font-medium text-slate-600 mb-1 truncate"
+                                title="Días de Crédito">Días Crédito</label>
+                            <input type="number" name="dias_credito" value="0" min="0" max="99"
+                                oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
+                                class="w-full px-3 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
                         </div>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <label class="block text-xs font-medium text-slate-600 mb-1 truncate"
-                                    title="Días de Crédito">Días Crédito</label>
-                                <input type="number" name="dias_credito" value="0" min="0" max="99"
-                                    oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
-                                    class="w-full px-3 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
-                            </div>
-                            <div>
-                                <label class="block text-xs font-medium text-slate-600 mb-1 truncate"
-                                    title="Frecuencia de Pedidos">Frecuencia Pedidos</label>
-                                <input type="number" name="dias_despacho" value="3" min="0" max="99"
-                                    oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
-                                    class="w-full px-3 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
-                            </div>
+                        <div>
+                            <label class="block text-xs font-medium text-slate-600 mb-1 truncate"
+                                title="Frecuencia de Pedidos">Frecuencia Pedidos</label>
+                            <input type="number" name="dias_despacho" value="3" min="0" max="99"
+                                oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
+                                class="w-full px-3 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-colors">
                         </div>
                     </div>
                 </div>
+            </div>
 
-                <!-- Sección para añadir etiquetas/categorías en el modal -->
-                <div class="mb-6 seccion-badges">
-                    <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Categorías /
-                        Etiquetas</label>
-                    <div class="contenedor-badges flex flex-wrap items-center gap-2 mb-2">
-                        <p class="sin-badges-msg text-xs text-slate-400 italic">Sin categorías asignadas.</p>
-                    </div>
-
-                    <!-- Input y botón para añadir etiquetas localmente -->
-                    <div class="inline-flex items-center gap-2 mt-2 relative w-64">
-                        <div class="relative flex-1">
-                            <input type="text"
-                                class="input-badge w-full px-3 py-1 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                                placeholder="Ej. Lácteos..." oninput="mostrarSugerenciasEtiquetas(this)">
-                            <div
-                                class="sugerencias-etiquetas hidden absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-30 max-h-36 overflow-y-auto">
-                            </div>
-                        </div>
-                        <button type="button" onclick="agregarBadgeFicha(this)"
-                            class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shrink-0">
-                            <i class="fa-solid fa-plus mr-1"></i> Agregar
-                        </button>
-                    </div>
+            <!-- Sección para añadir etiquetas/categorías en el modal -->
+            <div class="mb-6 seccion-badges">
+                <label class="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Categorías /
+                    Etiquetas</label>
+                <div class="contenedor-badges flex flex-wrap items-center gap-2 mb-2">
+                    <p class="sin-badges-msg text-xs text-slate-400 italic">Sin categorías asignadas.</p>
                 </div>
 
-                <!-- Botones de Acción visibiles para guardar o cerrar -->
-                <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
-                    <button type="button" onclick="cerrarModalCrear()"
-                        class="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-sm transition">
-                        Cancelar
+                <!-- Input y botón para añadir etiquetas localmente -->
+                <div class="inline-flex items-center gap-2 mt-2 relative w-64">
+                    <div class="relative flex-1">
+                        <input type="text"
+                            class="input-badge w-full px-3 py-1 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            placeholder="Ej. Lácteos..." oninput="mostrarSugerenciasEtiquetas(this)">
+                        <div
+                            class="sugerencias-etiquetas hidden absolute left-0 top-full mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg z-30 max-h-36 overflow-y-auto">
+                        </div>
+                    </div>
+                    <button type="button" onclick="agregarBadgeFicha(this)"
+                        class="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition shrink-0">
+                        <i class="fa-solid fa-plus mr-1"></i> Agregar
                     </button>
+                </div>
+            </div>
+
+            <!-- Botones de Acción visibiles para guardar o cerrar -->
+            <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                <button type="button" onclick="cerrarModalCrear()"
+                    class="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-sm transition">
+                    Cancelar
+                </button>
+                <button type="submit"
+                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar
+                </button>
+            </div>
+        </form>
+
+
+    </div>
+
+    <!-- Modal para Cargar Data XML desde el Menú -->
+    <div id="modal-xml-menu"
+        class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+        <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Cargar Data XML</h3>
+            <p class="text-xs text-slate-500 mb-4">Selecciona el archivo XML con el directorio para actualizar la
+                información de proveedores.</p>
+            <form action="/proveedores/importar-xml" method="POST" enctype="multipart/form-data" class="space-y-4">
+                <input type="file" name="archivo_xml" accept=".xml" required
+                    class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="document.getElementById('modal-xml-menu').classList.add('hidden')"
+                        class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancelar</button>
                     <button type="submit"
-                        class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2">
-                        <i class="fa-solid fa-floppy-disk"></i> Guardar
-                    </button>
+                        class="px-4 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">Procesar
+                        XML</button>
                 </div>
             </form>
-
-
         </div>
+    </div>
 
-        <!-- Modal para Cargar Data XML desde el Menú -->
-        <div id="modal-xml-menu"
-            class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-            <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100">
-                <h3 class="text-lg font-bold text-slate-800 mb-2">Cargar Data XML</h3>
-                <p class="text-xs text-slate-500 mb-4">Selecciona el archivo XML con el directorio para actualizar la
-                    información de proveedores.</p>
-                <form action="/proveedores/importar-xml" method="POST" enctype="multipart/form-data" class="space-y-4">
-                    <input type="file" name="archivo_xml" accept=".xml" required
-                        class="block w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
-                    <div class="flex justify-end gap-2 pt-2">
-                        <button type="button"
-                            onclick="document.getElementById('modal-xml-menu').classList.add('hidden')"
-                            class="px-4 py-2 text-xs font-medium text-slate-600 bg-slate-100 rounded-lg hover:bg-slate-200">Cancelar</button>
-                        <button type="submit"
-                            class="px-4 py-2 text-xs font-medium text-white bg-indigo-600 rounded-lg hover:bg-indigo-700">Procesar
-                            XML</button>
-                    </div>
-                </form>
-            </div>
-        </div>
+    <script>
 
-        <script>
+        let etiquetasFiltro = [];
 
-            let etiquetasFiltro = [];
+        // Cargar estado previo de búsqueda desde sessionStorage
+        function cargarEstadoBusqueda() {
+            const textoGuardado = sessionStorage.getItem('prov_busqueda_texto') || '';
+            const etiquetasGuardadas = sessionStorage.getItem('prov_busqueda_etiquetas');
 
-            // Cargar estado previo de búsqueda desde sessionStorage
-            function cargarEstadoBusqueda() {
-                const textoGuardado = sessionStorage.getItem('prov_busqueda_texto') || '';
-                const etiquetasGuardadas = sessionStorage.getItem('prov_busqueda_etiquetas');
-
-                if (etiquetasGuardadas) {
-                    try {
-                        etiquetasFiltro = JSON.parse(etiquetasGuardadas);
-                    } catch (e) {
-                        etiquetasFiltro = [];
-                    }
-                }
-
-                const busquedaInput = document.getElementById('busqueda_proveedores');
-                if (busquedaInput) {
-                    busquedaInput.value = textoGuardado;
-                }
-
-                renderizarEtiquetas();
-                filtrarProveedores();
-            }
-
-            // Guardar el estado actual en sessionStorage
-            function guardarEstadoBusqueda() {
-                const busquedaInput = document.getElementById('busqueda_proveedores');
-                const valorInput = busquedaInput ? busquedaInput.value : '';
-
-                sessionStorage.setItem('prov_busqueda_texto', valorInput);
-                sessionStorage.setItem('prov_busqueda_etiquetas', JSON.stringify(etiquetasFiltro));
-            }
-
-            // Agregar etiqueta dinámica
-            function agregarEtiqueta(tipo, valor) {
-                const existe = etiquetasFiltro.some(f => f.tipo === tipo && f.valor.toLowerCase() === valor.toLowerCase());
-                if (!existe) {
-                    etiquetasFiltro.push({ tipo, valor });
-                    guardarEstadoBusqueda();
-                    renderizarEtiquetas();
-                    filtrarProveedores();
+            if (etiquetasGuardadas) {
+                try {
+                    etiquetasFiltro = JSON.parse(etiquetasGuardadas);
+                } catch (e) {
+                    etiquetasFiltro = [];
                 }
             }
 
-            // Remover etiqueta individual
-            function removerEtiqueta(index) {
-                etiquetasFiltro.splice(index, 1);
+            const busquedaInput = document.getElementById('busqueda_proveedores');
+            if (busquedaInput) {
+                busquedaInput.value = textoGuardado;
+            }
+
+            renderizarEtiquetas();
+            filtrarProveedores();
+        }
+
+        // Guardar el estado actual en sessionStorage
+        function guardarEstadoBusqueda() {
+            const busquedaInput = document.getElementById('busqueda_proveedores');
+            const valorInput = busquedaInput ? busquedaInput.value : '';
+
+            sessionStorage.setItem('prov_busqueda_texto', valorInput);
+            sessionStorage.setItem('prov_busqueda_etiquetas', JSON.stringify(etiquetasFiltro));
+        }
+
+        // Agregar etiqueta dinámica
+        function agregarEtiqueta(tipo, valor) {
+            const existe = etiquetasFiltro.some(f => f.tipo === tipo && f.valor.toLowerCase() === valor.toLowerCase());
+            if (!existe) {
+                etiquetasFiltro.push({ tipo, valor });
                 guardarEstadoBusqueda();
                 renderizarEtiquetas();
                 filtrarProveedores();
             }
+        }
 
-            // Renderizar badges en el buscador
-            function renderizarEtiquetas() {
-                const contenedor = document.getElementById('lista-etiquetas');
-                if (!contenedor) return;
+        // Remover etiqueta individual
+        function removerEtiqueta(index) {
+            etiquetasFiltro.splice(index, 1);
+            guardarEstadoBusqueda();
+            renderizarEtiquetas();
+            filtrarProveedores();
+        }
 
-                contenedor.innerHTML = '';
-                etiquetasFiltro.forEach((f, idx) => {
-                    const badge = document.createElement('span');
-                    badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
-                    badge.innerHTML = `
+        // Renderizar badges en el buscador
+        function renderizarEtiquetas() {
+            const contenedor = document.getElementById('lista-etiquetas');
+            if (!contenedor) return;
+
+            contenedor.innerHTML = '';
+            etiquetasFiltro.forEach((f, idx) => {
+                const badge = document.createElement('span');
+                badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
+                badge.innerHTML = `
             <span class="text-[10px] text-blue-500 uppercase font-bold">${f.tipo}:</span>
             <span>${f.valor}</span>
             <button type="button" onclick="removerEtiqueta(${idx})" class="hover:text-rose-600 ml-0.5 focus:outline-none">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
         `;
-                    contenedor.appendChild(badge);
+                contenedor.appendChild(badge);
+            });
+        }
+
+        function normalizarTexto(texto) {
+            if (!texto) return '';
+            return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        }
+
+        // Filtrar la lista del directorio en tiempo real por datos y etiquetas/categorías
+        function filtrarProveedores() {
+            const busquedaInput = document.getElementById('busqueda_proveedores');
+            const textoInput = normalizarTexto(busquedaInput ? busquedaInput.value : '');
+            const elementos = document.querySelectorAll('.prov-item');
+
+            elementos.forEach(item => {
+                const codigo = normalizarTexto(item.getAttribute('data-codigo'));
+                const nombre = normalizarTexto(item.getAttribute('data-nombre'));
+                const contacto = normalizarTexto(item.getAttribute('data-contacto'));
+
+                let categorias = [];
+                try {
+                    categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
+                } catch (e) {
+                    categorias = [];
+                }
+                const textoCategorias = normalizarTexto(categorias.join(' '));
+
+                const contenidoCompleto = `${codigo} ${nombre} ${contacto} ${textoCategorias}`;
+
+                const matchTexto = textoInput === '' || contenidoCompleto.includes(textoInput);
+
+                const matchEtiquetas = etiquetasFiltro.every(f => {
+                    const val = normalizarTexto(f.valor);
+                    return contenidoCompleto.includes(val);
                 });
-            }
 
-            function normalizarTexto(texto) {
-                if (!texto) return '';
-                return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
-            }
-
-            // Filtrar la lista del directorio en tiempo real por datos y etiquetas/categorías
-            function filtrarProveedores() {
-                const busquedaInput = document.getElementById('busqueda_proveedores');
-                const textoInput = normalizarTexto(busquedaInput ? busquedaInput.value : '');
-                const elementos = document.querySelectorAll('.prov-item');
-
-                elementos.forEach(item => {
-                    const codigo = normalizarTexto(item.getAttribute('data-codigo'));
-                    const nombre = normalizarTexto(item.getAttribute('data-nombre'));
-                    const contacto = normalizarTexto(item.getAttribute('data-contacto'));
-
-                    let categorias = [];
-                    try {
-                        categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
-                    } catch (e) {
-                        categorias = [];
-                    }
-                    const textoCategorias = normalizarTexto(categorias.join(' '));
-
-                    const contenidoCompleto = `${codigo} ${nombre} ${contacto} ${textoCategorias}`;
-
-                    const matchTexto = textoInput === '' || contenidoCompleto.includes(textoInput);
-
-                    const matchEtiquetas = etiquetasFiltro.every(f => {
-                        const val = normalizarTexto(f.valor);
-                        return contenidoCompleto.includes(val);
-                    });
-
-                    if (matchTexto && matchEtiquetas) {
-                        item.style.display = '';
-                    } else {
-                        item.style.display = 'none';
-                    }
-                });
-            }
-
-            // Alternar visibilidad del menú de tres puntos
-            function toggleMenuOpciones() {
-                const dropdown = document.getElementById('dropdown-opciones');
-                if (dropdown) dropdown.classList.toggle('hidden');
-            }
-
-            // Cerrar menú desplegable al hacer clic fuera
-            document.addEventListener('click', (e) => {
-                const dropdown = document.getElementById('dropdown-opciones');
-                if (dropdown && !dropdown.contains(e.target) && !e.target.closest('button[onclick="toggleMenuOpciones()"]')) {
-                    dropdown.classList.add('hidden');
+                if (matchTexto && matchEtiquetas) {
+                    item.style.display = '';
+                } else {
+                    item.style.display = 'none';
                 }
             });
+        }
 
-            // Abrir Modal para crear nuevo proveedor
-            function abrirModalCrear() {
-                // Referencia al título del modal
-                const titulo = document.getElementById('titulo-modal-prov');
-                // Referencia al formulario del modal
-                const form = document.getElementById('form-proveedor-modal');
-                // Referencia al contenedor modal
-                const modal = document.getElementById('modal-proveedor');
+        // Alternar visibilidad del menú de tres puntos
+        function toggleMenuOpciones() {
+            const dropdown = document.getElementById('dropdown-opciones');
+            if (dropdown) dropdown.classList.toggle('hidden');
+        }
 
-                // Establecer el título
-                if (titulo) titulo.textContent = 'Crear Nuevo Proveedor';
+        // Cerrar menú desplegable al hacer clic fuera
+        document.addEventListener('click', (e) => {
+            const dropdown = document.getElementById('dropdown-opciones');
+            if (dropdown && !dropdown.contains(e.target) && !e.target.closest('button[onclick="toggleMenuOpciones()"]')) {
+                dropdown.classList.add('hidden');
+            }
+        });
 
-                // Limpiar valores del formulario
-                if (form) form.reset();
+        // Abrir Modal para crear nuevo proveedor
+        function abrirModalCrear() {
+            // Referencia al título del modal
+            const titulo = document.getElementById('titulo-modal-prov');
+            // Referencia al formulario del modal
+            const form = document.getElementById('form-proveedor-modal');
+            // Referencia al contenedor modal
+            const modal = document.getElementById('modal-proveedor');
 
-                // Asegurar que el ID enviado sea nulo/vacío
-                const provId = document.getElementById('prov_id_modal');
-                if (provId) provId.value = '';
+            // Establecer el título
+            if (titulo) titulo.textContent = 'Crear Nuevo Proveedor';
 
-                // Restablecer la lista gráfica de etiquetas a su estado inicial
-                if (form) {
-                    const contenedorBadges = form.querySelector('.contenedor-badges');
-                    if (contenedorBadges) {
-                        contenedorBadges.innerHTML = '<p class="sin-badges-msg text-xs text-slate-400 italic">Sin categorías asignadas.</p>';
-                    }
+            // Limpiar valores del formulario
+            if (form) form.reset();
+
+            // Asegurar que el ID enviado sea nulo/vacío
+            const provId = document.getElementById('prov_id_modal');
+            if (provId) provId.value = '';
+
+            // Restablecer la lista gráfica de etiquetas a su estado inicial
+            if (form) {
+                const contenedorBadges = form.querySelector('.contenedor-badges');
+                if (contenedorBadges) {
+                    contenedorBadges.innerHTML = '<p class="sin-badges-msg text-xs text-slate-400 italic">Sin categorías asignadas.</p>';
                 }
-
-                // Mostrar el modal eliminando la clase hidden
-                if (modal) modal.classList.remove('hidden');
             }
 
-            // Cerrar Modal de Proveedor
-            function cerrarModalCrear() {
-                const modal = document.getElementById('modal-proveedor');
-                if (modal) modal.classList.add('hidden');
-            }
+            // Mostrar el modal eliminando la clase hidden
+            if (modal) modal.classList.remove('hidden');
+        }
 
-            // Extrae todas las etiquetas únicas creadas en los proveedores existentes
-            function obtenerTodasLasEtiquetasExistentes() {
-                const etiquetasSet = new Set();
-                document.querySelectorAll('.prov-item').forEach(item => {
-                    try {
-                        const categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
-                        categorias.forEach(cat => etiquetasSet.add(cat.trim()));
-                    } catch (e) { }
-                });
-                return Array.from(etiquetasSet);
-            }
+        // Cerrar Modal de Proveedor
+        function cerrarModalCrear() {
+            const modal = document.getElementById('modal-proveedor');
+            if (modal) modal.classList.add('hidden');
+        }
 
-            // Filtra y muestra el menú flotante de sugerencias
-            function mostrarSugerenciasEtiquetas(inputElement) {
-                const contenedorRelativo = inputElement.closest('.relative');
-                const menuSugerencias = contenedorRelativo.querySelector('.sugerencias-etiquetas');
-                const query = normalizarTexto(inputElement.value);
+        // Extrae todas las etiquetas únicas creadas en los proveedores existentes
+        function obtenerTodasLasEtiquetasExistentes() {
+            const etiquetasSet = new Set();
+            document.querySelectorAll('.prov-item').forEach(item => {
+                try {
+                    const categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
+                    categorias.forEach(cat => etiquetasSet.add(cat.trim()));
+                } catch (e) { }
+            });
+            return Array.from(etiquetasSet);
+        }
 
-                if (!query) {
-                    menuSugerencias.classList.add('hidden');
-                    menuSugerencias.innerHTML = '';
-                    return;
-                }
+        // Filtra y muestra el menú flotante de sugerencias
+        function mostrarSugerenciasEtiquetas(inputElement) {
+            const contenedorRelativo = inputElement.closest('.relative');
+            const menuSugerencias = contenedorRelativo.querySelector('.sugerencias-etiquetas');
+            const query = normalizarTexto(inputElement.value);
 
-                const todasEtiquetas = obtenerTodasLasEtiquetasExistentes();
-                const coincidencias = todasEtiquetas.filter(tag => normalizarTexto(tag).includes(query));
-
-                if (coincidencias.length === 0) {
-                    menuSugerencias.classList.add('hidden');
-                    menuSugerencias.innerHTML = '';
-                    return;
-                }
-
-                menuSugerencias.innerHTML = '';
-                coincidencias.forEach(tag => {
-                    const itemBtn = document.createElement('button');
-                    itemBtn.type = 'button';
-                    itemBtn.className = 'w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors block';
-                    itemBtn.textContent = tag;
-                    itemBtn.onclick = () => seleccionarSugerenciaEtiqueta(inputElement, tag);
-                    menuSugerencias.appendChild(itemBtn);
-                });
-
-                menuSugerencias.classList.remove('hidden');
-            }
-
-            // Inserta el texto seleccionado desde el menú emergente
-            function seleccionarSugerenciaEtiqueta(inputElement, valor) {
-                inputElement.value = valor;
-                const contenedorRelativo = inputElement.closest('.relative');
-                const menuSugerencias = contenedorRelativo.querySelector('.sugerencias-etiquetas');
+            if (!query) {
                 menuSugerencias.classList.add('hidden');
-
-                // Dispara el evento de agregar directamente al seleccionar
-                const btnAgregar = inputElement.closest('.seccion-badges, .flex').querySelector('button[onclick="agregarBadgeFicha(this)"]');
-                if (btnAgregar) agregarBadgeFicha(btnAgregar);
+                menuSugerencias.innerHTML = '';
+                return;
             }
 
-            // Ocultar menú de sugerencias si el usuario hace clic fuera de él
-            document.addEventListener('click', (e) => {
-                if (!e.target.closest('.relative')) {
-                    document.querySelectorAll('.sugerencias-etiquetas').forEach(menu => menu.classList.add('hidden'));
-                }
+            const todasEtiquetas = obtenerTodasLasEtiquetasExistentes();
+            const coincidencias = todasEtiquetas.filter(tag => normalizarTexto(tag).includes(query));
+
+            if (coincidencias.length === 0) {
+                menuSugerencias.classList.add('hidden');
+                menuSugerencias.innerHTML = '';
+                return;
+            }
+
+            menuSugerencias.innerHTML = '';
+            coincidencias.forEach(tag => {
+                const itemBtn = document.createElement('button');
+                itemBtn.type = 'button';
+                itemBtn.className = 'w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 transition-colors block';
+                itemBtn.textContent = tag;
+                itemBtn.onclick = () => seleccionarSugerenciaEtiqueta(inputElement, tag);
+                menuSugerencias.appendChild(itemBtn);
             });
-            // Escuchadores de eventos
-            document.addEventListener('DOMContentLoaded', () => {
-                const busquedaInput = document.getElementById('busqueda_proveedores');
-                const contenedorBuscador = document.getElementById('contenedor-buscador');
 
-                if (contenedorBuscador && busquedaInput) {
-                    contenedorBuscador.addEventListener('click', (e) => {
-                        if (e.target !== busquedaInput && !e.target.closest('button')) {
-                            busquedaInput.focus();
+            menuSugerencias.classList.remove('hidden');
+        }
+
+        // Inserta el texto seleccionado desde el menú emergente
+        function seleccionarSugerenciaEtiqueta(inputElement, valor) {
+            inputElement.value = valor;
+            const contenedorRelativo = inputElement.closest('.relative');
+            const menuSugerencias = contenedorRelativo.querySelector('.sugerencias-etiquetas');
+            menuSugerencias.classList.add('hidden');
+
+            // Dispara el evento de agregar directamente al seleccionar
+            const btnAgregar = inputElement.closest('.seccion-badges, .flex').querySelector('button[onclick="agregarBadgeFicha(this)"]');
+            if (btnAgregar) agregarBadgeFicha(btnAgregar);
+        }
+
+        // Ocultar menú de sugerencias si el usuario hace clic fuera de él
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.relative')) {
+                document.querySelectorAll('.sugerencias-etiquetas').forEach(menu => menu.classList.add('hidden'));
+            }
+        });
+        // Escuchadores de eventos
+        document.addEventListener('DOMContentLoaded', () => {
+            const busquedaInput = document.getElementById('busqueda_proveedores');
+            const contenedorBuscador = document.getElementById('contenedor-buscador');
+
+            if (contenedorBuscador && busquedaInput) {
+                contenedorBuscador.addEventListener('click', (e) => {
+                    if (e.target !== busquedaInput && !e.target.closest('button')) {
+                        busquedaInput.focus();
+                    }
+                });
+            }
+
+            if (busquedaInput) {
+                busquedaInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (busquedaInput.value.trim() !== '') {
+                            agregarEtiqueta('Buscar', busquedaInput.value.trim());
+                            busquedaInput.value = '';
+                            guardarEstadoBusqueda();
                         }
-                    });
-                }
+                    } else if (e.key === 'Backspace' && busquedaInput.value === '' && etiquetasFiltro.length > 0) {
+                        removerEtiqueta(etiquetasFiltro.length - 1);
+                    }
+                });
 
-                if (busquedaInput) {
-                    busquedaInput.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            if (busquedaInput.value.trim() !== '') {
-                                agregarEtiqueta('Buscar', busquedaInput.value.trim());
-                                busquedaInput.value = '';
-                                guardarEstadoBusqueda();
-                            }
-                        } else if (e.key === 'Backspace' && busquedaInput.value === '' && etiquetasFiltro.length > 0) {
-                            removerEtiqueta(etiquetasFiltro.length - 1);
-                        }
-                    });
+                busquedaInput.addEventListener('input', () => {
+                    guardarEstadoBusqueda();
+                    filtrarProveedores();
+                });
+            }
 
-                    busquedaInput.addEventListener('input', () => {
-                        guardarEstadoBusqueda();
-                        filtrarProveedores();
-                    });
-                }
+            // Restaurar el texto y etiquetas del buscador guardados en la sesión
+            cargarEstadoBusqueda();
+        });
+    </script>
 
-                // Restaurar el texto y etiquetas del buscador guardados en la sesión
-                cargarEstadoBusqueda();
-            });
-        </script>
-
-    </div>
     {% endblock %}
