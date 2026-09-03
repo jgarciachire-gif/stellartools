@@ -1140,6 +1140,8 @@ async def crear_orden(
 
             if codigo_raw:
                 codigo = str(codigo_raw).strip()
+                if codigo.isdigit():
+                    codigo = codigo.zfill(6)
                 codigo_sin_ceros = codigo.lstrip("0")
 
                 res_prod = supabase.table("productos").select("id, codigo_st, precio").eq("codigo_st", codigo).execute()
@@ -1234,20 +1236,20 @@ def vista_productos(
         res_prov = supabase.table("proveedores").select("id").ilike("nombre", patron_busqueda).execute()
         ids_prov = [str(p["id"]) for p in res_prov.data] if res_prov.data else []
 
-        # Solo campos de texto para ILIKE
+        # Incluir códigos ST y EAN dentro de las búsquedas por coincidencia parcial de texto
         condiciones = [
-            f"descripcion.ilike.{patron_busqueda}",
-            f"marca.ilike.{patron_busqueda}",
-            f"departamento.ilike.{patron_busqueda}",
-            f"grupo.ilike.{patron_busqueda}"
+            f"codigo_st.ilike.{patron_busqueda}",   # Búsqueda parcial en código ST
+            f"codigo_ean.ilike.{patron_busqueda}",  # Búsqueda parcial en código EAN
+            f"descripcion.ilike.{patron_busqueda}", # Búsqueda parcial en descripción
+            f"marca.ilike.{patron_busqueda}",       # Búsqueda parcial en marca
+            f"departamento.ilike.{patron_busqueda}", # Búsqueda parcial en departamento
+            f"grupo.ilike.{patron_busqueda}"        # Búsqueda parcial en grupo
         ]
 
-        # Si el término es numérico, usa .eq para los campos tipo INTEGER / BIGINT
+        # Mantener la consulta exacta de ID numérico únicamente para el ID de proveedor
         if term_limpio.isdigit():
-            val_num = int(term_limpio)
-            condiciones.append(f"codigo_st.eq.{val_num}")
-            condiciones.append(f"codigo_ean.eq.{val_num}")
-            condiciones.append(f"proveedor_id.eq.{val_num}")
+            val_num = int(term_limpio)  # Conversión a entero
+            condiciones.append(f"proveedor_id.eq.{val_num}")  # Filtro por ID de proveedor
 
         if ids_prov:
             for pid in ids_prov:
@@ -1273,6 +1275,19 @@ def vista_productos(
                 prov_obj = res_sel.data[0]
         except Exception as e:
             print("Error al obtener producto seleccionado:", e)
+
+    if 'term_limpio' in locals() and term_limpio and term_limpio.isdigit() and productos:
+            def evaluar_prioridad(prod):
+                cod_st = str(prod.get("codigo_st", "") or "")  # Convertir el codigo_st a texto de forma segura
+                if cod_st == term_limpio:
+                    return 0  # Coincidencia exacta (máxima prioridad)
+                elif cod_st.startswith(term_limpio):
+                    return 1  # El código comienza con los números ingresados
+                elif term_limpio in cod_st:
+                    return 2  # El código contiene los números ingresados
+                return 3  # Coincidencia en descripción o demás campos (menor prioridad)
+
+            productos.sort(key=evaluar_prioridad)
 
     return templates.TemplateResponse(
         request=request,
@@ -1305,8 +1320,9 @@ def guardar_producto(
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
+    codigo_st_fmt = codigo_st.strip().zfill(6) if codigo_st.strip().isdigit() else codigo_st.strip()
     payload = {
-        "codigo_st": codigo_st,
+        "codigo_st": codigo_st_fmt,
         "codigo_ean": codigo_ean or None,
         "unidad_manejo": unidad_manejo,
         "descripcion": descripcion,

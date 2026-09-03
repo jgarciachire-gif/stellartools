@@ -18,37 +18,46 @@
 
 <body class="bg-slate-100 text-slate-800 min-h-screen flex flex-col font-sans antialiased">
 
-    <header class="h-14 bg-slate-900 text-white flex items-center justify-between px-4 shadow-md sticky top-0 z-50">
+    <!-- Banner superior con gradiente elegante de izquierda a derecha -->
+    <header
+        class="h-14 bg-gradient-to-r from-slate-800 via-emerald-800 to-indigo-950 text-white flex items-center justify-between px-4 shadow-lg border-b border-indigo-900/40 sticky top-0 z-50">
         <div class="flex items-center gap-4">
+            <!-- Logo principal de la aplicación -->
             <a class="font-semibold text-lg tracking-wide flex items-center gap-2 hover:opacity-90 transition-opacity"
                 title="Ir al Inicio">
-                <i class="fa-solid fa-boxes-packing text-blue-500"></i>
-                <span>StellarTools+</span>
+                <i class="fa-solid fa-boxes-packing text-slate-300"></i> <!-- Ícono del logo -->
+                <span
+                    class="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent font-bold">StellarTools+</span>
+                <!-- Nombre con gradiente de texto -->
             </a>
 
+            <!-- Botón de Inicio con efecto hover traslúcido compatible con el gradiente -->
             <a href="/"
-                class="flex items-center gap-2 p-2 hover:bg-slate-800 rounded-lg transition-colors text-slate-300 hover:text-white">
-                <svg class="w-5 h-5 text-slate-200 group-hover:text-slate-200 transition-colors" fill="none"
-                    stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                class="flex items-center gap-2 p-2 hover:bg-white/10 rounded-lg transition-colors text-white hover:text-white">
+                <svg class="w-5 h-5 text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                    xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                         d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 00-1-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 00-1 1m-6 0h6">
                     </path>
                 </svg>
                 <span class="text-sm font-medium hidden sm:inline">Inicio</span>
             </a>
-
         </div>
 
+        <!-- Menú desplegable de usuario -->
         <div class="relative" x-data="{ abierto: false }">
+            <!-- Botón de perfil con hover traslúcido -->
             <button @click="abierto = !abierto" @click.outside="abierto = false"
-                class="flex items-center gap-2 p-1.5 hover:bg-slate-800 rounded-lg transition-colors text-slate-300 hover:text-white focus:outline-none">
-                <i class="fa-solid fa-circle-user text-xl"></i>
+                class="flex items-center gap-2 p-1.5 hover:bg-white/10 rounded-lg transition-colors text-white hover:text-white focus:outline-none">
+                <i class="fa-solid fa-circle-user text-xl text-white"></i>
+                <!-- Ícono de usuario destacado en azul/índigo -->
                 <span class="text-sm font-medium hidden sm:inline">{{ request.state.perfil.nombre_comprador if
                     request.state.perfil and request.state.perfil.nombre_comprador else 'Mi Cuenta' }}</span>
                 <i class="fa-solid fa-chevron-down text-xs transition-transform"
                     :class="abierto ? 'rotate-180' : ''"></i>
             </button>
 
+            <!-- Menú flotante de Ajustes y Cerrar Sesión -->
             <div x-show="abierto" x-cloak
                 class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 text-slate-700">
                 <a href="/perfil"
