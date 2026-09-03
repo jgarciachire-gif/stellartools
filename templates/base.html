@@ -1,6 +1,18 @@
 <!DOCTYPE html>
 <html lang="es">
 
+<!-- Mapeo dinámico de títulos según la ruta activa -->
+{% set app_map = {
+'/dashboard': 'Recepción',
+'/ordenes': 'Compras',
+'/analisis-pedido': 'Pedidos',
+'/proveedores': 'Proveedores',
+'/productos': 'Productos',
+'/escanear': 'Escanear Recepciones',
+'/perfil': 'Perfil'
+} %}
+{% set active_app = app_map.get(request.url.path) %}
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,19 +33,20 @@
     <!-- Banner superior con gradiente elegante de izquierda a derecha -->
     <header
         class="h-14 bg-gradient-to-r from-slate-800 via-indigo-950 to-emerald-800 text-white flex items-center justify-between px-4 shadow-lg border-b border-indigo-900/40 sticky top-0 z-50">
-        <div class="flex items-center gap-4">
-            <!-- Logo principal de la aplicación -->
-            <a class="font-semibold text-lg tracking-wide flex items-center gap-2 hover:opacity-90 transition-opacity"
+        <!-- Sección izquierda: Logo, Botón Inicio e Indicador de Texto -->
+        <div class="flex items-center gap-2 sm:gap-4 overflow-hidden">
+            <!-- Logo principal -->
+            <a href="/"
+                class="font-semibold text-lg tracking-wide flex items-center gap-2 hover:opacity-90 transition-opacity shrink-0"
                 title="Ir al Inicio">
-                <i class="fa-solid fa-boxes-packing text-slate-300"></i> <!-- Ícono del logo -->
+                <i class="fa-solid fa-boxes-packing text-slate-300"></i>
                 <span
                     class="bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent font-bold">StellarTools+</span>
-                <!-- Nombre con gradiente de texto -->
             </a>
 
-            <!-- Botón de Inicio con efecto hover traslúcido compatible con el gradiente -->
+            <!-- Botón de Inicio -->
             <a href="/"
-                class="flex items-center gap-2 p-2 hover:bg-white/10 rounded-lg transition-colors text-white hover:text-white">
+                class="flex items-center gap-1.5 p-2 hover:bg-white/10 rounded-lg transition-colors text-white hover:text-white shrink-0">
                 <svg class="w-5 h-5 text-white transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                     xmlns="http://www.w3.org/2000/svg">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -42,6 +55,14 @@
                 </svg>
                 <span class="text-sm font-medium hidden sm:inline">Inicio</span>
             </a>
+
+            {% if active_app %}
+            <!-- Separador Flecha en texto -->
+            <span class="text-slate-400 font-medium select-none shrink-0">/</span>
+
+            <!-- Título de la aplicación abierta en texto plano -->
+            <span class="text-sm font-semibold text-white tracking-wide truncate">{{ active_app }}</span>
+            {% endif %}
         </div>
 
         <!-- Menú desplegable de usuario -->
