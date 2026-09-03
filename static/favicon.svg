@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+
+  <!-- Marco trasero tipo documento -->
+  <path d="M220 90 H410 C432 90 450 108 450 130 V390 C450 412 432 430 410 430 H300" stroke="#ffffff" stroke-width="32" stroke-linecap="round"/>
+  
+  <!-- Flecha de carga hacia arriba -->
+  <path d="M375 380 V270 M320 325 L375 270 L430 325" stroke="#FFFFFF" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Tapa del contenedor frontal -->
+  <rect x="50" y="180" width="250" height="40" rx="10" fill="#FFFFFF"/>
+  
+  <!-- Cuerpo del contenedor frontal -->
+  <rect x="70" y="240" width="210" height="180" rx="20" fill="#FFFFFF"/>
+  
+  <!-- Asa blanca del contenedor -->
+  <rect x="135" y="290" width="80" height="20" rx="10" fill="#414141"/>
+</svg>

@@ -44,6 +44,7 @@ supabase: Client = create_client(
 
 app = FastAPI(title="Control de Compras", version="2.0")
 app.add_middleware(SessionMiddleware, secret_key="clave_secreta_para_sesiones")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ==========================================
 # 2. Configuración de Plantillas y Filtros
