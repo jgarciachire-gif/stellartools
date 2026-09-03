@@ -131,7 +131,7 @@
                 <input type="text" id="buscar_depto_analisis" placeholder="Todos los departamentos..."
                     autocomplete="off" oninput="filtrarDeptosAnalisis()" onfocus="mostrarOpcionesDeptoAnalisis()"
                     disabled
-                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-not-allowed">
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
                 <button type="button" onclick="limpiarDeptoAnalisis()"
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
                     <i class="fa-solid fa-xmark text-xs"></i>
@@ -151,7 +151,7 @@
             <div class="relative">
                 <input type="text" id="buscar_grupo_analisis" placeholder="Todos los grupos..." autocomplete="off"
                     oninput="filtrarGruposAnalisis()" onfocus="mostrarOpcionesGrupoAnalisis()" disabled
-                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-not-allowed">
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
                 <button type="button" onclick="limpiarGrupoAnalisis()"
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
                     <i class="fa-solid fa-xmark text-xs"></i>
@@ -171,7 +171,7 @@
             <div class="relative">
                 <input type="text" id="buscar_subgrupo_analisis" placeholder="Todos los subgrupos..." autocomplete="off"
                     oninput="filtrarSubgruposAnalisis()" onfocus="mostrarOpcionesSubgrupoAnalisis()" disabled
-                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-not-allowed">
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
                 <button type="button" onclick="limpiarSubgrupoAnalisis()"
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
                     <i class="fa-solid fa-xmark text-xs"></i>
@@ -185,7 +185,7 @@
         <!-- Botón Importar Productos -->
         <div class="pt-2">
             <button type="button" id="btn_importar_productos" onclick="importarProductosAnalisis()" disabled
-                class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-not-allowed">
+                class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-default">
                 <i class="fa-solid fa-file-import"></i> Importar Productos
             </button>
         </div>
@@ -635,9 +635,11 @@
 
     // --- IMPORTACIÓN MASIVA DE PRODUCTOS A LA TABLA ---
     async function importarProductosAnalisis() {
+        // Obtiene el ID del proveedor seleccionado
         const proveedorId = document.getElementById('proveedor_id_analisis').value;
         if (!proveedorId) return;
 
+        // Lee los parámetros de filtrado seleccionados por el usuario
         const depto = document.getElementById('depto_analisis').value;
         const grupo = document.getElementById('grupo_analisis').value;
         const subgrupo = document.getElementById('subgrupo_analisis').value;
@@ -650,6 +652,7 @@
         });
 
         try {
+            // Petición a la API para obtener el listado de productos
             const res = await fetch(`/api/productos/importar-analisis?${params.toString()}`);
             const productos = await res.json();
 
@@ -659,34 +662,53 @@
             }
 
             const tbody = document.getElementById('filas-tabla-analisis');
+            // Obtiene todas las filas presentes actualmente en la tabla
+            const filasExistentes = Array.from(tbody.querySelectorAll('tr'));
 
-            // Si hay 1 sola fila inicial y está vacía, se reemplaza
-            if (tbody.children.length === 1) {
-                const primerCod = tbody.querySelector('.inp-codigo').value.trim();
-                if (!primerCod) tbody.innerHTML = '';
-            }
+            // Filtra únicamente aquellas filas cuyo campo de código esté completamente vacío
+            const filasVacias = filasExistentes.filter(tr => {
+                const inpCod = tr.querySelector('.inp-codigo');
+                return inpCod && inpCod.value.trim() === '';
+            });
 
-            // Inserta cada producto extraído en la cuadrícula
-            // ... dentro del forEach donde se insertan los productos
-            productos.forEach(prod => {
-                const tr = agregarFilaAnalisis();
-                tr.querySelector('.inp-codigo').value = prod.codigo || '';
-                tr.querySelector('.inp-desc').value = prod.descripcion || '';
+            // Recorre los productos importados e inserta la información slot por slot
+            productos.forEach((prod, index) => {
+                let tr;
 
+                // Si aún quedan filas vacías disponibles arriba, las aprovecha y rellena
+                if (index < filasVacias.length) {
+                    tr = filasVacias[index];
+                } else {
+                    // Si los productos superan las filas vacías disponibles, crea filas nuevas
+                    tr = agregarFilaAnalisis();
+                }
+
+                const inpCod = tr.querySelector('.inp-codigo');
+                const inpDesc = tr.querySelector('.inp-desc');
                 const inpPre = tr.querySelector('.inp-pre');
                 const inpCosto = tr.querySelector('.inp-costo');
+                const inpEmp = tr.querySelector('.inp-emp');
 
+                // Asigna los datos obtenidos a la fila elegida
+                inpCod.value = prod.codigo || '';
+                inpDesc.value = prod.descripcion || '';
                 inpPre.value = prod.unidad_manejo || 1;
                 inpCosto.value = (prod.precio || 0).toFixed(2);
 
-                // Guardar los valores originales
+                // Asigna los valores en dataset para controlar cambios futuros
                 inpPre.dataset.original = prod.unidad_manejo || 1;
                 inpCosto.dataset.original = (prod.precio || 0).toFixed(2);
 
-                tr.querySelector('.inp-emp').value = 0;
-                calcularFila(tr.querySelector('.inp-codigo'));
+                inpEmp.value = 0;
+
+                // Bloquea visualmente la celda de código cargada de la API
+                bloquearCeldaCodigo(inpCod);
+
+                // Recalcula subtotal y totales generales
+                calcularFila(inpCod);
             });
 
+            // Actualiza los datos de empaques, unidades y monto final en la barra inferior
             totalizarAnalisis();
 
         } catch (e) {
@@ -695,7 +717,7 @@
         }
     }
     // Lógica de selección rectangular estilo Excel
-    let celdasSeleccionadas = [];
+    let celdasSeleccionadasAnalisis = [];
     let celdaInicio = null;
     let isArrastrando = false;
 
@@ -770,7 +792,7 @@
                 const td = tr.children[c];
                 const input = td?.querySelector('input');
                 if (input) {
-                    celdasSeleccionadas.push(input);
+                    celdasSeleccionadasAnalisis.push(input);
 
                     // Estilo de fondo interior unificado
                     td.classList.add('bg-blue-100/70');
@@ -787,7 +809,7 @@
 
     // Limpia las clases de resaltado del rango
     function desseleccionarCeldas() {
-        celdasSeleccionadas.forEach(input => {
+        celdasSeleccionadasAnalisis.forEach(input => {
             const td = input.closest('td');
             if (td) {
                 td.classList.remove(
@@ -799,7 +821,7 @@
                 );
             }
         });
-        celdasSeleccionadas = [];
+        celdasSeleccionadasAnalisis = [];
     }
 
     // Listener global de teclado (CTRL + C, Delete, Escape)
@@ -814,12 +836,12 @@
         }
 
         // Copiar rango seleccionado (CTRL + C o CMD + C) incluyendo celdas bloqueadas
-        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && celdasSeleccionadas.length > 0) {
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && celdasSeleccionadasAnalisis.length > 0) {
             e.preventDefault();
 
             const matrizValores = {};
 
-            celdasSeleccionadas.forEach(input => {
+            celdasSeleccionadasAnalisis.forEach(input => {
                 const tr = input.closest('tr');
                 const tbody = tr.parentElement;
                 const rowIndex = Array.from(tbody.children).indexOf(tr);
@@ -846,10 +868,10 @@
         }
 
         // Borrar datos en rango seleccionado (Delete / Supr)
-        if ((e.key === 'Delete' || e.key === 'Del') && celdasSeleccionadas.length > 0) {
+        if ((e.key === 'Delete' || e.key === 'Del') && celdasSeleccionadasAnalisis.length > 0) {
             e.preventDefault();
 
-            celdasSeleccionadas.forEach(input => {
+            celdasSeleccionadasAnalisis.forEach(input => {
                 const tr = input.closest('tr');
 
                 // Si se borra un código (bloqueado o no), reactivar edición
@@ -1155,64 +1177,171 @@
         }
     }
 
-    // --- NAVEGACIÓN TECLA ENTER ---
+    // Helper para enfocar y seleccionar todo el texto de la celda activa
+    function enfocarYSombrearCelda(input) {
+        if (!input) return;
+
+        // Si el campo es readonly (ej: código bloqueado), salta al foco sin intentar editar
+        if (input.readOnly) {
+            input.focus();
+            return;
+        }
+
+        input.focus();
+        // Forzar micro-tarea para asegurar que select() resalte todo el valor en pantalla
+        setTimeout(() => {
+            input.select();
+        }, 0);
+
+        celdaInicio = input;
+        actualizarSeleccionRango(input);
+    }
+    // --- NAVEGACIÓN COMPLETA Y EDICIÓN TECLADO ---
     function manejarKeyNav(e, elem, campoActual) {
-        // --- LÓGICA PARA ESCAPE (Manteniendo la que agregamos antes) ---
-        if (e.key === 'Escape') {
-            e.preventDefault();
+        const tr = elem.closest('tr');
+        const tbody = tr.parentElement;
+        const filas = Array.from(tbody.children);
+        // Columnas navegables en orden estricto
+        const colIndices = ['codigo', 'pre', 'emp', 'uni', 'costo'];
 
-            if (elem.dataset.valorOriginal !== undefined) {
-                elem.value = elem.dataset.valorOriginal;
+        // 1. EDICIÓN AL PRESIONAR NÚMEROS (0-9 o Numpad 0-9) ESTANDO EN MODO VISTA / FOCO
+        if ((/^[0-9]$/.test(e.key) || /^Numpad[0-9]$/.test(e.code)) && !e.ctrlKey && !e.altKey && !e.metaKey) {
+            // Si todo el texto está resaltado o la celda recién recibe foco, vaciar para sobreescribir
+            const textoSeleccionado = window.getSelection().toString();
+            const esSeleccionCompleta = (elem.selectionStart === 0 && elem.selectionEnd === elem.value.length);
 
-                if (campoActual === 'uni') {
-                    ajustarPorUnidades(elem);
-                } else if (['pre', 'emp', 'costo'].includes(campoActual)) {
-                    calcularFila(elem);
+            if (esSeleccionCompleta || textoSeleccionado !== '') {
+                elem.value = ''; // Limpia el valor anterior inmediatamente para escribir el digito presionado
+            }
+        }
+
+        // 2. MANEJO DE TECLA TAB Y SHIFT + TAB (Recorrido entre celdas)
+        if (e.key === 'Tab') {
+            e.preventDefault(); // Detiene el salto nativo del navegador
+
+            let rIdx = filas.indexOf(tr);
+            let cIdx = colIndices.indexOf(campoActual);
+
+            if (e.shiftKey) {
+                // Recorrido Inverso (Shift + Tab)
+                cIdx--;
+                if (cIdx < 0) {
+                    cIdx = colIndices.length - 1;
+                    rIdx--; // Salta a la última celda de la fila anterior
+                }
+            } else {
+                // Recorrido Adelante (Tab)
+                cIdx++;
+                if (cIdx >= colIndices.length) {
+                    cIdx = 0;
+                    rIdx++; // Salta a la primera celda de la siguiente fila
                 }
             }
 
+            // Si se pasa de la última fila hacia adelante, crea una nueva fila automáticamente
+            if (rIdx >= filas.length) {
+                agregarFilaAnalisis();
+            }
+
+            // Asegura no salirse del límite superior de filas
+            rIdx = Math.max(0, rIdx);
+
+            const trDestino = tbody.children[rIdx];
+            const campoDestino = colIndices[cIdx];
+            const inputDestino = trDestino?.querySelector(`.inp-${campoDestino}`);
+
+            if (inputDestino) {
+                if (inputDestino.readOnly) {
+                    // Si la celda está bloqueada (ej. código ya cargado), re-ejecuta el paso
+                    manejarKeyNav(e, inputDestino, campoDestino);
+                } else {
+                    enfocarYSombrearCelda(inputDestino);
+                }
+            }
+            return;
+        }
+
+        // 3. MANEJO DE TECLA ESCAPE: Descarta cambios y limpia la selección
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            if (elem.dataset.valorOriginal !== undefined) {
+                elem.value = elem.dataset.valorOriginal; // Restaura el valor antes de editar
+                if (campoActual === 'uni') ajustarPorUnidades(elem);
+                else if (['pre', 'emp', 'costo'].includes(campoActual)) calcularFila(elem);
+            }
             elem.blur();
             desseleccionarCeldas();
             e.stopPropagation();
             return;
         }
 
-        // --- LÓGICA ACTUALIZADA PARA ENTER ---
+        // 4. MANEJO DE TECLA ENTER: Fija el valor y salta a la siguiente columna/fila
         if (e.key === 'Enter') {
             e.preventDefault();
-            const tr = elem.closest('tr');
+            elem.blur();
+
+            let siguienteInput = null;
 
             if (campoActual === 'codigo') {
-                // Al presionar Enter en Código, salta directamente a Empaque (emp.)
                 consultarProductoCodigo(elem).then(() => {
-                    tr.querySelector('.inp-emp').focus();
+                    siguienteInput = tr.querySelector('.inp-emp');
+                    enfocarYSombrearCelda(siguienteInput);
                 });
-
+                return;
             } else if (campoActual === 'pre') {
-                tr.querySelector('.inp-emp').focus();
-
+                siguienteInput = tr.querySelector('.inp-emp');
             } else if (campoActual === 'emp') {
-                // Al presionar Enter en Empaque, salta al Código de la siguiente fila
-                let sigTr = tr.nextElementSibling;
-
-                // Si no hay más filas abajo, crea una nueva automáticamente
-                if (!sigTr) {
-                    sigTr = agregarFilaAnalisis();
-                }
-
-                const inpCod = sigTr.querySelector('.inp-codigo');
-                inpCod.focus();
-
+                let sigTr = tr.nextElementSibling || agregarFilaAnalisis(); // Obtiene la fila inferior
+                siguienteInput = sigTr.querySelector('.inp-emp'); // Enfoca la misma columna Emp.
             } else if (campoActual === 'uni') {
-                tr.querySelector('.inp-costo').focus();
-
+                siguienteInput = tr.querySelector('.inp-costo');
             } else if (campoActual === 'costo') {
-                let sigTr = tr.nextElementSibling;
-                if (!sigTr) {
-                    sigTr = agregarFilaAnalisis();
+                let sigTr = tr.nextElementSibling || agregarFilaAnalisis();
+                siguienteInput = sigTr.querySelector('.inp-codigo');
+            }
+
+            if (siguienteInput) {
+                enfocarYSombrearCelda(siguienteInput);
+            }
+            return;
+        }
+
+        // 5. NAVEGACIÓN CON FLECHAS Y SELECCIÓN CON SHIFT
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+            // Cancelar de inmediato el scroll nativo de la ventana/página
+            e.preventDefault();
+
+            // Permitir edición interna si el cursor está en medio del texto y no se presionó Shift
+            if (!e.shiftKey && elem.selectionStart !== elem.selectionEnd && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+                return;
+            }
+
+            let rIdx = filas.indexOf(tr);
+            let cIdx = colIndices.indexOf(campoActual);
+
+            if (e.key === 'ArrowUp') rIdx = Math.max(0, rIdx - 1);
+            if (e.key === 'ArrowDown') {
+                rIdx++;
+                if (rIdx >= filas.length) {
+                    agregarFilaAnalisis();
+                    rIdx = tbody.children.length - 1;
                 }
-                const inpCod = sigTr.querySelector('.inp-codigo');
-                inpCod.focus();
+            }
+            if (e.key === 'ArrowLeft') cIdx = Math.max(0, cIdx - 1);
+            if (e.key === 'ArrowRight') cIdx = Math.min(colIndices.length - 1, cIdx + 1);
+
+            const trDestino = tbody.children[rIdx];
+            const campoDestino = colIndices[cIdx];
+            const inputDestino = trDestino?.querySelector(`.inp-${campoDestino}`);
+
+            if (inputDestino) {
+                if (e.shiftKey) {
+                    if (!celdaInicio) celdaInicio = elem;
+                    inputDestino.focus();
+                    actualizarSeleccionRango(inputDestino);
+                } else {
+                    enfocarYSombrearCelda(inputDestino);
+                }
             }
         }
     }
@@ -1458,6 +1587,22 @@
             e.preventDefault();
             // Los navegadores modernos muestran un mensaje genérico por seguridad, no se puede personalizar el texto aquí
             e.returnValue = '';
+        }
+    });
+    // Bloquear scroll de la página al usar teclas de navegación dentro de la tabla
+    document.getElementById('tabla-analisis')?.addEventListener('keydown', function (e) {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.key)) {
+            // Evita el desplazamiento si la tecla proviene de cualquier elemento de la tabla
+            e.preventDefault();
+        }
+    });
+    // Evita que las flechas desplacen la página si el foco está en el body o en la tabla
+    window.addEventListener('keydown', function (e) {
+        if (['ArrowUp', 'ArrowDown'].includes(e.key)) {
+            // Si el elemento enfocado es el body o la propia tabla, bloquea el scroll nativo
+            if (document.activeElement === document.body || document.activeElement.closest('#tabla-analisis')) {
+                e.preventDefault();
+            }
         }
     });
 </script>
