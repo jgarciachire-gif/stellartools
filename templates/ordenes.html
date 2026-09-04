@@ -1167,6 +1167,8 @@
         }
     }
 
+
+    document.getElementById('form-xml-modal').addEventListener('submit', procesarXMLModal);
     // Función asíncrona reescrita para procesar archivos de forma secuencial y real
     async function procesarXMLModal(e) {
         e.preventDefault(); // Prevenir el envío tradicional del formulario
