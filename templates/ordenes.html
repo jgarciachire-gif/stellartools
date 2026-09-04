@@ -88,8 +88,8 @@
             <!-- Botón Menú 3 Puntos -->
             <div class="relative">
                 <button id="btn-menu-opciones"
-                    class="text-slate-500 hover:text-blue-600 p-2 rounded-full hover:bg-blue-50 transition-colors focus:outline-none">
-                    <i class="fa-solid fa-ellipsis-vertical text-xl px-2"></i>
+                    class="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none">
+                    <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
                 </button>
 
                 <div id="dropdown-opciones"
@@ -900,12 +900,14 @@
         document.getElementById('modal-cargar-xml').classList.add('hidden'); // Oculta el modal
     }
 
-    async function validarYProcesarPDFModal(e) {
+    // Procesa la subida con seguimiento de progreso mediante XMLHttpRequest
+    function validarYProcesarPDFModal(e) {
         e.preventDefault();
 
         const input = document.getElementById('input-pdf-modal');
-        let pesoTotal = 0;
+        if (!input.files.length) return;
 
+        let pesoTotal = 0;
         for (let i = 0; i < input.files.length; i++) {
             pesoTotal += input.files[i].size;
         }
@@ -918,52 +920,81 @@
         const btn = document.getElementById('btn-procesar-pdf-modal');
         const texto = document.getElementById('btn-texto-pdf-modal');
         const spinner = document.getElementById('btn-spinner-pdf-modal');
+        const contenedorProgreso = document.getElementById('contenedor-progreso-pdf');
+        const barraProgreso = document.getElementById('barra-progreso-pdf');
+        const porcentajeTexto = document.getElementById('porcentaje-progreso');
+        const estadoTexto = document.getElementById('texto-estado-progreso');
 
-        texto.innerText = "Extrayendo...";
+        texto.innerText = "Subiendo...";
         spinner.classList.remove('hidden');
         btn.classList.add('opacity-75', 'cursor-not-allowed');
         btn.disabled = true;
+
+        if (contenedorProgreso) {
+            contenedorProgreso.classList.remove('hidden');
+            barraProgreso.style.width = '0%';
+            porcentajeTexto.innerText = '0%';
+            estadoTexto.innerText = 'Subiendo archivos...';
+        }
 
         const formData = new FormData();
         for (let i = 0; i < input.files.length; i++) {
             formData.append('archivos_pdf', input.files[i]);
         }
 
-        try {
-            const response = await fetch('/escanear/procesar', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest' // Indica a FastAPI que es una petición AJAX
-                },
-                credentials: 'same-origin', // Asegura el envío de cookies de autenticación
-                body: formData
-            });
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/escanear/procesar', true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('Accept', 'application/json');
 
-            // Si FastAPI redirigió a /login (código 401 u otro HTML)
-            const contentType = response.headers.get("content-type");
-            if (!contentType || !contentType.includes("application/json")) {
-                throw new Error("La sesión ha expirado o el servidor devolvió una respuesta HTML en lugar de JSON.");
+        // Escucha la carga real del archivo desde el cliente
+        xhr.upload.onprogress = function (event) {
+            if (event.lengthComputable) {
+                const porcentaje = Math.round((event.loaded / event.total) * 100);
+                if (barraProgreso && porcentajeTexto) {
+                    barraProgreso.style.width = porcentaje + '%';
+                    porcentajeTexto.innerText = porcentaje + '%';
+                }
+                if (porcentaje === 100 && estadoTexto) {
+                    estadoTexto.innerText = 'Procesando en servidor...';
+                }
             }
+        };
 
-            const data = await response.json();
-
-            if (data.success) {
-                cerrarModalCargarOC();
-                renderizarTablaDetalleOC(data.ordenes);
-                document.getElementById('modal-detalle-extraido-oc').classList.remove('hidden');
+        xhr.onload = function () {
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        cerrarModalCargarOC();
+                        renderizarTablaDetalleOC(data.ordenes);
+                        document.getElementById('modal-detalle-extraido-oc').classList.remove('hidden');
+                    } else {
+                        alert('Error al procesar el archivo: ' + (data.mensaje || 'Respuesta no válida'));
+                    }
+                } catch (err) {
+                    alert('La sesión ha expirado o el servidor devolvió una respuesta no válida.');
+                }
             } else {
-                alert('Error al procesar el archivo: ' + (data.mensaje || 'Respuesta no válida'));
+                alert('Error en la comunicación con el servidor. Código: ' + xhr.status);
             }
-        } catch (error) {
-            console.error('Error en la extracción:', error);
-            alert('Ocurrió un error al procesar la solicitud: ' + error.message);
-        } finally {
+            restablecerEstadoUI();
+        };
+
+        xhr.onerror = function () {
+            alert('Ocurrió un error de red al subir los archivos.');
+            restablecerEstadoUI();
+        };
+
+        function restablecerEstadoUI() {
             texto.innerText = "Procesar PDF(s)";
             spinner.classList.add('hidden');
             btn.classList.remove('opacity-75', 'cursor-not-allowed');
             btn.disabled = false;
+            if (contenedorProgreso) contenedorProgreso.classList.add('hidden');
         }
+
+        xhr.send(formData);
     }
 
     // Renderiza dinámicamente cada orden extraída en formato de tarjeta editable
@@ -1135,68 +1166,123 @@
             });
         }
     }
-    // Procesa asíncronamente el formulario de XML y renderiza la respuesta
-    async function procesarXMLModal(e) {
-        e.preventDefault();
 
-        // Referencias a elementos
+    // Función asíncrona reescrita para procesar archivos de forma secuencial y real
+    async function procesarXMLModal(e) {
+        e.preventDefault(); // Prevenir el envío tradicional del formulario
+
+        // 1. Obtener referencias a elementos del modal
         const input = document.getElementById('input-xml-modal');
         const btn = document.getElementById('btn-procesar-xml-modal');
         const texto = document.getElementById('btn-texto-xml-modal');
         const spinner = document.getElementById('btn-spinner-xml-modal');
         const modalDetalle = document.getElementById('modal-detalle-xml-oc');
 
-        // Validación básica de archivos
-        if (!input || !input.files || input.files.length === 0) return;
+        const contenedorProgreso = document.getElementById('contenedor-progreso-xml');
+        const barraProgreso = document.getElementById('barra-progreso-xml');
+        const porcentajeTexto = document.getElementById('porcentaje-progreso-xml');
+        const estadoTexto = document.getElementById('texto-estado-progreso-xml');
 
-        // Estado visual de carga (con verificación para evitar errores null)
+        // 2. Validar que existan archivos en el input
+        if (!input || !input.files || input.files.length === 0) return;
+        const archivos = input.files;
+        const totalArchivos = archivos.length;
+
+        // 3. Configurar interfaz inicial antes de procesar
         if (texto) texto.innerText = "Procesando...";
         if (spinner) spinner.classList.remove('hidden');
         if (btn) {
-            btn.classList.add('opacity-75', 'cursor-not-allowed');
+            btn.classList.add('opacity-75', 'cursor-default');
             btn.disabled = true;
         }
 
-        const formData = new FormData();
-        for (let i = 0; i < input.files.length; i++) {
-            formData.append('archivos_xml', input.files[i]);
+        if (contenedorProgreso) {
+            contenedorProgreso.classList.remove('hidden');
+            if (barraProgreso) barraProgreso.style.width = '0%';
+            if (porcentajeTexto) porcentajeTexto.innerText = '0%';
+            if (estadoTexto) estadoTexto.innerText = `Iniciando (0 de ${totalArchivos})...`;
         }
 
-        try {
-            const response = await fetch('/recepciones/procesar-xml', {
-                method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest'
-                },
-                body: formData
-            });
+        let todosProcesados = [];
+        let todosNoEncontrados = [];
 
-            const data = await response.json();
+        // 4. Recorrer y enviar los XML uno a uno para un avance real
+        for (let i = 0; i < totalArchivos; i++) {
+            const archivoActual = archivos[i];
+            const formData = new FormData();
+            formData.append('archivos_xml', archivoActual); // Enviar solo 1 archivo por petición
 
-            if (data.success) {
-                // Cierra el modal de selección de archivo si la función existe
-                if (typeof cerrarModalCargarXML === 'function') cerrarModalCargarXML();
+            // Actualizar texto descriptivo del archivo en proceso
+            if (estadoTexto) estadoTexto.innerText = `Procesando: ${archivoActual.name} (${i + 1}/${totalArchivos})`;
 
-                // Renderiza los datos procesados
-                renderizarResumenXML(data);
+            try {
+                // Petición POST unitaria al backend
+                const response = await fetch('/recepciones/procesar-xml', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
 
-                // Muestra el modal de resumen
-                if (modalDetalle) modalDetalle.classList.remove('hidden');
-            } else {
-                alert('Error: ' + (data.mensaje || 'Respuesta no válida del servidor.'));
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        if (data.procesados) todosProcesados.push(...data.procesados);
+                        if (data.no_encontrados) todosNoEncontrados.push(...data.no_encontrados);
+                    }
+                } else {
+                    todosNoEncontrados.push(archivoActual.name);
+                }
+            } catch (err) {
+                console.error(`Error en ${archivoActual.name}:`, err);
+                todosNoEncontrados.push(archivoActual.name);
             }
-        } catch (error) {
-            console.error('Error procesando XML:', error);
-            alert('Ocurrió un error al procesar los archivos XML.');
-        } finally {
-            // Restaurar estado original del botón
-            if (texto) texto.innerText = "Procesar Recepciones";
+
+            // 5. Cálculo exacto del porcentaje completado
+            const completados = i + 1;
+            const porcentajeReal = Math.round((completados / totalArchivos) * 100);
+
+            // Actualizar barra y número según archivos realmente terminados
+            if (barraProgreso) barraProgreso.style.width = `${porcentajeReal}%`;
+            if (porcentajeTexto) porcentajeTexto.innerText = `${porcentajeReal}%`;
+
+            // Pausa de 150ms para renderizar suavemente el movimiento de la barra
+            await new Promise(resolve => setTimeout(resolve, 150));
+        }
+
+        // 6. Finalización y muestra de resultados
+        if (estadoTexto) estadoTexto.innerText = '¡Procesamiento finalizado!';
+
+        setTimeout(() => {
+            if (typeof cerrarModalCargarXML === 'function') cerrarModalCargarXML();
+
+            // Estructura de datos consolidada para tu tabla de resumen
+            const resultadoFinal = {
+                success: true,
+                procesados: todosProcesados,
+                no_encontrados: todosNoEncontrados
+            };
+
+            if (typeof renderizarResumenXML === 'function') {
+                renderizarResumenXML(resultadoFinal);
+            }
+
+            if (modalDetalle) modalDetalle.classList.remove('hidden');
+
+            restablecerEstadoXML();
+        }, 400);
+
+        // Función interna para restaurar botones
+        function restablecerEstadoXML() {
+            if (texto) texto.innerText = "Procesar";
             if (spinner) spinner.classList.add('hidden');
             if (btn) {
                 btn.classList.remove('opacity-75', 'cursor-not-allowed');
                 btn.disabled = false;
             }
+            if (contenedorProgreso) contenedorProgreso.classList.add('hidden');
         }
     }
 
@@ -1337,6 +1423,7 @@
             }
         }
     }
+
 </script>
 {% endblock %}
 
@@ -1360,6 +1447,18 @@
                 </label>
                 <input type="file" id="input-pdf-modal" name="archivos_pdf" accept=".pdf" multiple required
                     class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
+            </div>
+            <!-- Barra de Progreso de Carga -->
+            <div id="contenedor-progreso-pdf" class="hidden space-y-2 mb-4">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
+                    <span id="texto-estado-progreso">Subiendo archivos...</span>
+                    <span id="porcentaje-progreso">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                    <div id="barra-progreso-pdf"
+                        class="bg-gradient-to-r from-blue-400 to-indigo-600 h-2.5 rounded-full transition-all duration-150 ease-out w-0">
+                    </div>
+                </div>
             </div>
 
             <!-- Botones alineados de lado a lado -->
@@ -1405,6 +1504,19 @@
                 </label>
                 <input type="file" id="input-xml-modal" name="archivos_xml" accept=".xml" multiple required
                     class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
+            </div>
+
+            <!-- Barra de Progreso para XML -->
+            <div id="contenedor-progreso-xml" class="hidden space-y-2.5 mb-4">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
+                    <span id="texto-estado-progreso-xml">Subiendo archivos...</span>
+                    <span id="porcentaje-progreso-xml">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                    <div id="barra-progreso-xml"
+                        class="bg-gradient-to-r from-emerald-400 to-teal-600 h-2.5 rounded-full transition-all duration-150 ease-out w-0">
+                    </div>
+                </div>
             </div>
 
             <!-- Botones alineados de lado a lado -->
