@@ -20,6 +20,8 @@ from pydantic import BaseModel
 from supabase import create_client, Client, ClientOptions
 from starlette.middleware.sessions import SessionMiddleware
 from pdf_processor import extraer_datos_oc
+from supabase import AClient, create_async_client
+from fastapi.concurrency import run_in_threadpool
 
 # ==========================================
 # 1. Configuración global y clientes HTTP
@@ -41,6 +43,7 @@ supabase: Client = create_client(
         storage_client_timeout=60
     )
 )
+supabase_async = None
 
 app = FastAPI(title="Control de Compras", version="2.0")
 app.add_middleware(SessionMiddleware, secret_key="clave_secreta_para_sesiones")
@@ -140,6 +143,11 @@ class ProductoModificado(BaseModel):
 # ==========================================
 # 5. Endpoints del Sistema
 # ==========================================
+@app.on_event("startup")
+async def startup_event():
+    global supabase_async
+    supabase_async = await create_async_client(SUPABASE_URL, SUPABASE_KEY)
+
 @app.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
 async def chrome_devtools_silencer():
     return Response(status_code=204) 
@@ -986,8 +994,9 @@ async def procesar_pdf(
         if not archivo.filename:
             continue
         contenido_bytes = await archivo.read()
+        
         pdf_en_memoria = io.BytesIO(contenido_bytes)
-        datos_extraidos = extraer_datos_oc(pdf_en_memoria)
+        datos_extraidos = await run_in_threadpool(extraer_datos_oc, pdf_en_memoria)
         
         prods_procesados = []
         monto_calculado_total = 0.0
@@ -1269,7 +1278,12 @@ def vista_productos(
         condicion_or = ",".join(condiciones)
         builder = builder.or_(condicion_or)
 
-    productos_res = builder.order("descripcion", desc=False).limit(200).execute()
+    
+    page = int(request.query_params.get("page", 1))
+    limit = 50
+    offset = (page - 1) * limit
+
+    productos_res = builder.order("descripcion", desc=False).range(offset, offset + limit - 1).execute()
     productos = productos_res.data or []
 
     res_prov = supabase.table("proveedores").select("id, nombre").order("nombre").execute()
