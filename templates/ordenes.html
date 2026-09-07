@@ -153,19 +153,55 @@
         <div class="overflow-x-auto border-t border-slate-100">
             <table class="w-full text-left border-collapse whitespace-nowrap">
                 <thead>
-                    <tr class="border-b border-slate-200 text-xs font-bold text-slate-500 bg-white">
+                    <tr class="border-b border-slate-200 text-xs font-bold text-slate-500 bg-white select-none">
                         <th class="col-seleccion hidden p-4 w-10 text-center">
                             <i class="fa-solid fa-check-double text-slate-300"></i>
                         </th>
-                        <th class="p-4">Nº OC</th>
-                        <th class="p-4">Proveedor</th>
-                        <th class="p-4">Tienda Destino</th>
-                        <th class="p-4">Fecha Envío</th>
-                        <th class="p-4">Fecha Recepción</th>
-                        <th class="p-4">Venc. Factura</th>
-                        <th class="p-4">Monto ($)</th>
-                        <th class="p-4">Estatus</th>
-                        <th class="p-4">Alerta de Pago</th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 1, 'texto')">
+                            <div class="flex items-center justify-between">Nº OC <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 2, 'texto')">
+                            <div class="flex items-center justify-between">Proveedor <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 3, 'texto')">
+                            <div class="flex items-center justify-between">Tienda Destino <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 4, 'fecha')">
+                            <div class="flex items-center justify-between">Fecha Envío <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 5, 'fecha')">
+                            <div class="flex items-center justify-between">Fecha Recepción <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 6, 'texto')">
+                            <div class="flex items-center justify-between">Venc. Factura <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 7, 'numero')">
+                            <div class="flex items-center justify-between">Monto ($) <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 8, 'texto')">
+                            <div class="flex items-center justify-between">Estatus <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
+                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
+                            onclick="ordenarTablaPrincipal(this, 9, 'texto')">
+                            <div class="flex items-center justify-between">Alerta de Pago <i
+                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
+                        </th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-sm">
@@ -1414,6 +1450,73 @@
             actualizarEstadoBotonEliminar();
         }
     });
+    // Control de estado de ordenamiento por columna para las tablas de ordenes
+    const estadoOrdenTablaPrincipal = {};
+
+    function ordenarTablaPrincipal(th, colIndex, tipo) {
+        // Localiza la tabla y el tbody mas cercano a la cabecera clickeada
+        const tabla = th.closest('table');
+        const tbody = tabla ? tabla.querySelector('tbody') : null;
+        if (!tbody) return;
+
+        // Alterna la direccion de ordenamiento (Ascendente / Descendente)
+        estadoOrdenTablaPrincipal[colIndex] = !estadoOrdenTablaPrincipal[colIndex];
+        const esAsc = estadoOrdenTablaPrincipal[colIndex];
+
+        // Restablece los iconos de todas las columnas de la cabecera
+        tabla.querySelectorAll('th i').forEach(icon => {
+            icon.className = 'fa-solid fa-sort text-[10px] ml-1 text-slate-400';
+        });
+
+        // Actualiza el icono de la columna activa
+        const iconoActual = th.querySelector('i');
+        if (iconoActual) {
+            iconoActual.className = `fa-solid fa-sort-${esAsc ? 'up' : 'down'} text-[10px] ml-1 text-blue-600`;
+        }
+
+        // Obtiene las filas principales manteniendo vinculada su fila desplegable de detalle
+        const filasPrincipales = Array.from(tbody.querySelectorAll('tr.row-orden'));
+
+        const parejas = filasPrincipales.map(rowMain => {
+            const id = rowMain.getAttribute('data-id');
+            const rowDetail = tbody.querySelector(`#detalle-${id}`);
+            const celda = rowMain.children[colIndex];
+
+            let val = '';
+            if (celda) {
+                // Lee el valor si la celda contiene un input de fecha o texto normal
+                const input = celda.querySelector('input');
+                val = input ? input.value : celda.textContent.trim();
+            }
+
+            // Normaliza el tipo de dato para una comparacion correcta
+            if (tipo === 'numero') {
+                // Limpia simbolos de moneda y convierte a float
+                val = parseFloat(val.replace(/[^\d.,-]/g, '').replace(/\./g, '').replace(',', '.')) || 0;
+            } else if (tipo === 'fecha') {
+                val = val ? new Date(val).getTime() : 0;
+            } else {
+                val = val.toLowerCase();
+            }
+
+            return { main: rowMain, detail: rowDetail, val };
+        });
+
+        // Ordenar las filas
+        parejas.sort((a, b) => {
+            if (a.val < b.val) return esAsc ? -1 : 1;
+            if (a.val > b.val) return esAsc ? 1 : -1;
+            return 0;
+        });
+
+        // Reorganiza los nodos dentro del DOM sin perder la fila desplegable
+        parejas.forEach(pareja => {
+            tbody.appendChild(pareja.main);
+            if (pareja.detail) {
+                tbody.appendChild(pareja.detail);
+            }
+        });
+    }
     // Alternar visibilidad del detalle desplegable de la Orden de Compra
     function toggleDetalleOC(ordenId) {
         const filaDetalle = document.getElementById(`detalle-${ordenId}`);

@@ -23,6 +23,12 @@
 
         <div id="dropdown-opciones"
             class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+            <button type="button" onclick="document.getElementById('input-csv-stellar').click();"
+                class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 rounded-xl flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-file-csv text-emerald-500"></i> Cargar Ventas (CSV)
+            </button>
+            <!-- Input file oculto para activar el selector de archivos -->
+            <input type="file" id="input-csv-stellar" accept=".csv" class="hidden" onchange="subirCSVStellar(event)">
             <!-- Opción para Limpiar Lista -->
             <button type="button" onclick="limpiarListaProductos();"
                 class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-rose-600 rounded-xl flex items-center gap-2 transition-colors">
@@ -34,9 +40,9 @@
 
 <!-- CONTENEDOR PRINCIPAL DE CONTROLES (PROVEEDOR, TIENDA Y FILTROS EN PROPORCIÓN 2:1) -->
 <div class="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6">
-
-    <!-- TARJETA IZQUIERDA: SELECCIÓN DE PROVEEDOR Y TIENDA -->
-    <div class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-5">
+    <!-- TARJETA IZQUIERDA: SELECCIÓN DE PROVEEDOR, COBERTURA Y CÁLCULO -->
+    <div
+        class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
 
         <!-- Buscador de Proveedor -->
         <div class="relative" id="combo-proveedor-analisis">
@@ -74,47 +80,22 @@
             </div>
         </div>
 
-
-        <!-- Buscador / Selector de Tienda Destino -->
-        <div class="relative" id="combo-tienda-analisis">
-            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-2">
-                <i class="fa-solid fa-store text-blue-600 mr-1"></i> Tienda
-            </label>
-
-            <!-- Campo oculto sin valor predeterminado (inicia vacío) -->
-            <input type="hidden" id="tienda_destino" name="tienda_destino" value="">
-
-            <div class="relative">
-                <!-- Input visible con value vacío para mostrar el placeholder -->
-                <input type="text" id="buscar_tienda_analisis" value="" placeholder="Escriba para buscar tienda..."
-                    autocomplete="off" oninput="filtrarTiendasAnalisis()" onfocus="mostrarOpcionesTiendaAnalisis()"
-                    onkeydown="navegarTiendasAnalisis(event)"
-                    class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition">
-
-                <!-- Botón para limpiar selección de tienda -->
-                <button type="button" onclick="limpiarTiendaAnalisis()"
-                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
-                    <i class="fa-solid fa-xmark text-xs"></i>
-                </button>
+        <!-- Días de Cobertura y Botón Calcular Sugerido (Migrados debajo de Proveedor) -->
+        <div class="flex items-end gap-3 pt-2">
+            <div class="flex-1">
+                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5 whitespace-nowrap">
+                    <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i> Días de Cobertura
+                </label>
+                <input type="number" id="dias_cobertura" value="7" min="1" step="1"
+                    class="w-20 px-3 py-2 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
             </div>
 
-            <!-- Menú desplegable flotante con las tiendas disponibles -->
-            <div id="opciones_tienda_analisis"
-                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto z-30">
-                <div onclick="seleccionarTiendaAnalisis('', '-- Seleccionar Tienda --')"
-                    class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
-                    -- Seleccionar Tienda --
-                </div>
-                {% for tienda in ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'] %}
-                <div onclick="seleccionarTiendaAnalisis('{{ tienda }}', '{{ tienda }}')"
-                    data-nombre="{{ tienda|lower }}"
-                    class="opcion-tienda-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
-                    {{ tienda }}
-                </div>
-                {% endfor %}
-            </div>
+            <!-- Botón de ejecución para calcular el sugerido de la tienda activa -->
+            <button type="button" onclick="calcularSugeridoSedeActual()"
+                class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer">
+                <i class="fa-solid fa-bolt"></i> ⚡ Calcular Sugerido
+            </button>
         </div>
-
     </div>
 
     <!-- TARJETA DERECHA: SECCIÓN FILTROS EN CASCADA (Se activa al seleccionar un proveedor) -->
@@ -191,36 +172,50 @@
         </div>
 
     </div>
-    <!-- TARJETA DERECHA: EXPORTACIÓN DE DATOS A TXT -->
+    <!-- TARJETA DERECHA: EXPORTACIÓN INTELIGENTE DE DATOS -->
     <div
         class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
         <div>
-            <!-- Título del contenedor con icono -->
             <h3 class="text-xs font-semibold text-slate-700 tracking-wider mb-2">
-                <i class="fa-solid fa-file-export text-blue-600 mr-1"></i> Exportar Productos
+                <i class="fa-solid fa-file-export text-blue-600 mr-1"></i> Exportación Inteligente
             </h3>
-            <!-- Texto descriptivo de la acción -->
             <p class="text-xs text-slate-500">
-                Genera un archivo para importar a Stellar.
+                Genera los archivos .txt de las órdenes de compra para importación masiva.
             </p>
         </div>
 
-        <!-- Botón para ejecutar la exportación -->
-        <div>
-            <button type="button" onclick="exportarTablaTxt()"
-                class="w-full py-2.5 px-4 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer">
-                <i class="fa-solid fa-download"></i> Exportar Orden de Compra
+        <div class="grid grid-cols-1 gap-2">
+            <!-- Exportar por Tienda Individual -->
+            <button type="button" onclick="exportarArchivosSeparados()"
+                class="w-full py-2 px-3 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-boxes-packing"></i> Exportar Separados (.txt)
+            </button>
+            <!-- Exportar Consolidado Global -->
+            <button type="button" onclick="exportarConsolidado()"
+                class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer">
+                <i class="fa-solid fa-warehouse"></i> Exportar Consolidado (.txt)
             </button>
         </div>
     </div>
 
 </div>
-
+<!-- CONTENEDOR MULTITIENDA -->
+<div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
+    <!-- Pestañas dinámicas por Tienda con CENTRO activa por defecto -->
+    <div class="flex items-center gap-2 overflow-x-auto" id="pestanas-tiendas">
+        {% for tienda in ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'] %}
+        <button type="button" onclick="cambiarTiendaPestana('{{ tienda }}')" data-tienda="{{ tienda }}"
+            class="btn-pestana-tienda px-4 py-2 rounded-xl text-xs {% if tienda == 'CENTRO' %}font-bold border border-blue-600 bg-blue-600 text-white shadow-xs{% else %}font-semibold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-600{% endif %} transition">
+            <i class="fa-solid fa-store mr-1.5"></i>{{ tienda }}
+        </button>
+        {% endfor %}
+    </div>
+</div>
 <!-- TABLA DE DETALLE DE PRODUCTOS -->
 <div class="bg-white border border-slate-300 rounded-2xl shadow-xs overflow-hidden">
     <div class="overflow-x-auto">
         <!-- Cuadrícula compacta con bordes definidos estilo hoja de cálculo -->
-        <table class="w-full text-left border-collapse border border-slate-300" id="tabla-analisis">
+        <table class="w-full text-left border-collapse border border-slate-900" id="tabla-analisis">
             <!-- Se agregan eventos click para ordenar y cursores interactivos en la cabecera -->
             <thead>
                 <tr class="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider select-none">
@@ -237,6 +232,11 @@
                     <th onclick="ordenarTablaAnalisis(2, 'numero')"
                         class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
                         <div class="flex items-center justify-center gap-1">PRE. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(3, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 bg-slate-950/40 transition">
+                        <div class="flex items-center justify-center gap-1">INV. <i
                                 class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
                     </th>
                     <th onclick="ordenarTablaAnalisis(3, 'numero')"
@@ -867,43 +867,47 @@
             return;
         }
 
-        // Borrar datos en rango seleccionado (Delete / Supr)
+        // Borrar datos en rango seleccionado (Delete / Supr) afectando únicamente las celdas seleccionadas
         if ((e.key === 'Delete' || e.key === 'Del') && celdasSeleccionadasAnalisis.length > 0) {
             e.preventDefault();
 
             celdasSeleccionadasAnalisis.forEach(input => {
                 const tr = input.closest('tr');
 
-                // Si se borra un código (bloqueado o no), reactivar edición
+                // Si se borra la columna de código, solo se limpia el código y su descripción
                 if (input.classList.contains('inp-codigo')) {
-                    input.readOnly = false;
-                    input.value = '';
+                    input.readOnly = false; // Desbloquea la celda
+                    input.value = ''; // Limpia el código
                     input.classList.remove('bg-slate-100', 'cursor-default', 'select-none');
                     input.classList.add('focus:bg-white');
 
-                    tr.querySelector('.inp-desc').value = '';
-                    tr.querySelector('.inp-pre').value = '1';
-                    tr.querySelector('.inp-emp').value = '0';
-                    tr.querySelector('.inp-uni').value = '0';
-                    tr.querySelector('.inp-costo').value = '0.00';
-                    tr.querySelector('.txt-subtotal').textContent = '$ 0,00';
+                    const inpDesc = tr.querySelector('.inp-desc');
+                    if (inpDesc) inpDesc.value = ''; // Limpia solo la descripción
                 }
+                // Si se borra la columna de inventario (INV.)
+                else if (input.classList.contains('inp-inv-emp')) {
+                    input.value = '0'; // Reinicia a 0
+                    recancularFilaConInventario(input); // Recalcula el sugerido
+                }
+                // Si se borra empaques o unidades
                 else if (input.classList.contains('inp-emp') || input.classList.contains('inp-uni')) {
-                    input.value = '0';
-                    calcularFila(input);
+                    input.value = '0'; // Reinicia a 0
+                    calcularFila(input); // Recalcula subtotales
                 }
+                // Si se borra el costo unitario
                 else if (input.classList.contains('inp-costo')) {
-                    input.value = '0.00';
-                    calcularFila(input);
+                    input.value = '0.00'; // Reinicia el costo
+                    calcularFila(input); // Recalcula subtotales
                 }
+                // Si se borra la presentación (PRE.)
                 else if (input.classList.contains('inp-pre')) {
-                    input.value = '1';
-                    calcularFila(input);
+                    input.value = '1'; // Restablece presentación por defecto
+                    recancularFilaConInventario(input); // Recalcula dependientes
                 }
             });
 
-            desseleccionarCeldas();
-            totalizarAnalisis();
+            desseleccionarCeldas(); // Quita el sombreado azul
+            totalizarAnalisis(); // Actualiza la barra de totales globales
         }
     });
 
@@ -914,57 +918,71 @@
         }
     });
 
+    let matrizTiendas = {};
+    let tiendaActivaPestana = 'CENTRO';
+
+    // Función para inicializar la matriz de una tienda si no existe
+    function asegurarEstructuraTienda(tienda) {
+        if (!matrizTiendas[tienda]) {
+            matrizTiendas[tienda] = {};
+        }
+    }
+
+    // Actualización de la función que genera celdas dinámicas
     function agregarFilaAnalisis() {
         const tbody = document.getElementById('filas-tabla-analisis');
         const tr = document.createElement('tr');
         tr.className = 'hover:bg-blue-50/40 transition text-xs';
 
-        // Estructura de celdas con bordes tipo cuadrícula e inputs con eventos de click, doble click y arrastre
         tr.innerHTML = `
-            <td class="border border-slate-200 p-0 celda-interactiva relative">
-                <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:outline-none bg-transparent"
-                    placeholder=""
-                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    ondblclick="desbloquearCeldaCodigo(this)"
-                    onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)" onpaste="manejarPegadoCodigo(event, this)">
-            </td>
-            <td class="border border-slate-200 p-0 celda-interactiva relative">
-                <input type="text" readonly class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
-                    placeholder=""
-                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)">
-            </td>
-            <td class="border border-slate-200 p-0 celda-interactiva relative">
-                <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'pre')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'pre')"
-                    onfocus="iniciarEdicion(this)">
-            </td>
-            <td class="border border-slate-200 p-0 celda-interactiva relative">
-                <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')"
-                    onfocus="iniciarEdicion(this)">
-            </td>
-            <td class="border border-slate-200 p-0 celda-interactiva relative">
-                <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')"
-                    onfocus="iniciarEdicion(this)">
-            </td>
-            <td class="border border-slate-200 p-0 celda-interactiva relative">
-                <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                    onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'costo')">
-            </td>
-            <td class="border border-slate-200 px-2 py-1.5 text-right font-normal text-slate-700 bg-slate-50/50">
-                <span class="txt-subtotal">$ 0,00</span>
-            </td>
-            <td class="border border-slate-200 p-0 text-center bg-slate-50/50">
-                <button type="button" onclick="eliminarFila(this)" class="w-full h-full text-slate-400 hover:text-rose-600 transition py-1.5">
-                    <i class="fa-solid fa-trash-can text-xs"></i>
-                </button>
-            </td>
-        `;
+        <td class="border border-slate-200 p-0 celda-interactiva relative">
+            <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:outline-none bg-transparent"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                ondblclick="desbloquearCeldaCodigo(this)"
+                onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)" onpaste="manejarPegadoCodigo(event, this)">
+        </td>
+        <td class="border border-slate-200 p-0 celda-interactiva relative">
+            <input type="text" readonly class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)">
+        </td>
+        <td class="border border-slate-200 p-0 celda-interactiva relative">
+            <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                onkeydown="manejarKeyNav(event, this, 'pre')" oninput="recancularFilaConInventario(this)" onpaste="manejarPegadoColumna(event, this, 'pre')"
+                onfocus="iniciarEdicion(this)">
+        </td>
+        <td class="border border-slate-200 p-0 celda-interactiva relative bg-amber-50/30">
+            <input type="number" step="1" min="0" value="0" class="inp-inv-emp text-center w-full px-2 py-1.5 border-0 text-xs font-semibold text-amber-800 focus:bg-white focus:outline-none bg-transparent"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                onkeydown="manejarKeyNav(event, this, 'inv-emp')" oninput="recancularFilaConInventario(this)" onpaste="manejarPegadoColumna(event, this, 'inv-emp')"
+                onfocus="iniciarEdicion(this)">
+        </td>
+        <td class="border border-slate-200 p-0 celda-interactiva relative">
+            <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')"
+                onfocus="iniciarEdicion(this)">
+        </td>
+        <td class="border border-slate-200 p-0 celda-interactiva relative">
+            <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')"
+                onfocus="iniciarEdicion(this)">
+        </td>
+        <td class="border border-slate-200 p-0 celda-interactiva relative">
+            <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
+                onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
+                onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'costo')">
+        </td>
+        <td class="border border-slate-200 px-2 py-1.5 text-right font-normal text-slate-700 bg-slate-50/50">
+            <span class="txt-subtotal">$ 0,00</span>
+        </td>
+        <td class="border border-slate-200 p-0 text-center bg-slate-50/50">
+            <button type="button" onclick="eliminarFila(this)" class="w-full h-full text-slate-400 hover:text-rose-600 transition py-1.5">
+                <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+        </td>
+    `;
 
         tbody.appendChild(tr);
         return tr;
@@ -1036,6 +1054,8 @@
                 // Ejecuta la lógica de recálculo según el tipo de columna
                 if (tipo === 'uni') {
                     ajustarPorUnidades(inputDestino);
+                } else if (tipo === 'inv-emp') {
+                    recancularFilaConInventario(inputDestino);
                 } else {
                     calcularFila(inputDestino);
                 }
@@ -1202,7 +1222,7 @@
         const tbody = tr.parentElement;
         const filas = Array.from(tbody.children);
         // Columnas navegables en orden estricto
-        const colIndices = ['codigo', 'pre', 'emp', 'uni', 'costo'];
+        const colIndices = ['codigo', 'pre', 'inv-emp', 'emp', 'uni', 'costo'];
 
         // 1. EDICIÓN AL PRESIONAR NÚMEROS (0-9 o Numpad 0-9) ESTANDO EN MODO VISTA / FOCO
         if ((/^[0-9]$/.test(e.key) || /^Numpad[0-9]$/.test(e.code)) && !e.ctrlKey && !e.altKey && !e.metaKey) {
@@ -1290,6 +1310,9 @@
                 return;
             } else if (campoActual === 'pre') {
                 siguienteInput = tr.querySelector('.inp-emp');
+            } else if (campoActual === 'inv-emp') {
+                let sigTr = tr.nextElementSibling || agregarFilaAnalisis(); // Obtiene o crea la fila de abajo
+                siguienteInput = sigTr.querySelector('.inp-inv-emp'); // Enfoca la celda de abajo en la misma columna INV.
             } else if (campoActual === 'emp') {
                 let sigTr = tr.nextElementSibling || agregarFilaAnalisis(); // Obtiene la fila inferior
                 siguienteInput = sigTr.querySelector('.inp-emp'); // Enfoca la misma columna Emp.
@@ -1437,56 +1460,111 @@
         filas.forEach(tr => tbody.appendChild(tr));
     }
     // --- EXPORTACIÓN DE TABLA A FORMATO TXT ---
-    function exportarTablaTxt() {
-        // Obtiene todas las filas activas dentro de la tabla
+    // Exporta archivos .txt independientes por cada tienda que tenga cantidades mayores a 0
+    function exportarArchivosSeparados() {
+        // 1. Sincroniza los datos de la pantalla actual en la matriz en memoria
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+
+        const inputProveedor = document.getElementById('buscar_proveedor_analisis');
+        const proveedor = inputProveedor?.value.trim() || 'PROVEEDOR';
+
+        const hoy = new Date();
+        const fechaActual = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
+
+        const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
+        const filas = document.querySelectorAll('#filas-tabla-analisis tr');
+
+        let archivosGenerados = 0;
+
+        // Recorre cada sede para generar su archivo individual si contiene productos
+        sedes.forEach((tienda, index) => {
+            let lineas = [];
+
+            filas.forEach(tr => {
+                const codigo = tr.querySelector('.inp-codigo')?.value.trim() || '';
+                if (!codigo) return;
+
+                const pre = parseFloat(tr.querySelector('.inp-pre')?.value) || 1;
+                const datosTienda = matrizTiendas[tienda]?.[codigo];
+                const emp = datosTienda ? parseFloat(datosTienda.emp) || 0 : 0;
+                const unidades = emp * pre;
+
+                // Incluye solo filas con cantidades válidas
+                if (unidades > 0) {
+                    lineas.push(`${codigo}|${unidades}|`);
+                }
+            });
+
+            // Descarga el archivo de la tienda con un breve retraso para evitar bloqueo del navegador
+            if (lineas.length > 0) {
+                archivosGenerados++;
+                setTimeout(() => {
+                    const contenido = lineas.join('\r\n') + '\r\n';
+                    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
+                    a.download = nombreArchivo;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, index * 200);
+            }
+        });
+
+        if (archivosGenerados === 0) {
+            alert('No hay productos con empaques o unidades para exportar.');
+        }
+    }
+
+    // Exporta un archivo .txt único con la suma total de empaques/unidades de todas las tiendas
+    function exportarConsolidado() {
+        // 1. Sincroniza los datos de la pantalla actual en la matriz en memoria
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+
+        const inputProveedor = document.getElementById('buscar_proveedor_analisis');
+        const proveedor = inputProveedor?.value.trim() || 'PROVEEDOR';
+
+        const hoy = new Date();
+        const fechaActual = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
+
+        const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
         const filas = document.querySelectorAll('#filas-tabla-analisis tr');
         let lineas = [];
 
         filas.forEach(tr => {
-            // Extrae el código ST y la cantidad en unidades
             const codigo = tr.querySelector('.inp-codigo')?.value.trim() || '';
-            const unidades = parseInt(tr.querySelector('.inp-uni')?.value) || 0;
+            if (!codigo) return;
 
-            // Agrega la línea solo si la fila contiene un código
-            if (codigo !== '') {
-                lineas.push(`${codigo}|${unidades}|`);
+            const pre = parseFloat(tr.querySelector('.inp-pre')?.value) || 1;
+            let totalUnidades = 0;
+
+            // Suma las unidades requeridas en las 6 tiendas para este producto
+            sedes.forEach(tienda => {
+                const datosTienda = matrizTiendas[tienda]?.[codigo];
+                const emp = datosTienda ? parseFloat(datosTienda.emp) || 0 : 0;
+                totalUnidades += (emp * pre);
+            });
+
+            if (totalUnidades > 0) {
+                lineas.push(`${codigo}|${totalUnidades}|`);
             }
         });
 
-        // Valida que existan datos cargados antes de descargar
         if (lineas.length === 0) {
-            alert('No hay productos con código en la tabla para exportar.');
+            alert('No hay productos con empaques o unidades consolidadas para exportar.');
             return;
         }
 
-        // Une cada producto con un salto de línea
+        // Genera y descarga el archivo consolidado global
         const contenido = lineas.join('\r\n') + '\r\n';
-        // Crea el archivo en memoria en formato texto plano
         const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
         const url = URL.createObjectURL(blob);
-
-        // Genera y simula el clic de descarga
         const a = document.createElement('a');
         a.href = url;
-        // Obtiene el valor del proveedor desde el campo de texto de la interfaz
-        const inputProveedor = document.getElementById('buscar_proveedor_analisis');
-        const proveedor = inputProveedor?.value.trim() || 'PROVEEDOR';
-
-        // Obtiene el valor de la tienda desde el campo de texto de la interfaz
-        const inputTienda = document.getElementById('buscar_tienda_analisis');
-        const tienda = inputTienda?.value.trim() || 'TIENDA';
-
-        // Genera la fecha exacta al momento de la creación del archivo
-        const hoy = new Date();
-        const dia = String(hoy.getDate()).padStart(2, '0');
-        const mes = String(hoy.getMonth() + 1).padStart(2, '0');
-        const anio = hoy.getFullYear();
-        const fechaActual = `${dia}-${mes}-${anio}`;
-
-        // Limpia caracteres inválidos y construye el nombre final del archivo
-        const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
-
-        // Asigna el nombre dinámico generado al enlace de descarga
+        const nombreArchivo = `${proveedor} - CONSOLIDADO GLOBAL - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
         a.download = nombreArchivo;
         document.body.appendChild(a);
         a.click();
@@ -1604,6 +1682,245 @@
                 e.preventDefault();
             }
         }
+    });
+    // Función que aplica la fórmula matemática de sugerido usando el inventario contado
+    function recancularFilaConInventario(elem) {
+        const tr = elem.closest('tr');
+        const codigo = tr.querySelector('.inp-codigo').value.trim();
+        const pre = parseFloat(tr.querySelector('.inp-pre').value) || 1;
+        const invEmp = parseFloat(tr.querySelector('.inp-inv-emp').value) || 0;
+
+        // Obtener demanda diaria guardada en la matriz desde la BD para la tienda activa
+        asegurarEstructuraTienda(tiendaActivaPestana);
+        const datosProd = matrizTiendas[tiendaActivaPestana][codigo] || { demandaDiaria: 0 };
+        const demandaDiaria = datosProd.demandaDiaria || 0;
+        const diasCobertura = parseFloat(document.getElementById('dias_cobertura').value) || 7;
+
+        // 1. Convertir Inventario Físico en Empaques a Unidades
+        const invUnidades = invEmp * pre;
+
+        // 2. Unidades Requeridas = (Demanda Diaria * Días Cobertura) - Inventario en Unidades
+        const unidadesRequeridas = (demandaDiaria * diasCobertura) - invUnidades;
+
+        // 3. EMP. Sugerido = Redondear Arriba ( Max(0, Unidades Requeridas) / Presentación )
+        let empSugerido = 0;
+        if (unidadesRequeridas > 0 && pre > 0) {
+            empSugerido = Math.ceil(unidadesRequeridas / pre);
+        }
+
+        // Auto-completar la columna EMP con el valor sugerido recomendado
+        tr.querySelector('.inp-emp').value = empSugerido;
+
+        // Guardar estado en memoria para no perderlo al cambiar de pestaña
+        matrizTiendas[tiendaActivaPestana][codigo] = {
+            invEmp: invEmp,
+            emp: empSugerido,
+            demandaDiaria: demandaDiaria
+        };
+
+        // Calcular Unidades Totales y Subtotal Fila
+        calcularFila(elem);
+    }
+
+    // Función para cambiar de tienda activa en la barra de pestañas manteniendo los datos
+    function cambiarTiendaPestana(nuevaTienda) {
+        // 1. Persistir los datos actuales de la tabla en el objeto matrizTiendas
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+
+        // 2. Actualizar tienda activa
+        tiendaActivaPestana = nuevaTienda;
+
+        // 3. Resaltar pestaña activa visualmente
+        document.querySelectorAll('.btn-pestana-tienda').forEach(btn => {
+            if (btn.getAttribute('data-tienda') === nuevaTienda) {
+                btn.className = 'btn-pestana-tienda px-4 py-2 rounded-xl text-xs font-bold transition border border-blue-600 bg-blue-600 text-white shadow-xs';
+            } else {
+                btn.className = 'btn-pestana-tienda px-4 py-2 rounded-xl text-xs font-semibold transition border border-slate-200 bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-600';
+            }
+        });
+
+        // 4. Restaurar en pantalla los datos en memoria de la nueva tienda seleccionada
+        cargarEstadoTablaDesdeMemoria(nuevaTienda);
+    }
+
+    function guardarEstadoTablaEnMemoria(tienda) {
+        asegurarEstructuraTienda(tienda);
+        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+            const codigo = normalizarCodigoAnalisis(tr.querySelector('.inp-codigo')?.value);
+            if (codigo) {
+                const invEmp = parseFloat(tr.querySelector('.inp-inv-emp')?.value) || 0;
+                const emp = parseFloat(tr.querySelector('.inp-emp')?.value) || 0;
+                matrizTiendas[tienda][codigo] = {
+                    ...matrizTiendas[tienda][codigo],
+                    invEmp: invEmp,
+                    emp: emp
+                };
+            }
+        });
+    }
+
+    function normalizarCodigoAnalisis(cod) {
+        if (!cod) return '';
+        let str = String(cod).trim();
+        return /^\d+$/.test(str) ? str.padStart(6, '0') : str;
+    }
+    function cargarEstadoTablaDesdeMemoria(tienda) {
+        asegurarEstructuraTienda(tienda);
+        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+            const inpCod = tr.querySelector('.inp-codigo');
+            if (!inpCod) return;
+
+            // Normaliza el código visual para consultar exactamente la misma clave en la matriz
+            const codigo = normalizarCodigoAnalisis(inpCod.value);
+            if (codigo) {
+                inpCod.value = codigo; // Sincroniza la casilla en pantalla
+                const datos = matrizTiendas[tienda][codigo] || { invEmp: 0, emp: 0 };
+
+                const inpInv = tr.querySelector('.inp-inv-emp');
+                const inpEmp = tr.querySelector('.inp-emp');
+
+                if (inpInv) inpInv.value = datos.invEmp || 0;
+                if (inpEmp) inpEmp.value = datos.emp || 0;
+
+                if (inpEmp) calcularFila(inpEmp);
+            }
+        });
+    }
+    // Enviar el archivo CSV al backend FastAPI mediante FormData
+    async function subirCSVStellar(event) {
+        const fileInput = event.target;
+        if (!fileInput.files || fileInput.files.length === 0) return;
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        try {
+            const response = await fetch('/analisis/cargar-ventas-csv', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                alert(result.detail || 'Error al procesar el archivo CSV.');
+                return;
+            }
+
+            alert(`Ventas actualizadas exitosamente (${result.procesados} registros).`);
+
+            // Recargar matriz en memoria llamando al backend
+            await cargarVentasStellarEnMemoria();
+
+        } catch (error) {
+            console.error('Error en la petición:', error);
+            alert('Ocurrió un error al conectar con el servidor.');
+        } finally {
+            fileInput.value = ''; // Limpiar el input file
+        }
+    }
+
+
+    async function cargarVentasStellarEnMemoria() {
+        try {
+            const response = await fetch('/analisis/obtener-ventas-stellar');
+            const result = await response.json();
+
+            // Extrae el array sin importar si FastAPI responde con lista pura o dict con clave 'data'
+            const registros = Array.isArray(result) ? result : (Array.isArray(result?.data) ? result.data : []);
+
+            if (registros.length === 0) return;
+
+            registros.forEach(item => {
+                if (!item || !item.sede) return;
+
+                // Normaliza el nombre de la sede y elimina espacios extras
+                const sedeLimpia = String(item.sede).trim().toUpperCase();
+                const sedeNormalizada = (sedeLimpia === 'ALIANZA' || sedeLimpia === 'C. ALIANZA') ? 'CIUDAD ALIANZA' : sedeLimpia;
+
+                // Mantiene el código de texto de 6 dígitos exactamente como viene en BD/CSV
+                const codigo = normalizarCodigoAnalisis(item.codigo);
+                if (!codigo) return;
+
+                // Garantiza que la estructura exista en la matriz para la sede y producto
+                asegurarEstructuraTienda(sedeNormalizada);
+                if (!matrizTiendas[sedeNormalizada][codigo]) {
+                    matrizTiendas[sedeNormalizada][codigo] = { invEmp: 0, emp: 0, demandaDiaria: 0 };
+                }
+
+                // Convierte la demanda diaria a un número válido
+                const demanda = parseFloat(String(item.demanda_diaria || 0).replace(',', '.')) || 0;
+                matrizTiendas[sedeNormalizada][codigo].demandaDiaria = demanda;
+            });
+        } catch (error) {
+            console.error('Error al cargar ventas en memoria:', error);
+        }
+    }
+
+    // Ejecuta el cálculo de sugeridos para cada tienda según los días de cobertura ingresados
+    // Función síncrona para recalcular instantáneamente en memoria sin esperas de red
+    function ejecutarCalculoSugeridosSync() {
+        // 1. Resguarda los valores escritos en pantalla
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+
+        const diasCobertura = parseFloat(document.getElementById('dias_cobertura')?.value) || 7;
+        const filas = document.querySelectorAll('#filas-tabla-analisis tr');
+        const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
+
+        filas.forEach(tr => {
+            const inpCodigo = tr.querySelector('.inp-codigo');
+            if (!inpCodigo) return;
+
+            const codigo = normalizarCodigoAnalisis(inpCodigo.value);
+            if (!codigo) return;
+            inpCodigo.value = codigo; // Asegura el formato de 6 dígitos
+
+            const pre = parseFloat(tr.querySelector('.inp-pre')?.value) || 1;
+
+            sedes.forEach(sede => {
+                asegurarEstructuraTienda(sede);
+
+                // Obtiene datos de la sede guardados en memoria
+                const datosExistentes = matrizTiendas[sede][codigo] || { invEmp: 0, emp: 0, demandaDiaria: 0 };
+                const invEmp = parseFloat(datosExistentes.invEmp) || 0;
+                const invUnidades = invEmp * pre;
+                const demanda = parseFloat(datosExistentes.demandaDiaria) || 0;
+
+                // Cálculo del sugerido: (Demanda Diaria * Días Cobertura) - Inventario Físico
+                const unidadesRequeridas = (demanda * diasCobertura) - invUnidades;
+
+                let empSugerido = 0;
+                if (unidadesRequeridas > 0 && pre > 0) {
+                    empSugerido = Math.ceil(unidadesRequeridas / pre);
+                }
+
+                // Actualiza la estimación en la matriz de memoria
+                matrizTiendas[sede][codigo] = {
+                    ...datosExistentes,
+                    invEmp: invEmp,
+                    emp: empSugerido
+                };
+            });
+        });
+
+        // 2. Refresca la vista en pantalla con los nuevos cálculos inmediatamente
+        cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
+    }
+
+    // Ejecuta el cálculo consultando la BD al presionar el botón
+    async function calcularSugeridoSedeActual() {
+        await cargarVentasStellarEnMemoria();
+        ejecutarCalculoSugeridosSync();
+    }
+
+    // Recalcula los sugeridos instantáneamente al cambiar los días de cobertura
+    function recargarSugeridosEnTabla() {
+        ejecutarCalculoSugeridosSync();
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        cargarVentasStellarEnMemoria();
+        cambiarTiendaPestana('CENTRO');
     });
 </script>
 
