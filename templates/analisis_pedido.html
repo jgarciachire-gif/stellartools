@@ -113,13 +113,16 @@
                 <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5 whitespace-nowrap">
                     <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i> Días de Cobertura
                 </label>
-                <input type="number" id="dias_cobertura" value="7" min="1" step="1"
+                <!-- Se agrega el evento oninput para refrescar al instante al cambiar el número -->
+                <input type="number" id="dias_cobertura" value="7" min="1" step="1" oninput="recargarSugeridosEnTabla()"
                     class="w-20 px-3 py-2 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
             </div>
 
-            <button type="button" onclick="calcularSugeridoSedeActual()"
-                class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer">
-                <i class="fa-solid fa-bolt"></i>Calcular Sugerido
+            <!-- Se le agrega id y etiquetas internas para controlar el Spinner y estado deshabilitado -->
+            <button type="button" id="btn-calcular-sugerido" onclick="calcularSugeridoSedeActual()"
+                class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
+                <i class="fa-solid fa-bolt" id="icono-btn-calcular"></i>
+                <span>Calcular Sugerido</span>
             </button>
         </div>
     </div>
@@ -790,6 +793,8 @@
 
             // Actualiza los datos de empaques, unidades y monto final en la barra inferior
             totalizarAnalisis();
+
+            ejecutarCalculoSugeridosSync();
 
         } catch (e) {
             console.error('Error al importar productos:', e);
@@ -1575,22 +1580,22 @@
                 }
             });
 
-            // Descarga el archivo de la tienda con un breve retraso para evitar bloqueo del navegador
+            // Genera y descarga el archivo individual de la tienda si contiene registros
             if (lineas.length > 0) {
-                archivosGenerados++;
-                setTimeout(() => {
-                    const contenido = lineas.join('\r\n') + '\r\n';
-                    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
-                    a.download = nombreArchivo;
-                    document.body.appendChild(a);
-                    a.click();
-                    document.body.removeChild(a);
-                    URL.revokeObjectURL(url);
-                }, index * 200);
+                archivosGenerados++; // Incrementa el contador de archivos procesados
+                setTimeout(() => { // Aplica pausa entre descargas para evitar bloqueos del navegador
+                    const contenido = lineas.map(l => l.trim()).join('\r\n') + '\r\n'; // Limpia espacios y une filas con salto CRLF (\r\n) exacto para Stellar
+                    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' }); // Crea el objeto Blob formateado como texto plano
+                    const url = URL.createObjectURL(blob); // Genera la URL temporal del archivo generado
+                    const a = document.createElement('a'); // Crea dinámicamente la etiqueta de enlace de descarga
+                    a.href = url; // Asigna la URL del Blob al elemento enlace
+                    const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, ''); // Limpia caracteres no permitidos en nombres de archivo
+                    a.download = nombreArchivo; // Define el nombre final del archivo descargable
+                    document.body.appendChild(a); // Inserta temporalmente el enlace en el cuerpo del documento
+                    a.click(); // Ejecuta el disparo de descarga automática
+                    document.body.removeChild(a); // Remueve la etiqueta del DOM tras la descarga
+                    URL.revokeObjectURL(url); // Libera los recursos de memoria asignados a la URL
+                }, index * 200); // Espacia las descargas con un intervalo de 200 ms por tienda
             }
         });
 
@@ -1638,18 +1643,18 @@
             return;
         }
 
-        // Genera y descarga el archivo consolidado global
-        const contenido = lineas.join('\r\n') + '\r\n';
-        const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        const nombreArchivo = `${proveedor} - CONSOLIDADO GLOBAL - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, '');
-        a.download = nombreArchivo;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        // Une todas las líneas consolidadas con saltos de línea Windows (\r\n) y remueve espacios sobrantes
+        const contenido = lineas.map(l => l.trim()).join('\r\n') + '\r\n'; // Garantiza que cada registro termine en CRLF para Stellar
+        const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' }); // Genera el contenedor Blob con la codificación de texto adecuada
+        const url = URL.createObjectURL(blob); // Crea la ruta temporal para la descarga del consolidado
+        const a = document.createElement('a'); // Inicializa la etiqueta auxiliar de descarga
+        a.href = url; // Asigna la dirección del archivo Blob al enlace
+        const nombreArchivo = `${proveedor} - CONSOLIDADO GLOBAL - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, ''); // Aplica saneamiento al nombre del archivo
+        a.download = nombreArchivo; // Asigna el nombre al archivo .txt final
+        document.body.appendChild(a); // Agrega el enlace al DOM
+        a.click(); // Activa la descarga en el navegador
+        document.body.removeChild(a); // Elimina la etiqueta del DOM
+        URL.revokeObjectURL(url); // Cancela la asignación de memoria de la URL
     }
     // Guarda el valor original y selecciona el texto para sobreescribir al teclear
     function iniciarEdicion(elem) {
@@ -2193,10 +2198,23 @@
         cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
     }
 
-    // Ejecuta el cálculo consultando la BD al presionar el botón
+    // Ejecuta el cálculo mostrando un Spinner y deshabilitando el botón mientras procesa
     async function calcularSugeridoSedeActual() {
-        await cargarVentasStellarEnMemoria();
-        ejecutarCalculoSugeridosSync();
+        const btn = document.getElementById('btn-calcular-sugerido'); // Selecciona el botón de calcular
+        const icono = document.getElementById('icono-btn-calcular'); // Selecciona el icono interno del botón
+
+        if (btn) btn.disabled = true; // Inhabilita el botón inmediatamente al presionar
+        if (icono) icono.className = 'fa-solid fa-spinner fa-spin'; // Cambia el icono por un Spinner giratorio
+
+        try {
+            await cargarVentasStellarEnMemoria(); // Consulta la base de datos de ventas de forma asíncrona
+            ejecutarCalculoSugeridosSync(); // Recalcula las cantidades de inmediato para la tienda actual
+        } catch (error) {
+            console.error('Error al calcular sugeridos:', error); // Muestra error en consola si falla algo
+        } finally {
+            if (btn) btn.disabled = false; // Reasigna la capacidad de presionar el botón
+            if (icono) icono.className = 'fa-solid fa-bolt'; // Restaura el icono original del rayo
+        }
     }
 
     // Recalcula los sugeridos instantáneamente al cambiar los días de cobertura

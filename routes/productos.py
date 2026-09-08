@@ -7,6 +7,18 @@ import pandas as pd  # Lectura de archivos Excel
 from fastapi import APIRouter, Request, Form, UploadFile, File, Cookie  # FastAPI
 from fastapi.responses import RedirectResponse, JSONResponse  # Respuestas HTTP
 from config import supabase, templates, obtener_usuario_actual  # Variables globales
+import time
+import httpx
+
+# Ejecuta cualquier consulta a Supabase y la reintenta si el servidor corta la conexión HTTP/2
+def ejecutar_supabase_con_reintento(query, reintentos=3):
+    for intento in range(reintentos):
+        try:
+            return query.execute() # Intenta realizar la consulta a la base de datos
+        except (httpx.RemoteProtocolError, httpx.HTTPError, Exception) as e:
+            if intento == reintentos - 1: # Si falla en el último intento, lanza el error
+                raise e
+            time.sleep(0.2) # Espera una fracción de segundo antes de volver a intentar
 
 router = APIRouter()
 
@@ -43,7 +55,11 @@ def vista_productos(
         palabras = term_limpio.split()
         patron_busqueda = f"%{'%'.join(palabras)}%" if palabras else "%"
 
-        res_prov = supabase.table("proveedores").select("id").ilike("nombre", patron_busqueda).execute()
+    # Prepara la consulta para buscar proveedores por nombre
+        query_prov = supabase.table("proveedores").select("id").ilike("nombre", patron_busqueda)
+        # Ejecuta la consulta usando la función de reintento automático
+        res_prov = ejecutar_supabase_con_reintento(query_prov)
+        # Extrae la lista de IDs ajustando la sangría al nivel correcto
         ids_prov = [str(p["id"]) for p in res_prov.data] if res_prov.data else []
 
         condiciones = [

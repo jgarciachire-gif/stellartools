@@ -1,37 +1,46 @@
-from datetime import datetime, timedelta  # Manejo de fechas y duraciones
-from fastapi import APIRouter, Request, Cookie  # Tipos de FastAPI para consultas HTTP
-from fastapi.responses import RedirectResponse  # Respuestas de redirección
-from config import supabase, templates, obtener_usuario_actual  # Dependencias del sistema
+# dashboard.py
+
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Request, Cookie
+from fastapi.responses import RedirectResponse
+import config
+from config import templates, obtener_usuario_actual
 
 router = APIRouter()
 
 @router.get("/")
 @router.get("/aplicaciones") 
-def vista_aplicaciones(
+async def vista_aplicaciones(
     request: Request, 
     access_token: str = Cookie(None), 
     refresh_token: str = Cookie(None)
 ): 
-    user = obtener_usuario_actual(access_token, refresh_token) 
+    user = await obtener_usuario_actual(access_token, refresh_token) 
     if not user: 
         return RedirectResponse(url="/login", status_code=303) 
     return templates.TemplateResponse(request=request, name="index.html", context={})
 
 @router.get("/dashboard")
 @router.get("/inicio") 
-def dashboard(
+async def dashboard(
     request: Request, 
     access_token: str = Cookie(None),  
     refresh_token: str = Cookie(None)  
 ):
-    user = obtener_usuario_actual(access_token, refresh_token)
+    user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)  
 
-    res_oc = supabase.table("ordenes_compra").select("*, proveedores(nombre)").eq("usuario_id", user.id).order("id", desc=False).execute()
+    # Consulta ASÍNCRONA sin bloquear el Event Loop de FastAPI
+    res_oc = await config.supabase_async.table("ordenes_compra") \
+        .select("*, proveedores(nombre)") \
+        .eq("usuario_id", user.id) \
+        .order("id", desc=False) \
+        .execute()
     
     proveedores_desglose = {}
     hoy = datetime.now().date()  
+    
     if res_oc.data:
         agrupado = {}
         for row in res_oc.data:
@@ -68,11 +77,7 @@ def dashboard(
             if ocs_recibidas:
                 oc_seleccionada = ocs_recibidas[-1]
                 hay_nueva_enviada = any(oc.get('id', 0) > oc_seleccionada.get('id', 0) for oc in ocs_enviadas)
-                
-                if hay_nueva_enviada:
-                    estatus_oc = "Nueva OC enviada"
-                else:
-                    estatus_oc = "Despacho Recibido"
+                estatus_oc = "Nueva OC enviada" if hay_nueva_enviada else "Despacho Recibido"
             else:
                 oc_seleccionada = ocs_enviadas[-1]
                 estatus_oc = "Enviada"

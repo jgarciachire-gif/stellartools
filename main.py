@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, Request  # Framework principal web
 from fastapi.staticfiles import StaticFiles  # Soporte de archivos estáticos
 from starlette.middleware.sessions import SessionMiddleware  # Middleware para manejo de sesiones
@@ -13,27 +14,19 @@ from routes import auth, dashboard, proveedores, ordenes, escanear, productos, a
 # Inicialización de la aplicación FastAPI
 app = FastAPI(title="Control de Compras", version="2.0")
 
-# Middlewares principales
-app.add_middleware(SessionMiddleware, secret_key="clave_secreta_para_sesiones")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.on_event("startup")
 async def startup_event():
     config.supabase_async = await create_async_client(SUPABASE_URL, SUPABASE_KEY)
 
+# 1. PRIMERO declaramos el middleware del perfil
 @app.middleware("http")
 async def cargar_perfil_middleware(request: Request, call_next):
-    request.state.perfil = None
-    request.state.user = None  # Inicializa la propiedad del usuario en la solicitud
-    access_token = request.cookies.get("access_token")
-    
-    if access_token:
-        user = obtener_usuario_actual(access_token)  
-        if user:
-            request.state.user = user  # Guarda el usuario autenticado para Jinja2
-            res = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
-            request.state.perfil = res.data if res and res.data else None  
-            
+    # Leemos la sesión en memoria local (0 llamadas a Supabase/Red)
+    request.state.user = request.session.get("user")
+    request.state.perfil = request.session.get("perfil")
+
     response = await call_next(request)
 
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
@@ -41,6 +34,10 @@ async def cargar_perfil_middleware(request: Request, call_next):
     response.headers["Expires"] = "0"
 
     return response
+
+# 2. DESPUÉS agregamos SessionMiddleware (se ejecutará primero en cada petición)
+SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta_para_sesiones_local")
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Registro de rutas modulares
 app.include_router(auth.router)

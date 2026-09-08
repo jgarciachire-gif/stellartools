@@ -38,9 +38,19 @@ def procesar_registro(email: str = Form(...), password: str = Form(...)):
         )
 
 @router.post("/login")
-def procesar_login(email: str = Form(...), password: str = Form(...)):
+def procesar_login(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
         auth_res = supabase.auth.sign_in_with_password({"email": email.strip(), "password": password})
+        user = auth_res.user
+        
+        # Consultamos el perfil una sola vez durante el inicio de sesión
+        res_perfil = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+        perfil_data = res_perfil.data if res_perfil and res_perfil.data else None
+
+        # Guardamos los datos de usuario y perfil en la sesión cifrada
+        request.session["user"] = {"id": user.id, "email": user.email}
+        request.session["perfil"] = perfil_data
+
         response = RedirectResponse(url="/", status_code=303)
         
         response.set_cookie(
@@ -69,6 +79,7 @@ def procesar_login(email: str = Form(...), password: str = Form(...)):
         )
         res_error.delete_cookie("access_token")
         res_error.delete_cookie("refresh_token")
+        request.session.clear()
         return res_error
 
 @router.post("/recuperar-password")
@@ -104,7 +115,8 @@ def procesar_reset_password(access_token: str = Cookie(None), nueva_password: st
         return script_alerta_modal(tipo="error", titulo="Error", mensaje=f"Error al actualizar la contraseña: {str(e)}")
 
 @router.get("/logout")
-def cerrar_sesion():
+def cerrar_sesion(request: Request):
+    request.session.clear()
     response = RedirectResponse(url="/login", status_code=303)
     response.delete_cookie("access_token", path="/")
     response.delete_cookie("refresh_token", path="/")
