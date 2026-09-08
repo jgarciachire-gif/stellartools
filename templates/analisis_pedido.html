@@ -1,12 +1,12 @@
 {% extends "base.html" %}
 {% block content %}
 
-<!-- ENCABEZADO -->
-<div class="flex items-center justify-between mb-6 relative">
+<!-- ENCABEZADO CON ACCIONES PRINCIPALES -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 relative">
     <div>
         <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
             <div
-                class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30 group-hover:scale-105 transition-transform">
+                class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30">
                 <i class="fa-solid fa-calculator"></i>
             </div>
             <span>Análisis de Pedido</span>
@@ -14,35 +14,62 @@
         <p class="text-xs text-slate-500 mt-1">Planificación y estimación de cantidades por tienda y proveedor</p>
     </div>
 
-    <!-- Botón Menú 3 Puntos -->
-    <div class="relative">
-        <button id="btn-menu-opciones" type="button"
-            class="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none">
-            <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
+    <!-- Botones de Acción Cuadrados con Bordes Redondeados (Mismo Formato del Header) -->
+    <div class="flex items-center gap-2 flex-wrap">
+        <!-- Guardar -->
+        <button type="button" onclick="guardarPlantillaCompleta()"
+            class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-floppy-disk"></i> Guardar
         </button>
 
-        <div id="dropdown-opciones"
-            class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
-            <button type="button" onclick="document.getElementById('input-csv-stellar').click();"
-                class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 rounded-xl flex items-center gap-2 transition-colors">
-                <i class="fa-solid fa-file-csv text-emerald-500"></i> Cargar Ventas (CSV)
+        <!-- Cargar Pedido Guardado -->
+        <button type="button" onclick="cargarUltimoPedidoGuardado()"
+            class="px-3.5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-folder-open"></i> Cargar Pedido
+        </button>
+
+        <!-- Exportar Separados -->
+        <button onclick="abrirModalExportarSeparado()"
+            class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-boxes-packing"></i> Exportar Separados
+        </button>
+
+        <!-- Exportar Consolidado -->
+        <button type="button" onclick="exportarConsolidado()"
+            class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-warehouse"></i> Exportar Consolidado
+        </button>
+
+        <!-- Limpiar Lista -->
+        <button type="button" onclick="limpiarListaProductos()"
+            class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
+            <i class="fa-solid fa-trash-can"></i> Limpiar lista
+        </button>
+
+        <!-- Menú 3 Puntos -->
+        <div class="relative">
+            <button id="btn-menu-opciones" type="button"
+                class="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none border border-slate-200 bg-white shadow-xs">
+                <i class="fa-solid fa-ellipsis-vertical text-base"></i>
             </button>
-            <!-- Input file oculto para activar el selector de archivos -->
-            <input type="file" id="input-csv-stellar" accept=".csv" class="hidden" onchange="subirCSVStellar(event)">
-            <!-- Opción para Limpiar Lista -->
-            <button type="button" onclick="limpiarListaProductos();"
-                class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-rose-600 rounded-xl flex items-center gap-2 transition-colors">
-                <i class="fa-solid fa-trash-can text-rose-500"></i> Limpiar lista
-            </button>
+
+            <div id="dropdown-opciones"
+                class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+                <button type="button" onclick="document.getElementById('input-csv-stellar').click();"
+                    class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 rounded-xl flex items-center gap-2 transition-colors">
+                    <i class="fa-solid fa-file-csv text-emerald-500"></i> Cargar Ventas (CSV)
+                </button>
+                <input type="file" id="input-csv-stellar" accept=".csv" class="hidden"
+                    onchange="subirCSVStellar(event)">
+            </div>
         </div>
     </div>
 </div>
 
-<!-- CONTENEDOR PRINCIPAL DE CONTROLES (PROVEEDOR, TIENDA Y FILTROS EN PROPORCIÓN 2:1) -->
-<div class="grid grid-cols-1 md:grid-cols-6 gap-6 mb-6">
+<!-- CONTENEDOR PRINCIPAL DE CONTROLES (PROVEEDOR Y FILTROS) -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
     <!-- TARJETA IZQUIERDA: SELECCIÓN DE PROVEEDOR, COBERTURA Y CÁLCULO -->
-    <div
-        class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
+    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
 
         <!-- Buscador de Proveedor -->
         <div class="relative" id="combo-proveedor-analisis">
@@ -80,7 +107,7 @@
             </div>
         </div>
 
-        <!-- Días de Cobertura y Botón Calcular Sugerido (Migrados debajo de Proveedor) -->
+        <!-- Días de Cobertura y Botón Calcular Sugerido -->
         <div class="flex items-end gap-3 pt-2">
             <div class="flex-1">
                 <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5 whitespace-nowrap">
@@ -90,17 +117,16 @@
                     class="w-20 px-3 py-2 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
             </div>
 
-            <!-- Botón de ejecución para calcular el sugerido de la tienda activa -->
             <button type="button" onclick="calcularSugeridoSedeActual()"
                 class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer">
-                <i class="fa-solid fa-bolt"></i> ⚡ Calcular Sugerido
+                <i class="fa-solid fa-bolt"></i>Calcular Sugerido
             </button>
         </div>
     </div>
 
-    <!-- TARJETA DERECHA: SECCIÓN FILTROS EN CASCADA (Se activa al seleccionar un proveedor) -->
+    <!-- TARJETA DERECHA: SECCIÓN FILTROS EN CASCADA -->
     <div id="sec-filtros-clasificacion"
-        class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 opacity-50 pointer-events-none transition-all">
+        class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 opacity-50 pointer-events-none transition-all">
 
         <!-- 1er Campo: Departamento -->
         <div class="relative" id="combo-depto-analisis">
@@ -172,32 +198,6 @@
         </div>
 
     </div>
-    <!-- TARJETA DERECHA: EXPORTACIÓN INTELIGENTE DE DATOS -->
-    <div
-        class="md:col-span-2 bg-white p-6 rounded-2xl border border-slate-200 shadow-xs flex flex-col justify-between space-y-4">
-        <div>
-            <h3 class="text-xs font-semibold text-slate-700 tracking-wider mb-2">
-                <i class="fa-solid fa-file-export text-blue-600 mr-1"></i> Exportación Inteligente
-            </h3>
-            <p class="text-xs text-slate-500">
-                Genera los archivos .txt de las órdenes de compra para importación masiva.
-            </p>
-        </div>
-
-        <div class="grid grid-cols-1 gap-2">
-            <!-- Exportar por Tienda Individual -->
-            <button type="button" onclick="exportarArchivosSeparados()"
-                class="w-full py-2 px-3 bg-slate-800 hover:bg-slate-900 text-white font-medium rounded-xl text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer">
-                <i class="fa-solid fa-boxes-packing"></i> Exportar Separados (.txt)
-            </button>
-            <!-- Exportar Consolidado Global -->
-            <button type="button" onclick="exportarConsolidado()"
-                class="w-full py-2 px-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl text-xs transition shadow-xs flex items-center justify-center gap-2 cursor-pointer">
-                <i class="fa-solid fa-warehouse"></i> Exportar Consolidado (.txt)
-            </button>
-        </div>
-    </div>
-
 </div>
 <!-- CONTENEDOR MULTITIENDA -->
 <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
@@ -292,8 +292,88 @@
         </div>
     </div>
 </div>
+<!-- Modal de Selección de Tiendas a Exportar (.txt) -->
+<style>
+    /* Estilos para las etiquetas selectoras de tiendas */
+    .tag-tienda-exportar {
+        padding: 6px 14px;
+        /* Espaciado de la etiqueta */
+        border: 1px solid #007bff;
+        /* Borde azul */
+        background-color: #ffffff;
+        /* Fondo blanco */
+        color: #007bff;
+        /* Texto azul */
+        border-radius: 20px;
+        /* Bordes redondeados */
+        cursor: pointer;
+        /* Mano al pasar el cursor */
+        font-size: 13px;
+        /* Tamaño de texto */
+        font-weight: 600;
+        /* Texto seminegrita */
+        user-select: none;
+        /* Desactiva la selección de texto */
+        transition: all 0.2s ease;
+        /* Animación de cambio */
+    }
+
+    /* Estado seleccionado de la etiqueta */
+    .tag-tienda-exportar.activa {
+        background-color: #007bff;
+        /* Fondo azul */
+        color: #ffffff;
+        /* Texto blanco */
+    }
+</style>
+
+<div id="modal-exportar-tiendas"
+    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; justify-content: center; align-items: center;">
+    <div
+        style="background: #fff; padding: 20px; border-radius: 8px; width: 450px; max-width: 90%; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
+        <h3 style="margin-top: 0;">Seleccionar Tiendas a Exportar (.txt)</h3>
+
+        <!-- Botón para alternar todas las tiendas -->
+        <div style="margin-bottom: 12px; text-align: right;">
+            <button type="button" id="btn-toggle-todas-tiendas" onclick="toggleTodasLasTiendasExportar()"
+                style="padding: 4px 12px; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px; font-weight: bold;">
+                Todas
+            </button>
+        </div>
+
+        <!-- Lista dinámica de etiquetas de tiendas -->
+        <div id="contenedor-etiquetas-exportar"
+            style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 250px; overflow-y: auto; padding: 10px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 20px;">
+        </div>
+
+        <!-- Botones de acción -->
+        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+            <button type="button" onclick="cerrarModalExportarTiendas()"
+                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Cancelar
+            </button>
+            <button type="button" onclick="confirmarExportacionSeparada()"
+                style="padding: 8px 16px; background: #313681; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                Aceptar
+            </button>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
 <script>
+    // Inicialización del cliente Supabase en el navegador
+    const SUPABASE_URL = 'https://wrcbuseidkupjndpovdd.supabase.co'; // URL de tu proyecto
+    const SUPABASE_KEY = 'sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA'; // Clave pública
+    window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    // Obtiene el ID del usuario desde request.state inyectado por FastAPI/Jinja2
+    const USUARIO_ID_SESION = "{{ request.state.user.id if request.state and request.state.user else (request.state.perfil.usuario_id if request.state and request.state.perfil else (user.id if user is defined and user else '')) }}";
+</script>
+
+<script>
+
     // Control del Menú desplegable de 3 puntos
     document.addEventListener('DOMContentLoaded', () => {
         const btnMenuOpciones = document.getElementById('btn-menu-opciones');
@@ -1390,7 +1470,7 @@
 
     // Cargar 1 filas iniciales al abrir la vista
     document.addEventListener('DOMContentLoaded', () => {
-        const cantidadFilasIniciales = 5;
+        const cantidadFilasIniciales = 1;
         for (let i = 0; i < cantidadFilasIniciales; i++) {
             agregarFilaAnalisis();
         }
@@ -1609,6 +1689,213 @@
         });
 
         return modificados;
+    }
+    // Asegura la existencia de la variable en el objeto global de la ventana
+    if (typeof window.matrizDatosPorSede === 'undefined') {
+        window.matrizDatosPorSede = {};
+    }
+
+    // Función adaptada para guardar la matriz real 'matrizTiendas' de tu archivo
+    async function guardarPlantillaCompleta() {
+        try {
+            // Sincroniza la tabla en pantalla hacia la memoria de la pestaña activa
+            if (typeof guardarEstadoTablaEnMemoria === 'function' && typeof tiendaActivaPestana !== 'undefined') {
+                guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+            }
+
+            // Obtiene el ID del usuario autenticado
+            let userId = null;
+            try {
+                const { data: { user } } = await supabaseClient.auth.getUser();
+                if (user) userId = user.id;
+            } catch (e) { }
+
+            if (!userId && typeof USUARIO_ID_SESION !== 'undefined' && USUARIO_ID_SESION) {
+                userId = USUARIO_ID_SESION;
+            }
+
+            if (!userId) {
+                alert('Debe iniciar sesión para guardar en la base de datos.');
+                return;
+            }
+
+            // Datos de la cabecera
+            const rawProvId = document.getElementById('proveedor_id_analisis')?.value;
+            const proveedorId = rawProvId ? parseInt(rawProvId) : null;
+            const diasCobertura = parseInt(document.getElementById('dias_cobertura')?.value || 7);
+
+            // Upsert en la tabla principal analisis_pedidos
+            const { data: analisis, error: errorAnalisis } = await supabaseClient
+                .from('analisis_pedidos')
+                .upsert({
+                    usuario_id: userId,
+                    proveedor_id: proveedorId,
+                    dias_cobertura: diasCobertura,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'usuario_id' })
+                .select('id')
+                .single();
+
+            if (errorAnalisis) throw errorAnalisis;
+
+            const analisisId = analisis.id;
+
+            // Limpia detalle anterior antes de reinsertar
+            const { error: errorBorrado } = await supabaseClient
+                .from('analisis_pedidos_detalle')
+                .delete()
+                .eq('analisis_id', analisisId);
+
+            if (errorBorrado) throw errorBorrado;
+
+            // Recorre matrizTiendas e incluye la clave/código de cada producto
+            const filasDetalle = [];
+
+            for (const sede in matrizTiendas) {
+                for (const codigo in matrizTiendas[sede]) {
+                    const item = matrizTiendas[sede][codigo];
+                    if (!item) continue;
+
+                    const valInv = parseFloat(item.invEmp) || 0;
+                    const valEmp = parseFloat(item.emp) || 0;
+
+                    if (valInv > 0 || valEmp > 0) {
+                        filasDetalle.push({
+                            analisis_id: analisisId,
+                            sede: sede,
+                            codigo: codigo,       // Guarda la clave del producto
+                            sugerido: valInv,     // Guarda empaques de inventario/sugerido
+                            pedido_final: valEmp  // Guarda empaques finales
+                        });
+                    }
+                }
+            }
+
+            if (filasDetalle.length === 0) {
+                alert('⚠️ No hay datos ingresados en la tabla para guardar.');
+                return;
+            }
+
+            // Insertar datos a Supabase
+            const { error: errorInsertDetalle } = await supabaseClient
+                .from('analisis_pedidos_detalle')
+                .insert(filasDetalle);
+
+            if (errorInsertDetalle) throw errorInsertDetalle;
+
+            alert('✅ Pedido guardado exitosamente en Supabase.');
+        } catch (err) {
+            console.error('Error al guardar el pedido:', err);
+            alert('❌ Error de Supabase al guardar: ' + (err.message || JSON.stringify(err)));
+        }
+    }
+
+    // Función adaptada para cargar asignando los valores recuperados a 'matrizTiendas'
+    async function cargarUltimoPedidoGuardado() {
+        try {
+            let userId = null;
+            try {
+                const { data: { user } } = await supabaseClient.auth.getUser();
+                if (user) userId = user.id;
+            } catch (e) { }
+
+            if (!userId && typeof USUARIO_ID_SESION !== 'undefined' && USUARIO_ID_SESION) {
+                userId = USUARIO_ID_SESION;
+            }
+
+            if (!userId) {
+                alert('Debe iniciar sesión para cargar un pedido guardado.');
+                return;
+            }
+
+            // Consulta la cabecera
+            const { data: analisis, error } = await supabaseClient
+                .from('analisis_pedidos')
+                .select('*')
+                .eq('usuario_id', userId)
+                .maybeSingle();
+
+            if (error || !analisis) {
+                alert("No se encontró ningún pedido guardado para este usuario.");
+                return;
+            }
+
+            // Restaura días de cobertura y proveedor
+            if (analisis.dias_cobertura && document.getElementById('dias_cobertura')) {
+                document.getElementById('dias_cobertura').value = analisis.dias_cobertura;
+            }
+
+            if (analisis.proveedor_id) {
+                const inputProvId = document.getElementById('proveedor_id_analisis');
+                if (inputProvId) inputProvId.value = analisis.proveedor_id;
+
+                const { data: prov } = await supabaseClient
+                    .from('proveedores')
+                    .select('nombre')
+                    .eq('id', analisis.proveedor_id)
+                    .maybeSingle();
+
+                if (prov && document.getElementById('buscar_proveedor_analisis')) {
+                    document.getElementById('buscar_proveedor_analisis').value = prov.nombre;
+                }
+            }
+
+            // Consulta el detalle guardado
+            const { data: detalles, error: detallesError } = await supabaseClient
+                .from('analisis_pedidos_detalle')
+                .select('*')
+                .eq('analisis_id', analisis.id);
+
+            if (detallesError) throw detallesError;
+
+            if (detalles && detalles.length > 0) {
+                // 1. Limpiar el contenido actual de la tabla HTML para evitar acumular filas vacías
+                const tbody = document.getElementById('filas-tabla-analisis');
+                if (tbody) tbody.innerHTML = '';
+
+                // 2. Extraer la lista de códigos válidos descartando la palabra 'NULL', valores nulos y textos vacíos
+                const codigosUnicos = [...new Set(detalles.map(d => d.codigo))]
+                    .filter(c => c && String(c).trim().toUpperCase() !== 'NULL' && String(c).trim() !== '');
+
+                // 3. Generar únicamente las filas de productos válidos e importar su información
+                for (const codigo of codigosUnicos) {
+                    const tr = agregarFilaAnalisis(); // Inserta una nueva fila en la tabla visual
+                    const inpCod = tr.querySelector('.inp-codigo'); // Captura el campo input del código
+                    if (inpCod) {
+                        inpCod.value = codigo; // Asigna el código verificado
+                        await consultarProductoCodigo(inpCod); // Consulta descripción, costo y empaque en la API
+                    }
+                }
+
+                // 4. Asignar las cantidades guardadas (inventario/sugerido y pedido) a la matriz en memoria
+                detalles.forEach(item => {
+                    if (typeof asegurarEstructuraTienda === 'function') {
+                        asegurarEstructuraTienda(item.sede);
+                    } else if (!matrizTiendas[item.sede]) {
+                        matrizTiendas[item.sede] = {};
+                    }
+
+                    if (!matrizTiendas[item.sede][item.codigo]) {
+                        matrizTiendas[item.sede][item.codigo] = {};
+                    }
+
+                    matrizTiendas[item.sede][item.codigo].invEmp = item.sugerido || 0; // Restaura empaques de inventario
+                    matrizTiendas[item.sede][item.codigo].emp = item.pedido_final || 0; // Restaura empaques de pedido
+                });
+
+                // 5. Renderizar los datos en la pantalla para la tienda actualmente seleccionada
+                if (typeof cargarEstadoTablaDesdeMemoria === 'function') {
+                    cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
+                }
+
+                alert('✅ Pedido cargado exitosamente.');
+            } else {
+                alert('El registro de pedido está vacío o no contiene detalle de productos.');
+            }
+        } catch (err) {
+            console.error('Error al cargar pedido:', err);
+            alert('❌ Error de Supabase al cargar: ' + (err.message || JSON.stringify(err)));
+        }
     }
 
     // Función para enviar los datos al servidor
@@ -1857,7 +2144,6 @@
         }
     }
 
-    // Ejecuta el cálculo de sugeridos para cada tienda según los días de cobertura ingresados
     // Función síncrona para recalcular instantáneamente en memoria sin esperas de red
     function ejecutarCalculoSugeridosSync() {
         // 1. Resguarda los valores escritos en pantalla
@@ -1922,6 +2208,138 @@
         cargarVentasStellarEnMemoria();
         cambiarTiendaPestana('CENTRO');
     });
+
+    // Set global para rastrear las tiendas elegidas en la ventana modal
+    let tiendasSeleccionadasExportar = new Set();
+
+    // Abre el modal y renderiza la lista de tiendas
+    function abrirModalExportarSeparado() {
+        const contenedor = document.getElementById('contenedor-etiquetas-exportar'); // Obtener contenedor de etiquetas
+        if (!contenedor) return;
+
+        contenedor.innerHTML = ''; // Limpiar etiquetas previas
+        tiendasSeleccionadasExportar.clear(); // Limpiar datos del Set
+
+        // Obtener la lista de tiendas desde LISTA_TIENDAS o las claves del objeto matrizTiendas
+        const listaTiendas = (typeof LISTA_TIENDAS !== 'undefined' && LISTA_TIENDAS.length > 0)
+            ? LISTA_TIENDAS
+            : Object.keys(matrizTiendas || {});
+
+        if (listaTiendas.length === 0) {
+            alert('No hay tiendas disponibles para exportar.');
+            return;
+        }
+
+        // Generar dinámicamente las etiquetas de cada tienda
+        listaTiendas.forEach(tienda => {
+            tiendasSeleccionadasExportar.add(tienda); // Seleccionar por defecto
+
+            const tag = document.createElement('div'); // Crear elemento visual
+            tag.className = 'tag-tienda-exportar activa'; // Clase activa inicial
+            tag.textContent = tienda; // Nombre visible
+            tag.dataset.tienda = tienda; // Atributo identificador
+
+            tag.onclick = () => toggleTiendaExportar(tienda, tag); // Evento clic para alternar
+
+            contenedor.appendChild(tag); // Agregar al contenedor
+        });
+
+        document.getElementById('modal-exportar-tiendas').style.display = 'flex'; // Mostrar modal centrado
+    }
+
+    // Alterna la selección individual de una tienda
+    function toggleTiendaExportar(tienda, elementoHTML) {
+        if (tiendasSeleccionadasExportar.has(tienda)) {
+            tiendasSeleccionadasExportar.delete(tienda); // Desmarcar tienda
+            elementoHTML.classList.remove('activa'); // Quitar estilo activo
+        } else {
+            tiendasSeleccionadasExportar.add(tienda); // Marcar tienda
+            elementoHTML.classList.add('activa'); // Agregar estilo activo
+        }
+    }
+
+    // Marca o desmarca todas las tiendas
+    function toggleTodasLasTiendasExportar() {
+        const contenedor = document.getElementById('contenedor-etiquetas-exportar');
+        const tags = contenedor.querySelectorAll('.tag-tienda-exportar');
+        const listaTiendas = (typeof LISTA_TIENDAS !== 'undefined' && LISTA_TIENDAS.length > 0)
+            ? LISTA_TIENDAS
+            : Object.keys(matrizTiendas || {});
+
+        const seleccionarTodas = tiendasSeleccionadasExportar.size < listaTiendas.length;
+        tiendasSeleccionadasExportar.clear();
+
+        tags.forEach(tag => {
+            const tienda = tag.dataset.tienda;
+            if (seleccionarTodas) {
+                tiendasSeleccionadasExportar.add(tienda); // Agregar tienda al Set
+                tag.classList.add('activa'); // Estilo activo
+            } else {
+                tag.classList.remove('activa'); // Estilo inactivo
+            }
+        });
+    }
+
+    // Cierra la ventana emergente
+    function cerrarModalExportarTiendas() {
+        document.getElementById('modal-exportar-tiendas').style.display = 'none'; // Ocultar modal
+    }
+
+    // Genera los archivos .txt de las tiendas elegidas
+    function confirmarExportacionSeparada() {
+        if (tiendasSeleccionadasExportar.size === 0) {
+            alert('⚠️ Debes seleccionar al menos una tienda para exportar.');
+            return;
+        }
+
+        // Obtener el nombre del proveedor desde variable global o selector HTML
+        const elProv = document.getElementById('select-proveedor') || document.getElementById('inp-proveedor') || document.getElementById('proveedor');
+        const proveedor = (typeof PROVEEDOR !== 'undefined' && PROVEEDOR) ? PROVEEDOR : (elProv ? elProv.value.trim() : 'PROVEEDOR');
+
+        // Generar la fecha actual en formato DD-MM-AAAA
+        const hoy = new Date();
+        const dd = String(hoy.getDate()).padStart(2, '0');
+        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+        const aaaa = hoy.getFullYear();
+        const fechaStr = `${dd}-${mm}-${aaaa}`;
+
+        // Recorrer las tiendas seleccionadas en la ventana modal
+        tiendasSeleccionadasExportar.forEach(tienda => {
+            let contenidoTxt = ''; // Acumulador con el formato requerido por Stellar
+
+            if (typeof matrizTiendas !== 'undefined' && matrizTiendas[tienda]) {
+                Object.keys(matrizTiendas[tienda]).forEach(codigo => {
+                    const item = matrizTiendas[tienda][codigo];
+                    const emp = parseFloat(item.emp || item.pedido_final || 0); // Cantidad de empaques solicitados
+
+                    if (emp > 0) {
+                        // Obtener el factor de empaque para convertir empaques a unidades físicas
+                        const factor = parseFloat(item.empaque || item.bulto || item.factor || 1);
+                        const totalUnidades = Math.round(emp * factor); // Unidades totales requeridas por Stellar
+
+                        // Formato delimitado por tuberías: CODIGO|CANTIDAD|
+                        contenidoTxt += `${codigo}|${totalUnidades}|\n`;
+                    }
+                });
+            }
+
+            // Generar archivo .txt únicamente si hay productos para esa tienda
+            if (contenidoTxt.trim() !== '') {
+                const blob = new Blob([contenidoTxt], { type: 'text/plain;charset=utf-8;' }); // Crear objeto de texto plano
+                const url = URL.createObjectURL(blob); // Crear enlace de descarga temporal
+                const a = document.createElement('a'); // Crear nodo <a> dinámico
+                a.href = url;
+                a.download = `${proveedor} - ${tienda} - ${fechaStr}.txt`; // Nombre: PROVEEDOR - TIENDA - FECHA.txt
+                document.body.appendChild(a);
+                a.click(); // Forzar la descarga en el navegador
+                document.body.removeChild(a); // Eliminar el nodo temporal
+                URL.revokeObjectURL(url); // Liberar recurso en memoria
+            }
+        });
+
+        cerrarModalExportarTiendas(); // Cerrar el modal al finalizar
+    }
 </script>
+
 
 {% endblock %}

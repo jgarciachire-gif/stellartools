@@ -24,11 +24,13 @@ async def startup_event():
 @app.middleware("http")
 async def cargar_perfil_middleware(request: Request, call_next):
     request.state.perfil = None
+    request.state.user = None  # Inicializa la propiedad del usuario en la solicitud
     access_token = request.cookies.get("access_token")
     
     if access_token:
         user = obtener_usuario_actual(access_token)  
         if user:
+            request.state.user = user  # Guarda el usuario autenticado para Jinja2
             res = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
             request.state.perfil = res.data if res and res.data else None  
             
