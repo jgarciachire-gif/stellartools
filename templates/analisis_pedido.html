@@ -1544,117 +1544,225 @@
         // Reinsertar las filas ordenadas dentro del DOM
         filas.forEach(tr => tbody.appendChild(tr));
     }
-    // --- EXPORTACIÓN DE TABLA A FORMATO TXT ---
-    // Exporta archivos .txt independientes por cada tienda que tenga cantidades mayores a 0
-    function exportarArchivosSeparados() {
-        // 1. Sincroniza los datos de la pantalla actual en la matriz en memoria
-        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+    // --- LÓGICA DE ALMACENAMIENTO Y EXPORTACIÓN A TXT ---
 
-        const inputProveedor = document.getElementById('buscar_proveedor_analisis');
-        const proveedor = inputProveedor?.value.trim() || 'PROVEEDOR';
+    // Obtiene el nombre del proveedor activo en el contenedor 1
+    function obtenerNombreProveedor() {
+        const el = document.getElementById('buscar_proveedor_analisis')
+            || document.querySelector('#combo-proveedor-analisis input[type="text"]');
+        if (!el) return 'PROVEEDOR';
 
+        const valor = (el.value !== undefined && el.value !== '' ? el.value : el.textContent || el.innerText || '').trim();
+
+        if (!valor || valor.toUpperCase().includes('SELECCIONAR') || valor === '-- Seleccionar Proveedor --') {
+            return 'PROVEEDOR';
+        }
+        return valor;
+    }
+
+    // Extrae el valor numérico de un input o celda
+    function obtenerValorCelda(tr, selector) {
+        const el = tr.querySelector(selector);
+        if (!el) return 0;
+        const texto = (el.value !== undefined && el.value !== '' ? el.value : el.textContent || el.innerText || '0').trim();
+        return parseFloat(texto) || 0;
+    }
+
+    // Obtiene y valida el código del producto de la fila
+    function obtenerCodigoFila(tr) {
+        const el = tr.querySelector('.inp-codigo');
+        if (!el) return '';
+        const codigo = (el.value !== undefined && el.value !== '' ? el.value : el.textContent || el.innerText || '').trim();
+        if (!codigo || codigo.toUpperCase() === 'NULL' || codigo.toUpperCase() === 'UNDEFINED') return '';
+        return normalizarCodigoAnalisis(codigo);
+    }
+
+    // Guarda todos los datos de la pantalla (pre, invEmp, emp, uni, costo) en la matriz de la tienda dada
+    function guardarEstadoTablaEnMemoria(tienda) {
+        if (!tienda) return;
+        asegurarEstructuraTienda(tienda); // Inicializa el objeto de la tienda si no existe
+
+        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+            const codigo = obtenerCodigoFila(tr); // Obtiene código válido
+            if (!codigo) return;
+
+            const pre = obtenerValorCelda(tr, '.inp-pre') || 1; // Presentación (Unidades por caja)
+            const invEmp = obtenerValorCelda(tr, '.inp-inv-emp'); // Inventario empaques
+            const emp = obtenerValorCelda(tr, '.inp-emp'); // Empaques pedido
+
+            // Captura el valor de la columna UNI directamente desde input o texto HTML
+            const elUni = tr.querySelector('.inp-uni');
+            const valUni = elUni ? parseFloat(elUni.value || elUni.textContent || 0) : obtenerValorCelda(tr, '.inp-uni');
+
+            // Prioriza el valor real de la columna UNI. Si está en 0 pero hay empaques, calcula (Empaques * Presentación)
+            const uni = (!isNaN(valUni) && valUni > 0) ? valUni : (emp * pre);
+            const costo = obtenerValorCelda(tr, '.inp-costo'); // Costo unitario
+
+            matrizTiendas[tienda][codigo] = {
+                ...matrizTiendas[tienda][codigo],
+                pre: pre,
+                invEmp: invEmp,
+                emp: emp,
+                uni: uni,
+                costo: costo
+            };
+        });
+    }
+
+    // Obtiene de forma prioritaria la cantidad en Unidades (UNI.) reales
+    // Obtiene directamente y de forma estricta el valor de la columna Unidades (UNI.)
+    function obtenerUnidadesTienda(tienda, codigo) {
+        const codNorm = typeof normalizarCodigoAnalisis === 'function' ? normalizarCodigoAnalisis(codigo) : codigo;
+
+        // 1. Si la tienda está visible en pantalla, lee directamente la celda/input de la columna UNI.
+        if (typeof tiendaActivaPestana !== 'undefined' && tienda === tiendaActivaPestana) {
+            const fila = document.querySelector(`#filas-tabla-analisis tr[data-codigo="${codNorm}"]`);
+            if (fila) {
+                const inputUni = fila.querySelector('.inp-uni, input[data-tipo="uni"], .td-uni');
+                if (inputUni) {
+                    const val = parseFloat(inputUni.value !== undefined ? inputUni.value : inputUni.textContent);
+                    return isNaN(val) ? 0 : val;
+                }
+            }
+        }
+
+        // 2. Si es una tienda guardada en memoria, lee directamente la propiedad "uni"
+        if (typeof matrizTiendas !== 'undefined' && matrizTiendas[tienda] && matrizTiendas[tienda][codNorm]) {
+            const val = parseFloat(matrizTiendas[tienda][codNorm].uni);
+            return isNaN(val) ? 0 : val;
+        }
+
+        return 0; // Si no existe el registro, retorna 0
+    }
+
+    // --- ACCIONES DE EXPORTACIÓN A TXT ---
+
+    // Exporta un archivo .txt por cada tienda seleccionada en el modal con formato compatible con Stellar
+    function confirmarExportacionSeparada() {
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana); // Sincroniza la tabla visible en la matriz
+        const proveedor = obtenerNombreProveedor(); // Obtiene nombre del proveedor del contenedor 1
         const hoy = new Date();
-        const fechaActual = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
+        const dia = String(hoy.getDate()).padStart(2, '0'); // Día a 2 dígitos
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Mes a 2 dígitos
+        const anio = String(hoy.getFullYear()).slice(-2); // Año a 2 dígitos (AA)
+        const fechaActual = `${dia}-${mes}-${anio}`; // Formato DD-MM-AA
 
-        const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
-        const filas = document.querySelectorAll('#filas-tabla-analisis tr');
+        const tagsActivos = document.querySelectorAll('#contenedor-etiquetas-exportar .tag-tienda-exportar.activa');
+        const tiendasSeleccionadas = Array.from(tagsActivos).map(tag => tag.dataset.tienda);
+
+        if (tiendasSeleccionadas.length === 0) {
+            alert('Por favor, selecciona al menos una tienda para exportar.');
+            return;
+        }
+
+        // Obtiene todos los códigos únicos presentes en la tabla activa y en la matriz
+        const codigosSet = new Set();
+        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+            const cod = obtenerCodigoFila(tr);
+            if (cod) codigosSet.add(cod);
+        });
+        Object.keys(matrizTiendas).forEach(tienda => {
+            Object.keys(matrizTiendas[tienda] || {}).forEach(cod => {
+                const codNorm = normalizarCodigoAnalisis(cod);
+                if (codNorm) codigosSet.add(codNorm);
+            });
+        });
 
         let archivosGenerados = 0;
 
-        // Recorre cada sede para generar su archivo individual si contiene productos
-        sedes.forEach((tienda, index) => {
+        tiendasSeleccionadas.forEach((tienda, index) => {
             let lineas = [];
 
-            filas.forEach(tr => {
-                const codigo = tr.querySelector('.inp-codigo')?.value.trim() || '';
-                if (!codigo) return;
-
-                const pre = parseFloat(tr.querySelector('.inp-pre')?.value) || 1;
-                const datosTienda = matrizTiendas[tienda]?.[codigo];
-                const emp = datosTienda ? parseFloat(datosTienda.emp) || 0 : 0;
-                const unidades = emp * pre;
-
-                // Incluye solo filas con cantidades válidas
+            codigosSet.forEach(codigo => {
+                const unidades = obtenerUnidadesTienda(tienda, codigo); // Obtiene unidades de esa tienda
                 if (unidades > 0) {
-                    lineas.push(`${codigo}|${unidades}|`);
+                    lineas.push(`${codigo}|${unidades}|`); // Formato exacto CODIGO|UNIDADES|
                 }
             });
 
-            // Genera y descarga el archivo individual de la tienda si contiene registros
             if (lineas.length > 0) {
-                archivosGenerados++; // Incrementa el contador de archivos procesados
-                setTimeout(() => { // Aplica pausa entre descargas para evitar bloqueos del navegador
-                    const contenido = lineas.map(l => l.trim()).join('\r\n') + '\r\n'; // Limpia espacios y une filas con salto CRLF (\r\n) exacto para Stellar
-                    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' }); // Crea el objeto Blob formateado como texto plano
-                    const url = URL.createObjectURL(blob); // Genera la URL temporal del archivo generado
-                    const a = document.createElement('a'); // Crea dinámicamente la etiqueta de enlace de descarga
-                    a.href = url; // Asigna la URL del Blob al elemento enlace
-                    const nombreArchivo = `${proveedor} - ${tienda} - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, ''); // Limpia caracteres no permitidos en nombres de archivo
-                    a.download = nombreArchivo; // Define el nombre final del archivo descargable
-                    document.body.appendChild(a); // Inserta temporalmente el enlace en el cuerpo del documento
-                    a.click(); // Ejecuta el disparo de descarga automática
-                    document.body.removeChild(a); // Remueve la etiqueta del DOM tras la descarga
-                    URL.revokeObjectURL(url); // Libera los recursos de memoria asignados a la URL
-                }, index * 200); // Espacia las descargas con un intervalo de 200 ms por tienda
+                archivosGenerados++;
+                // Genera la descarga individual con retardo para no bloquear el navegador
+                setTimeout(() => {
+                    const contenido = lineas.join('\r\n') + '\r\n'; // Forza salto de línea CRLF Windows
+                    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    // Nombre: NOMBRE PROVEEDOR - TIENDA - DD-MM-AA.txt
+                    const nombreLimpio = `${proveedor} - ${tienda} - ${fechaActual}`.replace(/[/\\?%*:|"<>]/g, '');
+                    a.download = `${nombreLimpio}.txt`;
+                    document.body.appendChild(a);
+                    a.click(); // Descarga archivo
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                }, index * 250);
             }
         });
 
         if (archivosGenerados === 0) {
-            alert('No hay productos con empaques o unidades para exportar.');
+            alert('No hay productos con unidades mayores a cero en las tiendas seleccionadas.');
+        } else {
+            cerrarModalExportarTiendas();
         }
     }
 
-    // Exporta un archivo .txt único con la suma total de empaques/unidades de todas las tiendas
+    // Exporta un archivo .txt consolidado sumando las unidades de todas las tiendas
     function exportarConsolidado() {
-        // 1. Sincroniza los datos de la pantalla actual en la matriz en memoria
-        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
-
-        const inputProveedor = document.getElementById('buscar_proveedor_analisis');
-        const proveedor = inputProveedor?.value.trim() || 'PROVEEDOR';
-
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana); // Sincroniza la tabla visible
+        const proveedor = obtenerNombreProveedor(); // Obtiene el nombre del proveedor
         const hoy = new Date();
-        const fechaActual = `${String(hoy.getDate()).padStart(2, '0')}-${String(hoy.getMonth() + 1).padStart(2, '0')}-${hoy.getFullYear()}`;
+        const dia = String(hoy.getDate()).padStart(2, '0'); // Día a 2 dígitos
+        const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Mes a 2 dígitos
+        const anio = String(hoy.getFullYear()).slice(-2); // Año a 2 dígitos (AA)
+        const fechaActual = `${dia}-${mes}-${anio}`; // Formato DD-MM-AA
 
         const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
-        const filas = document.querySelectorAll('#filas-tabla-analisis tr');
+
+        // Recolecta códigos únicos de la tabla y la matriz
+        const codigosSet = new Set();
+        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+            const cod = obtenerCodigoFila(tr);
+            if (cod) codigosSet.add(cod);
+        });
+
+        Object.keys(matrizTiendas).forEach(tienda => {
+            Object.keys(matrizTiendas[tienda] || {}).forEach(cod => {
+                const codNorm = normalizarCodigoAnalisis(cod);
+                if (codNorm) codigosSet.add(codNorm);
+            });
+        });
+
         let lineas = [];
 
-        filas.forEach(tr => {
-            const codigo = tr.querySelector('.inp-codigo')?.value.trim() || '';
-            if (!codigo) return;
-
-            const pre = parseFloat(tr.querySelector('.inp-pre')?.value) || 1;
+        codigosSet.forEach(codigo => {
             let totalUnidades = 0;
-
-            // Suma las unidades requeridas en las 6 tiendas para este producto
             sedes.forEach(tienda => {
-                const datosTienda = matrizTiendas[tienda]?.[codigo];
-                const emp = datosTienda ? parseFloat(datosTienda.emp) || 0 : 0;
-                totalUnidades += (emp * pre);
+                totalUnidades += obtenerUnidadesTienda(tienda, codigo); // Suma unidades de todas las tiendas
             });
 
             if (totalUnidades > 0) {
-                lineas.push(`${codigo}|${totalUnidades}|`);
+                lineas.push(`${codigo}|${totalUnidades}|`); // Formato exacto CODIGO|TOTAL_UNIDADES|
             }
         });
 
         if (lineas.length === 0) {
-            alert('No hay productos con empaques o unidades consolidadas para exportar.');
+            alert('No hay productos con unidades consolidadas mayores a cero para exportar.');
             return;
         }
 
-        // Une todas las líneas consolidadas con saltos de línea Windows (\r\n) y remueve espacios sobrantes
-        const contenido = lineas.map(l => l.trim()).join('\r\n') + '\r\n'; // Garantiza que cada registro termine en CRLF para Stellar
-        const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' }); // Genera el contenedor Blob con la codificación de texto adecuada
-        const url = URL.createObjectURL(blob); // Crea la ruta temporal para la descarga del consolidado
-        const a = document.createElement('a'); // Inicializa la etiqueta auxiliar de descarga
-        a.href = url; // Asigna la dirección del archivo Blob al enlace
-        const nombreArchivo = `${proveedor} - CONSOLIDADO GLOBAL - ${fechaActual}.txt`.replace(/[/\\?%*:|"<>]/g, ''); // Aplica saneamiento al nombre del archivo
-        a.download = nombreArchivo; // Asigna el nombre al archivo .txt final
-        document.body.appendChild(a); // Agrega el enlace al DOM
-        a.click(); // Activa la descarga en el navegador
-        document.body.removeChild(a); // Elimina la etiqueta del DOM
-        URL.revokeObjectURL(url); // Cancela la asignación de memoria de la URL
+        const contenido = lineas.join('\r\n') + '\r\n'; // Salto de línea CRLF Windows
+        const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        // Nombre: NOMBRE PROVEEDOR - CONSOLIDADO GLOBAL - DD-MM-AA.txt
+        const nombreLimpio = `${proveedor} - CONSOLIDADO GLOBAL - ${fechaActual}`.replace(/[/\\?%*:|"<>]/g, '');
+        a.download = `${nombreLimpio}.txt`;
+        document.body.appendChild(a);
+        a.click(); // Descarga archivo
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
     // Guarda el valor original y selecciona el texto para sobreescribir al teclear
     function iniciarEdicion(elem) {
@@ -2016,39 +2124,21 @@
 
     // Función para cambiar de tienda activa en la barra de pestañas manteniendo los datos
     function cambiarTiendaPestana(nuevaTienda) {
-        // 1. Persistir los datos actuales de la tabla en el objeto matrizTiendas
-        guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+        if (nuevaTienda === tiendaActivaPestana) return; // Si es la misma tienda no realiza cambios
 
-        // 2. Actualizar tienda activa
-        tiendaActivaPestana = nuevaTienda;
+        guardarEstadoTablaEnMemoria(tiendaActivaPestana); // Sincroniza datos de la tienda actual en memoria
+        tiendaActivaPestana = nuevaTienda; // Asigna la nueva tienda como activa
 
-        // 3. Resaltar pestaña activa visualmente
+        // Actualiza las clases visuales del botón de pestaña activa e inactivas
         document.querySelectorAll('.btn-pestana-tienda').forEach(btn => {
-            if (btn.getAttribute('data-tienda') === nuevaTienda) {
-                btn.className = 'btn-pestana-tienda px-4 py-2 rounded-xl text-xs font-bold transition border border-blue-600 bg-blue-600 text-white shadow-xs';
-            } else {
-                btn.className = 'btn-pestana-tienda px-4 py-2 rounded-xl text-xs font-semibold transition border border-slate-200 bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-600';
-            }
+            const esActiva = btn.dataset.tienda === nuevaTienda;
+            btn.className = `btn-pestana-tienda px-4 py-2 rounded-xl text-xs transition ${esActiva
+                ? 'font-bold border border-blue-600 bg-blue-600 text-white shadow-xs'
+                : 'font-semibold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-600'
+                }`;
         });
 
-        // 4. Restaurar en pantalla los datos en memoria de la nueva tienda seleccionada
-        cargarEstadoTablaDesdeMemoria(nuevaTienda);
-    }
-
-    function guardarEstadoTablaEnMemoria(tienda) {
-        asegurarEstructuraTienda(tienda);
-        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
-            const codigo = normalizarCodigoAnalisis(tr.querySelector('.inp-codigo')?.value);
-            if (codigo) {
-                const invEmp = parseFloat(tr.querySelector('.inp-inv-emp')?.value) || 0;
-                const emp = parseFloat(tr.querySelector('.inp-emp')?.value) || 0;
-                matrizTiendas[tienda][codigo] = {
-                    ...matrizTiendas[tienda][codigo],
-                    invEmp: invEmp,
-                    emp: emp
-                };
-            }
-        });
+        cargarEstadoTablaDesdeMemoria(nuevaTienda); // Reconstruye la vista de la tabla con los datos de la nueva tienda
     }
 
     function normalizarCodigoAnalisis(cod) {
@@ -2057,24 +2147,22 @@
         return /^\d+$/.test(str) ? str.padStart(6, '0') : str;
     }
     function cargarEstadoTablaDesdeMemoria(tienda) {
-        asegurarEstructuraTienda(tienda);
-        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
-            const inpCod = tr.querySelector('.inp-codigo');
-            if (!inpCod) return;
+        asegurarEstructuraTienda(tienda); // Garantiza objeto inicializado para la tienda
+        const filas = document.querySelectorAll('#filas-tabla-analisis tr'); // Captura las filas del DOM
 
-            // Normaliza el código visual para consultar exactamente la misma clave en la matriz
-            const codigo = normalizarCodigoAnalisis(inpCod.value);
-            if (codigo) {
-                inpCod.value = codigo; // Sincroniza la casilla en pantalla
-                const datos = matrizTiendas[tienda][codigo] || { invEmp: 0, emp: 0 };
+        filas.forEach(tr => {
+            const codigo = obtenerCodigoFila(tr); // Código del producto
+            if (!codigo) return;
 
-                const inpInv = tr.querySelector('.inp-inv-emp');
-                const inpEmp = tr.querySelector('.inp-emp');
+            const datos = matrizTiendas[tienda]?.[codigo] || { invEmp: 0, emp: 0, uni: 0 }; // Extrae datos o valores por defecto
 
-                if (inpInv) inpInv.value = datos.invEmp || 0;
-                if (inpEmp) inpEmp.value = datos.emp || 0;
+            const inpInv = tr.querySelector('.inp-inv-emp'); // Input inventario empaques
+            const inpEmp = tr.querySelector('.inp-emp'); // Input empaques pedido
 
-                if (inpEmp) calcularFila(inpEmp);
+            if (inpInv) inpInv.value = datos.invEmp || 0; // Asigna inventario recuperado
+            if (inpEmp) {
+                inpEmp.value = datos.emp || 0; // Asigna empaques recuperados
+                calcularFila(inpEmp); // Recalcula unidades y subtotal de la fila
             }
         });
     }
@@ -2301,61 +2389,6 @@
     // Cierra la ventana emergente
     function cerrarModalExportarTiendas() {
         document.getElementById('modal-exportar-tiendas').style.display = 'none'; // Ocultar modal
-    }
-
-    // Genera los archivos .txt de las tiendas elegidas
-    function confirmarExportacionSeparada() {
-        if (tiendasSeleccionadasExportar.size === 0) {
-            alert('⚠️ Debes seleccionar al menos una tienda para exportar.');
-            return;
-        }
-
-        // Obtener el nombre del proveedor desde variable global o selector HTML
-        const elProv = document.getElementById('select-proveedor') || document.getElementById('inp-proveedor') || document.getElementById('proveedor');
-        const proveedor = (typeof PROVEEDOR !== 'undefined' && PROVEEDOR) ? PROVEEDOR : (elProv ? elProv.value.trim() : 'PROVEEDOR');
-
-        // Generar la fecha actual en formato DD-MM-AAAA
-        const hoy = new Date();
-        const dd = String(hoy.getDate()).padStart(2, '0');
-        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-        const aaaa = hoy.getFullYear();
-        const fechaStr = `${dd}-${mm}-${aaaa}`;
-
-        // Recorrer las tiendas seleccionadas en la ventana modal
-        tiendasSeleccionadasExportar.forEach(tienda => {
-            let contenidoTxt = ''; // Acumulador con el formato requerido por Stellar
-
-            if (typeof matrizTiendas !== 'undefined' && matrizTiendas[tienda]) {
-                Object.keys(matrizTiendas[tienda]).forEach(codigo => {
-                    const item = matrizTiendas[tienda][codigo];
-                    const emp = parseFloat(item.emp || item.pedido_final || 0); // Cantidad de empaques solicitados
-
-                    if (emp > 0) {
-                        // Obtener el factor de empaque para convertir empaques a unidades físicas
-                        const factor = parseFloat(item.empaque || item.bulto || item.factor || 1);
-                        const totalUnidades = Math.round(emp * factor); // Unidades totales requeridas por Stellar
-
-                        // Formato delimitado por tuberías: CODIGO|CANTIDAD|
-                        contenidoTxt += `${codigo}|${totalUnidades}|\n`;
-                    }
-                });
-            }
-
-            // Generar archivo .txt únicamente si hay productos para esa tienda
-            if (contenidoTxt.trim() !== '') {
-                const blob = new Blob([contenidoTxt], { type: 'text/plain;charset=utf-8;' }); // Crear objeto de texto plano
-                const url = URL.createObjectURL(blob); // Crear enlace de descarga temporal
-                const a = document.createElement('a'); // Crear nodo <a> dinámico
-                a.href = url;
-                a.download = `${proveedor} - ${tienda} - ${fechaStr}.txt`; // Nombre: PROVEEDOR - TIENDA - FECHA.txt
-                document.body.appendChild(a);
-                a.click(); // Forzar la descarga en el navegador
-                document.body.removeChild(a); // Eliminar el nodo temporal
-                URL.revokeObjectURL(url); // Liberar recurso en memoria
-            }
-        });
-
-        cerrarModalExportarTiendas(); // Cerrar el modal al finalizar
     }
 </script>
 

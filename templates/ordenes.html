@@ -1344,12 +1344,18 @@
         const alertaNoEncontrados = document.getElementById('alerta-xml-no-encontradas');
         const countNoEncontrados = document.getElementById('count-xml-no-encontradas');
 
+        // Obtener la cantidad de OC no procesadas (compatible con conteo directo o longitud de array)
+        const totalNoProcesadas = data.total_no_encontrados !== undefined
+            ? data.total_no_encontrados
+            : (data.no_encontrados ? data.no_encontrados.length : 0);
+
+        // Renderizar la cantidad en la línea inferior si existen no procesadas
         if (alertaNoEncontrados && countNoEncontrados) {
-            if (data.total_no_encontrados && data.total_no_encontrados > 0) {
-                countNoEncontrados.innerText = `${data.total_no_encontrados} orden(es)`;
-                alertaNoEncontrados.classList.remove('hidden');
+            if (totalNoProcesadas > 0) {
+                countNoEncontrados.innerText = `${totalNoProcesadas} orden(es)`; // Asigna el valor numérico
+                alertaNoEncontrados.classList.remove('hidden'); // Muestra la barra resumida
             } else {
-                alertaNoEncontrados.classList.add('hidden');
+                alertaNoEncontrados.classList.add('hidden'); // Oculta si todas se actualizaron
             }
         }
 
@@ -1756,12 +1762,12 @@
                     </table>
                 </div>
             </div>
-            <!-- Resumen Informativo: No Encontradas -->
+            <!-- Resumen Informativo: OC No Procesadas en una sola línea -->
             <div id="alerta-xml-no-encontradas"
                 class="hidden bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between text-xs text-amber-900">
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm"></i>
-                    <span>Órdenes no encontradas en la base de datos:</span>
+                    <span>Órdenes no procesadas:</span>
                 </div>
                 <span id="count-xml-no-encontradas"
                     class="font-bold bg-amber-200/60 text-amber-900 px-2.5 py-0.5 rounded-lg">0</span>

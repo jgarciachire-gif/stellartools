@@ -1,45 +1,51 @@
 import io  # Manejo de IO en memoria
 import re  # Expresiones regulares
-import urllib.parse  # Formateo e URL
+import urllib.parse  # Formateo de URL
+import asyncio  # Manejo de concurrencia y reintentos asíncronos
 from typing import Optional  # Tipado
 import xml.etree.ElementTree as ET  # Parseador XML
-import pandas as pd  # Lectura de archivos Excel
+import pandas as pd  # Lectura de archivos Excel y CSV
 from fastapi import APIRouter, Request, Form, UploadFile, File, Cookie  # FastAPI
 from fastapi.responses import RedirectResponse, JSONResponse  # Respuestas HTTP
-from config import supabase, templates, obtener_usuario_actual  # Variables globales
-import time
-import httpx
-
-# Ejecuta cualquier consulta a Supabase y la reintenta si el servidor corta la conexión HTTP/2
-def ejecutar_supabase_con_reintento(query, reintentos=3):
-    for intento in range(reintentos):
-        try:
-            return query.execute() # Intenta realizar la consulta a la base de datos
-        except (httpx.RemoteProtocolError, httpx.HTTPError, Exception) as e:
-            if intento == reintentos - 1: # Si falla en el último intento, lanza el error
-                raise e
-            time.sleep(0.2) # Espera una fracción de segundo antes de volver a intentar
+import config
+from config import templates, obtener_usuario_actual, script_alerta_modal  # Dependencias globales
 
 router = APIRouter()
 
+# Función auxiliar para ejecutar operaciones con reintentos exponenciales asíncronos
+async def ejecutar_supabase_con_reintento_async(func, max_reintentos: int = 3, espera_inicial: float = 0.5):
+    ultimo_error = None
+    for intento in range(max_reintentos):
+        try:
+            return await func()
+        except Exception as e:
+            ultimo_error = e
+            if intento < max_reintentos - 1:
+                tiempo_espera = espera_inicial * (2 ** intento)  # Backoff exponencial
+                await asyncio.sleep(tiempo_espera)  # Liberación asíncrona del hilo del servidor
+            else:
+                raise ultimo_error
+
+
 @router.get("/productos")
-def vista_productos(
+async def vista_productos(
     request: Request, 
     query: Optional[str] = None,
     departamento: Optional[str] = None,
     grupo: Optional[str] = None,
     proveedor_id: Optional[int] = None,
     select: Optional[str] = None,
-    access_token: str = Cookie(None)
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
 ):
-    user = obtener_usuario_actual(access_token)
+    user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
     busqueda_query = request.query_params.get("q", "")
     tags_query = request.query_params.get("tags", "")
     
-    builder = supabase.table("productos").select("*, proveedores(nombre)")
+    builder = config.supabase_async.table("productos").select("*, proveedores(nombre)")
 
     terminos = []
     if busqueda_query.strip():
@@ -47,6 +53,7 @@ def vista_productos(
     if tags_query.strip():
         terminos.extend([t.strip() for t in tags_query.split(",") if t.strip()])
 
+    term_limpio = None
     for term in terminos:
         term_limpio = re.sub(r'[^\w\s-]', '', term).strip()
         if not term_limpio:
@@ -55,11 +62,9 @@ def vista_productos(
         palabras = term_limpio.split()
         patron_busqueda = f"%{'%'.join(palabras)}%" if palabras else "%"
 
-    # Prepara la consulta para buscar proveedores por nombre
-        query_prov = supabase.table("proveedores").select("id").ilike("nombre", patron_busqueda)
-        # Ejecuta la consulta usando la función de reintento automático
-        res_prov = ejecutar_supabase_con_reintento(query_prov)
-        # Extrae la lista de IDs ajustando la sangría al nivel correcto
+        # Consulta asíncrona de proveedores con reintentos sin bloqueo
+        query_prov = config.supabase_async.table("proveedores").select("id").ilike("nombre", patron_busqueda)
+        res_prov = await ejecutar_supabase_con_reintento_async(lambda: query_prov.execute())
         ids_prov = [str(p["id"]) for p in res_prov.data] if res_prov.data else []
 
         condiciones = [
@@ -86,10 +91,13 @@ def vista_productos(
     limit = 50
     offset = (page - 1) * limit
 
-    productos_res = builder.order("descripcion", desc=False).range(offset, offset + limit - 1).execute()
+    # Consulta paginada asíncrona
+    productos_res = await ejecutar_supabase_con_reintento_async(
+        lambda: builder.order("descripcion", desc=False).range(offset, offset + limit - 1).execute()
+    )
     productos = productos_res.data or []
 
-    res_prov = supabase.table("proveedores").select("id, nombre").order("nombre").execute()
+    res_prov = await config.supabase_async.table("proveedores").select("id, nombre").order("nombre").execute()
     proveedores = res_prov.data if res_prov and res_prov.data else []
 
     select_id = request.query_params.get("select")
@@ -98,24 +106,24 @@ def vista_productos(
     if select_id:
         try:
             query_id = int(select_id) if str(select_id).isdigit() else select_id
-            res_sel = supabase.table("productos").select("*").eq("id", query_id).execute()
+            res_sel = await config.supabase_async.table("productos").select("*").eq("id", query_id).execute()
             if res_sel.data:
                 prov_obj = res_sel.data[0]
         except Exception as e:
             print("Error al obtener producto seleccionado:", e)
 
-    if 'term_limpio' in locals() and term_limpio and term_limpio.isdigit() and productos:
-            def evaluar_prioridad(prod):
-                cod_st = str(prod.get("codigo_st", "") or "")
-                if cod_st == term_limpio:
-                    return 0
-                elif cod_st.startswith(term_limpio):
-                    return 1
-                elif term_limpio in cod_st:
-                    return 2
-                return 3
+    if term_limpio and term_limpio.isdigit() and productos:
+        def evaluar_prioridad(prod):
+            cod_st = str(prod.get("codigo_st", "") or "")
+            if cod_st == term_limpio:
+                return 0
+            elif cod_st.startswith(term_limpio):
+                return 1
+            elif term_limpio in cod_st:
+                return 2
+            return 3
 
-            productos.sort(key=evaluar_prioridad)
+        productos.sort(key=evaluar_prioridad)
 
     return templates.TemplateResponse(
         request=request,
@@ -127,8 +135,9 @@ def vista_productos(
         }
     )
 
+
 @router.post("/productos/guardar")
-def guardar_producto(
+async def guardar_producto(
     id: Optional[str] = Form(None),
     codigo_st: str = Form(...),
     codigo_ean: Optional[str] = Form(None),
@@ -142,9 +151,10 @@ def guardar_producto(
     marca: str = Form(""),
     q: str = Form(""), 
     tags: str = Form(""),
-    access_token: str = Cookie(None)
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
 ):
-    user = obtener_usuario_actual(access_token)
+    user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -163,10 +173,10 @@ def guardar_producto(
     }
 
     if id:
-        supabase.table("productos").update(payload).eq("id", id).execute()
+        await config.supabase_async.table("productos").update(payload).eq("id", id).execute()
         prod_id = id
     else:
-        res = supabase.table("productos").insert(payload).execute()
+        res = await config.supabase_async.table("productos").insert(payload).execute()
         prod_id = res.data[0]["id"] if res and res.data else ""
 
     redirect_url = f"/productos?select={prod_id}"
@@ -177,30 +187,37 @@ def guardar_producto(
 
     return RedirectResponse(url=redirect_url, status_code=303)
 
+
 @router.post("/productos/eliminar/{producto_id}")
-def eliminar_producto(producto_id: str, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def eliminar_producto(
+    producto_id: str, 
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    supabase.table("productos").delete().eq("id", producto_id).execute()
+    await config.supabase_async.table("productos").delete().eq("id", producto_id).execute()
 
     return RedirectResponse(url="/productos", status_code=303)
 
+
 @router.post("/productos/cargar-lista")
 async def cargar_lista_productos(
-    archivo: UploadFile = File(...), # Archivo subido por el usuario
-    access_token: str = Cookie(None) # Token de sesión
+    archivo: UploadFile = File(...),
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
 ):
-    user = obtener_usuario_actual(access_token) # Verificar autenticación
+    user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    contenido = await archivo.read() # Leer bytes del archivo
-    nombre = archivo.filename.lower() # Nombre en minúsculas para validar extensión
-    filas = [] # Almacenará los registros extraídos
+    contenido = await archivo.read()
+    nombre = archivo.filename.lower()
+    filas = []
 
-    # 1. Extracción de datos desde CSV (detecta automáticamente si está separado por comas ',' o punto y coma ';')
+    # 1. Extracción de datos según extensión
     if nombre.endswith(".csv"):
         try:
             df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", encoding="utf-8")
@@ -220,7 +237,7 @@ async def cargar_lista_productos(
             })
 
     elif nombre.endswith(".xlsx"):
-        df = pd.read_excel(io.BytesIO(contenido)) # Lectura Excel
+        df = pd.read_excel(io.BytesIO(contenido))
         for _, r in df.iterrows():
             filas.append({
                 "codigo": str(r.get("CodigoDelProducto", "")),
@@ -234,7 +251,7 @@ async def cargar_lista_productos(
             })
 
     elif nombre.endswith(".xml"):
-        root = ET.fromstring(contenido) # Lectura XML
+        root = ET.fromstring(contenido)
         for item in (root.findall(".//Producto") or root):
             filas.append({
                 "codigo": item.findtext("CodigoDelProducto", ""),
@@ -247,20 +264,20 @@ async def cargar_lista_productos(
                 "proveedor": item.findtext("Proveedor", "")
             })
 
-    # 2. Mapeo de Proveedores (Nombre -> ID en BD)
-    res_prov = supabase.table("proveedores").select("id, nombre").execute()
+    # 2. Mapeo asíncrono de proveedores
+    res_prov = await config.supabase_async.table("proveedores").select("id, nombre").execute()
     mapa_proveedores = {p["nombre"].strip().upper(): p["id"] for p in (res_prov.data or []) if p.get("nombre")}
 
-    # 3. Formateo y limpieza de datos de entrada
+    # 3. Formateo y limpieza de datos
     codigos_entrada = []
     filas_procesadas = []
 
     for f in filas:
-        raw_cod = f["codigo"].split(".")[0].strip() # Limpiar decimales en código
-        codigo_st = raw_cod.zfill(6) if raw_cod.isdigit() else raw_cod # Formatear a 6 dígitos
+        raw_cod = f["codigo"].split(".")[0].strip()
+        codigo_st = raw_cod.zfill(6) if raw_cod.isdigit() else raw_cod
         
         nombre_prov = f["proveedor"].strip().upper() if f["proveedor"] and f["proveedor"] != "nan" else ""
-        prov_id = mapa_proveedores.get(nombre_prov) # Mapear ID del proveedor
+        prov_id = mapa_proveedores.get(nombre_prov)
 
         if codigo_st:
             codigos_entrada.append(codigo_st)
@@ -278,26 +295,24 @@ async def cargar_lista_productos(
     if not filas_procesadas:
         return RedirectResponse(url="/productos", status_code=303)
 
-    # 4. Consulta a BD dividiendo en lotes de 100 para no exceder el límite de URL de Supabase/HTTPX
-    prod_existentes_map = {} # Mapa para guardar los productos existentes en BD
-    tamanio_lote = 100 # Límite seguro de elementos por consulta HTTP GET
+    # 4. Consultas asíncronas por lotes (100 productos por viaje HTTP)
+    prod_existentes_map = {}
+    tamanio_lote = 100
 
-    # Iterar la lista de códigos de entrada en bloques de 100
     for i in range(0, len(codigos_entrada), tamanio_lote):
-        lote_codigos = codigos_entrada[i:i + tamanio_lote] # Extraer sublista de 100 códigos
-        res_lote = supabase.table("productos").select("*").in_("codigo_st", lote_codigos).execute() # Consultar lote actual
-        if res_lote.data: # Si trae registros la consulta
-            for p in res_lote.data: # Guardar cada producto en el diccionario general
+        lote_codigos = codigos_entrada[i:i + tamanio_lote]
+        res_lote = await config.supabase_async.table("productos").select("*").in_("codigo_st", lote_codigos).execute()
+        if res_lote.data:
+            for p in res_lote.data:
                 prod_existentes_map[p["codigo_st"]] = p
 
-    nuevos_productos = [] # Lista de productos a insertar por primera vez
-    actualizaciones_productos = [] # Lista de productos existentes a actualizar
+    nuevos_productos = []
+    actualizaciones_productos = []
 
-    # 5. Aplicar reglas (completar vacíos, actualizar precio costo o crear nuevo)
+    # 5. Evaluación de cambios o creaciones
     for item in filas_procesadas:
         cod = item["codigo_st"]
         
-        # Parsear precio costo a formato decimal
         costo_raw = item["costo_raw"]
         precio_nuevo = 0.0
         if pd.notna(costo_raw) and costo_raw != "":
@@ -314,7 +329,6 @@ async def cargar_lista_productos(
                     precio_nuevo = 0.0
 
         if cod in prod_existentes_map:
-            # SI EXISTE: Completar datos vacíos en BD y actualizar precio si cambió
             existente = prod_existentes_map[cod]
             cambios = {}
 
@@ -327,15 +341,12 @@ async def cargar_lista_productos(
 
             precio_bd = float(existente.get("precio") or 0.0)
             if precio_nuevo > 0 and precio_nuevo != precio_bd:
-                cambios["precio"] = precio_nuevo # Asignar nuevo costo si varió
+                cambios["precio"] = precio_nuevo
 
             if cambios:
-                # Mezclar datos existentes con los cambios para enviar el objeto completo
                 registro_actualizado = {**existente, **cambios}
                 actualizaciones_productos.append(registro_actualizado)
-
         else:
-            # NO EXISTE: Crear producto nuevo
             nuevos_productos.append({
                 "codigo_st": cod,
                 "descripcion": item["descripcion"],
@@ -352,16 +363,16 @@ async def cargar_lista_productos(
     total_nuevos = len(nuevos_productos) # Total de nuevos a insertar
     if nuevos_productos:
         for i in range(0, total_nuevos, tamanio_lote):
-            lote = nuevos_productos[i:i + tamanio_lote] # Sublista de 100
-            supabase.table("productos").insert(lote).execute() # Insertar en BD
+            lote = nuevos_productos[i:i + tamanio_lote] # Sublista de 100 productos
+            await config.supabase_async.table("productos").insert(lote).execute() # Insertar en BD asíncronamente usando la instancia global
             print(f"--> [NUEVOS] Procesados {min(i + tamanio_lote, total_nuevos)} de {total_nuevos}") # Ver progreso en terminal de VS Code
 
     # 7. Actualizar productos existentes en lotes mostrando progreso en consola
     total_actualizados = len(actualizaciones_productos) # Total a actualizar
     if actualizaciones_productos:
         for i in range(0, total_actualizados, tamanio_lote):
-            lote = actualizaciones_productos[i:i + tamanio_lote] # Sublista de 100
-            supabase.table("productos").upsert(lote, on_conflict="id").execute() # Actualizar en BD
+            lote = actualizaciones_productos[i:i + tamanio_lote] # Sublista de 100 productos
+            await config.supabase_async.table("productos").upsert(lote, on_conflict="id").execute() # Actualizar en BD asíncronamente
             print(f"--> [ACTUALIZADOS] Procesados {min(i + tamanio_lote, total_actualizados)} de {total_actualizados}") # Ver progreso en terminal
 
     print(f"SUCCESS: Carga finalizada con éxito. ({total_nuevos} creados, {total_actualizados} actualizados)") # Log final en consola
@@ -371,14 +382,19 @@ async def cargar_lista_productos(
     msj = f"Proceso finalizado: {total_nuevos} productos creados y {total_actualizados} actualizados."
     return script_alerta_modal("exito", "Carga Completada", msj, "/productos")
 
+
 @router.get("/api/productos/buscar-codigo/{codigo}")
-def buscar_producto_por_codigo(codigo: str, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def buscar_producto_por_codigo(
+    codigo: str, 
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return JSONResponse(status_code=401, content={"encontrado": False})
 
     codigo_limpio = codigo.strip()
-    res = supabase.table("productos").select("*").eq("codigo_st", codigo_limpio).execute()
+    res = await config.supabase_async.table("productos").select("*").eq("codigo_st", codigo_limpio).execute()
     
     if res.data and len(res.data) > 0:
         prod = res.data[0]
