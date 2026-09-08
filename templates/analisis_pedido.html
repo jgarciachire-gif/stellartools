@@ -330,33 +330,43 @@
     }
 </style>
 
+<!-- Modal principal con fondo semi-transparente y efecto borroso (backdrop-blur) -->
 <div id="modal-exportar-tiendas"
-    style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; justify-content: center; align-items: center;">
-    <div
-        style="background: #fff; padding: 20px; border-radius: 8px; width: 450px; max-width: 90%; box-shadow: 0 4px 10px rgba(0,0,0,0.3);">
-        <h3 style="margin-top: 0;">Seleccionar Tiendas a Exportar (.txt)</h3>
+    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
 
-        <!-- Botón para alternar todas las tiendas -->
-        <div style="margin-bottom: 12px; text-align: right;">
+    <!-- Tarjeta del modal con bordes redondeados y sombra elevada -->
+    <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+
+        <!-- Encabezado con título e icono estilizado junto al botón de selección global -->
+        <div class="flex items-center justify-between mb-2">
+            <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <i class="fa-solid fa-store text-indigo-600"></i> Seleccionar Tiendas
+            </h3>
+            <!-- Botón estilizado con variantes hover y bordes suaves -->
             <button type="button" id="btn-toggle-todas-tiendas" onclick="toggleTodasLasTiendasExportar()"
-                style="padding: 4px 12px; cursor: pointer; border: 1px solid #ccc; background: #f0f0f0; border-radius: 4px; font-weight: bold;">
+                class="px-3 py-1 text-xs font-semibold text-slate-600 bg-slate-50 hover:bg-indigo-100 border border-slate-200 rounded-lg transition-all">
                 Todas
             </button>
         </div>
 
-        <!-- Lista dinámica de etiquetas de tiendas -->
+        <!-- Texto descriptivo explicativo -->
+        <p class="text-xs text-slate-500 mb-4">
+            Selecciona las tiendas que deseas incluir para la exportación de datos.
+        </p>
+
+        <!-- Contenedor dinámico de etiquetas con scroll interno y fondo tenue -->
         <div id="contenedor-etiquetas-exportar"
-            style="display: flex; flex-wrap: wrap; gap: 8px; max-height: 250px; overflow-y: auto; padding: 10px; border: 1px solid #eee; border-radius: 6px; margin-bottom: 20px;">
+            class="flex flex-wrap gap-2 max-h-60 overflow-y-auto p-3 border border-slate-200 rounded-xl bg-slate-50/50 mb-4">
         </div>
 
-        <!-- Botones de acción -->
-        <div style="display: flex; justify-content: flex-end; gap: 10px;">
+        <!-- Pie de modal con divisor superior y botones de acción primario/secundario -->
+        <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
             <button type="button" onclick="cerrarModalExportarTiendas()"
-                style="padding: 8px 16px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                class="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
                 Cancelar
             </button>
             <button type="button" onclick="confirmarExportacionSeparada()"
-                style="padding: 8px 16px; background: #313681; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 text-xs shadow-sm">
                 Aceptar
             </button>
         </div>
