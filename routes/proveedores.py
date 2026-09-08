@@ -9,8 +9,8 @@ from config import supabase, templates, obtener_usuario_actual, script_alerta_er
 router = APIRouter()
 
 @router.get("/proveedores")
-def vista_proveedores(request: Request, select: int = None, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def vista_proveedores(request: Request, select: int = None, access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -34,7 +34,7 @@ def vista_proveedores(request: Request, select: int = None, access_token: str = 
     
 @router.post("/proveedores/importar-xml")
 async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -65,8 +65,8 @@ async def importar_proveedores_xml(archivo_xml: UploadFile = File(...), access_t
         return HTMLResponse("<script>alert('Error: El archivo XML no tiene un formato válido.'); window.location.href='/proveedores';</script>")
 
 @router.get("/proveedores/exportar-xml")
-def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -100,7 +100,7 @@ def exportar_proveedores_xml(request: Request, access_token: str = Cookie(None))
     )
 
 @router.post("/proveedores/guardar")
-def guardar_proveedor(
+async def guardar_proveedor(
     id: Optional[str] = Form(None),
     codigo: str = Form(""),
     nombre: Optional[str] = Form(""),
@@ -112,7 +112,7 @@ def guardar_proveedor(
     categorias: str = Form("[]"),
     access_token: str = Cookie(None)
 ):
-    user = obtener_usuario_actual(access_token)
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -157,8 +157,8 @@ def guardar_proveedor(
     return RedirectResponse(url=redirect_url, status_code=303)
 
 @router.post("/proveedores/eliminar/{prov_id}")
-def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
