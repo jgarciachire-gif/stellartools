@@ -1474,20 +1474,30 @@
     }
 
     function eliminarFila(btn) {
-        const tbody = document.getElementById('filas-tabla-analisis');
+        const tbody = document.getElementById('filas-tabla-analisis'); // Obtiene el contenedor principal de la tabla
+        const tr = btn.closest('tr'); // Ubica la fila HTML donde se hizo clic
+        const codigoABorrar = tr.querySelector('.inp-codigo')?.value?.trim(); // Extrae el código del producto a eliminar
+
+        // Purga el código en tiempo real de la memoria global para todas las sedes
+        if (codigoABorrar && typeof matrizTiendas !== 'undefined') {
+            for (const sede in matrizTiendas) {
+                delete matrizTiendas[sede][codigoABorrar]; // Elimina el registro del producto en cada tienda
+            }
+        }
+
         if (tbody.children.length > 1) {
-            btn.closest('tr').remove();
-            totalizarAnalisis();
+            tr.remove(); // Elimina la fila del DOM HTML
+            totalizarAnalisis(); // Recalcula los totales del análisis
         } else {
-            // Si es la última fila restante, reinicia sus valores
-            const tr = btn.closest('tr');
+            // Si es la última fila restante, limpia sus inputs y restablece campos por defecto
             tr.querySelectorAll('input').forEach(i => {
                 if (i.classList.contains('inp-pre')) i.value = '1';
                 else if (i.classList.contains('inp-costo')) i.value = '0.00';
                 else i.value = '';
             });
-            tr.querySelector('.txt-subtotal').textContent = '$ 0,00';
-            totalizarAnalisis();
+            const subtotalEl = tr.querySelector('.txt-subtotal'); // Captura el contenedor del subtotal
+            if (subtotalEl) subtotalEl.textContent = '$ 0,00'; // Restablece el subtotal visual
+            totalizarAnalisis(); // Recalcula los totales de la tabla
         }
     }
 
@@ -2055,11 +2065,11 @@
                 };
             });
 
-            // 3. Purga únicamente los códigos eliminados de la tienda activa actual sin borrar los datos guardados de CENTRO u otras sedes
-            if (matrizTiendas[sedeActual]) {
-                for (const codigo in matrizTiendas[sedeActual]) {
+            // 3. Purga de TODAS las tiendas en memoria los códigos que ya no están visibles en la tabla HTML
+            for (const sede in matrizTiendas) {
+                for (const codigo in matrizTiendas[sede]) {
                     if (!codigosVisiblesEnHTML.has(codigo)) {
-                        delete matrizTiendas[sedeActual][codigo]; // Elimina el código borrado solo dentro de la sede activa
+                        delete matrizTiendas[sede][codigo]; // Elimina la línea borrada de la memoria global para todas las sedes
                     }
                 }
             }
@@ -2106,62 +2116,49 @@
                 return;
             }
 
-            // 5. Consulta si ya existe un registro previo para este usuario y proveedor
-            let query = supabaseClient
+            // 5. Elimina por completo cualquier pedido previo guardado para este usuario (independientemente del proveedor)
+            const { data: registrosPrevios } = await supabaseClient
                 .from('analisis_pedidos')
                 .select('id')
-                .eq('usuario_id', userId);
+                .eq('usuario_id', userId); // Consulta todos los registros existentes del usuario
 
-            if (proveedorId) {
-                query = query.eq('proveedor_id', proveedorId);
+            if (registrosPrevios && registrosPrevios.length > 0) {
+                const idsPrevios = registrosPrevios.map(r => r.id); // Reúne todos los IDs de análisis a eliminar
+
+                // Borra los detalles viejos asociados a esos IDs para no romper restricciones de clave foránea
+                const { error: errBorrarDetalle } = await supabaseClient
+                    .from('analisis_pedidos_detalle')
+                    .delete()
+                    .in('analisis_id', idsPrevios);
+
+                if (errBorrarDetalle) throw errBorrarDetalle; // Lanza el error si falla el borrado de detalles
+
+                // Borra las cabeceras previas del usuario
+                const { error: errBorrarCabecera } = await supabaseClient
+                    .from('analisis_pedidos')
+                    .delete()
+                    .eq('usuario_id', userId);
+
+                if (errBorrarCabecera) throw errBorrarCabecera; // Lanza el error si falla el borrado de cabecera
             }
 
-            const { data: existente } = await query
-                .order('updated_at', { ascending: false })
-                .limit(1)
-                .maybeSingle();
+            // 6. Inserta el nuevo pedido desde cero como un registro limpio
+            const { data: nuevoAnalisis, error: errorInsertHeader } = await supabaseClient
+                .from('analisis_pedidos')
+                .insert({
+                    usuario_id: userId,
+                    proveedor_id: proveedorId,
+                    dias_cobertura: diasCobertura,
+                    updated_at: new Date().toISOString()
+                })
+                .select('id')
+                .single();
 
-            let analisisId = null;
+            if (errorInsertHeader) throw errorInsertHeader; // Detiene el proceso si falla la inserción de cabecera
 
-            if (existente && existente.id) {
-                // Actualiza la cabecera sobreescribiendo el registro previo
-                analisisId = existente.id;
-                const { error: errorUpdate } = await supabaseClient
-                    .from('analisis_pedidos')
-                    .update({
-                        proveedor_id: proveedorId,
-                        dias_cobertura: diasCobertura,
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', analisisId);
+            const analisisId = nuevoAnalisis.id; // Captura el nuevo ID generado por Supabase
 
-                if (errorUpdate) throw errorUpdate;
-            } else {
-                // Inserta una cabecera nueva si no existía ninguna
-                const { data: nuevoAnalisis, error: errorInsert } = await supabaseClient
-                    .from('analisis_pedidos')
-                    .insert({
-                        usuario_id: userId,
-                        proveedor_id: proveedorId,
-                        dias_cobertura: diasCobertura,
-                        updated_at: new Date().toISOString()
-                    })
-                    .select('id')
-                    .single();
-
-                if (errorInsert) throw errorInsert;
-                analisisId = nuevoAnalisis.id;
-            }
-
-            // 6. Elimina únicamente el detalle anterior vinculado a este ID
-            const { error: errorBorrado } = await supabaseClient
-                .from('analisis_pedidos_detalle')
-                .delete()
-                .eq('analisis_id', analisisId);
-
-            if (errorBorrado) throw errorBorrado;
-
-            // 7. Enlaza el analisisId a cada fila preparada e inserta en lote
+            // 7. Asigna el nuevo ID a las filas de detalle e inserta el lote de datos
             const filasDetalle = filasDetalleTemp.map(fila => ({
                 ...fila,
                 analisis_id: analisisId
@@ -2171,7 +2168,7 @@
                 .from('analisis_pedidos_detalle')
                 .insert(filasDetalle);
 
-            if (errorInsertDetalle) throw errorInsertDetalle;
+            if (errorInsertDetalle) throw errorInsertDetalle; // Detiene el proceso si falla la inserción de los detalles
 
             alert('✅ Pedido guardado y sobreescrito exitosamente en Supabase.');
         } catch (err) {
