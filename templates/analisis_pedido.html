@@ -71,40 +71,45 @@
 </div>
 </div>
 
-<!-- CONTENEDOR PRINCIPAL DE CONTROLES (PROVEEDOR Y FILTROS) -->
-<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
-    <!-- TARJETA IZQUIERDA: SELECCIÓN DE PROVEEDOR, COBERTURA Y CÁLCULO -->
-    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 flex flex-col justify-between">
+<!-- CONTENEDOR 1: SELECCIÓN Y FICHA TÉCNICA DEL PROVEEDOR (EXTENDIDO A LO ANCHO) -->
+<div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 space-y-4">
+    <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
 
-        <!-- Buscador de Proveedor -->
-        <div class="relative" id="combo-proveedor-analisis">
-            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-2">
+        <!-- Campo Buscador y Selector de Proveedor (Modificable y Bloqueable) -->
+        <div class="relative col-span-1 md:col-span-2" id="combo-proveedor-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
                 <i class="fa-solid fa-truck-field text-blue-600 mr-1"></i> Proveedor
             </label>
             <input type="hidden" id="proveedor_id_analisis" value="">
 
             <div class="relative">
+                <!-- Input editable para búsqueda -->
                 <input type="text" id="buscar_proveedor_analisis" placeholder="Escriba para buscar proveedor..."
                     autocomplete="off" oninput="filtrarProveedoresAnalisis()" onfocus="mostrarOpcionesProvAnalisis()"
                     onkeydown="navegarProveedoresAnalisis(event)"
                     class="w-full px-4 py-2.5 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition">
 
-                <button type="button" onclick="limpiarProveedorAnalisis()"
+                <!-- Botón 'X' para desbloquear y modificar el proveedor -->
+                <button type="button" onclick="limpiarProveedorAnalisis()" id="btn-limpiar-prov"
                     class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
                     <i class="fa-solid fa-xmark text-xs"></i>
                 </button>
             </div>
 
-            <!-- Menú desplegable flotante de proveedores -->
+            <!-- Menú desplegable flotante -->
             <div id="opciones_proveedor_analisis"
                 class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-56 overflow-y-auto z-30">
-                <div onclick="seleccionarProveedorAnalisis('', '-- Seleccionar Proveedor --')"
+                <div onclick="seleccionarProveedorAnalisis('', '-- Seleccionar Proveedor --', '', '', '', '', '')"
                     class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
                     -- Seleccionar Proveedor --
                 </div>
                 {% for p in proveedores %}
-                <div onclick="seleccionarProveedorAnalisis('{{ p.id }}', '{{ p.nombre }}')"
-                    data-nombre="{{ p.nombre|lower }}"
+                <!-- Opción dinámica limpia mediante atributos data-* -->
+                <div onclick="seleccionarProveedorDesdeElemento(this)" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}"
+                    data-contacto="{{ p.contacto|default('') }}" data-telefono="{{ p.telefono|default('') }}"
+                    data-dias-credito="{{ p.dias_credito|default('') }}"
+                    data-frecuencia="{{ p.frecuencia_pedidos or p.frecuencia or '' }}"
+                    data-etiquetas="{{ p.etiquetas|default('') }}"
                     class="opcion-prov-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
                     {{ p.nombre }}
                 </div>
@@ -112,30 +117,57 @@
             </div>
         </div>
 
-        <!-- Días de Cobertura y Botón Calcular Sugerido -->
-        <div class="flex items-end gap-3 pt-2">
-            <div class="flex-1">
-                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5 whitespace-nowrap">
-                    <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i> Días de Cobertura
-                </label>
-                <!-- Se agrega el evento oninput para refrescar al instante al cambiar el número -->
-                <input type="number" id="dias_cobertura" value="7" min="1" step="1" oninput="recargarSugeridosEnTabla()"
-                    class="w-20 px-3 py-2 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-            </div>
-
-            <!-- Se le agrega id y etiquetas internas para controlar el Spinner y estado deshabilitado -->
-            <button type="button" id="btn-calcular-sugerido" onclick="calcularSugeridoSedeActual()"
-                class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed">
-                <i class="fa-solid fa-bolt" id="icono-btn-calcular"></i>
-                <span>Calcular Sugerido</span>
-            </button>
+        <!-- Campo Contacto (Solo lectura) -->
+        <div>
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-user text-slate-500 mr-1"></i> Contacto
+            </label>
+            <input type="text" id="prov_contacto" readonly placeholder="-"
+                class="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
         </div>
+
+        <!-- Campo Teléfono (Solo lectura) -->
+        <div>
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-phone text-slate-500 mr-1"></i> Teléfono
+            </label>
+            <input type="text" id="prov_telefono" readonly placeholder="-"
+                class="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
+        </div>
+
+        <!-- Campo Días de Crédito (Solo lectura) -->
+        <div>
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-clock-rotate-left text-slate-500 mr-1"></i> Días de Crédito
+            </label>
+            <input type="text" id="prov_dias_credito" readonly placeholder="-"
+                class="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
+        </div>
+
+        <!-- Campo Frecuencia de Pedidos (Solo lectura) -->
+        <div>
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-calendar-check text-slate-500 mr-1"></i> Frecuencia Pedidos
+            </label>
+            <input type="text" id="prov_frecuencia" readonly placeholder="-"
+                class="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
+        </div>
+
     </div>
 
-    <!-- TARJETA DERECHA: SECCIÓN FILTROS EN CASCADA -->
-    <div id="sec-filtros-clasificacion"
-        class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4 opacity-50 pointer-events-none transition-all">
+    <!-- Muestra de etiquetas asignadas al proveedor -->
+    <div class="pt-2 border-t border-slate-100 flex items-center gap-2">
+        <span class="text-xs font-semibold text-slate-500"><i class="fa-solid fa-tags mr-1"></i> Etiquetas:</span>
+        <div id="prov_etiquetas" class="flex flex-wrap gap-1.5 items-center">
+            <span class="text-xs text-slate-400 italic">Sin proveedor seleccionado</span>
+        </div>
+    </div>
+</div>
 
+<!-- CONTENEDOR 2: FILTROS EN CASCADA -->
+<div id="sec-filtros-clasificacion"
+    class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 opacity-50 pointer-events-none transition-all">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
         <!-- 1er Campo: Departamento -->
         <div class="relative" id="combo-depto-analisis">
             <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
@@ -198,17 +230,17 @@
         </div>
 
         <!-- Botón Importar Productos -->
-        <div class="pt-2">
+        <div>
             <button type="button" id="btn_importar_productos" onclick="importarProductosAnalisis()" disabled
                 class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-default">
                 <i class="fa-solid fa-file-import"></i> Importar Productos
             </button>
         </div>
-
     </div>
 </div>
-<!-- CONTENEDOR MULTITIENDA -->
-<div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
+<!-- CONTENEDOR MULTITIENDA Y CÁLCULO DE SUGERIDO -->
+<div
+    class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
     <!-- Pestañas dinámicas por Tienda con CENTRO activa por defecto -->
     <div class="flex items-center gap-2 overflow-x-auto" id="pestanas-tiendas">
         {% for tienda in ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'] %}
@@ -217,6 +249,24 @@
             <i class="fa-solid fa-store mr-1.5"></i>{{ tienda }}
         </button>
         {% endfor %}
+    </div>
+
+    <!-- Días de Cobertura y Botón Calcular Sugerido a la derecha -->
+    <div class="flex items-center gap-3 shrink-0 ml-auto">
+        <div class="flex items-center gap-2">
+            <label class="block text-xs font-semibold text-slate-700 whitespace-nowrap">
+                <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i> Días:
+            </label>
+            <input type="number" id="dias_cobertura" value="7" min="1" step="1" oninput="recargarSugeridosEnTabla()"
+                class="w-16 px-2 py-1.5 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+        </div>
+
+        <!-- Botón Calcular Sugerido con animación de Spinner y cambio de estado -->
+        <button type="button" id="btn-calcular-sugerido" onclick="ejecutarCalculoSugeridoConSpinner()"
+            class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-default">
+            <i class="fa-solid fa-bolt" id="icono-btn-calcular"></i>
+            <span id="texto-btn-calcular">Calcular Sugerido</span>
+        </button>
     </div>
 </div>
 <!-- TABLA DE DETALLE DE PRODUCTOS -->
@@ -502,27 +552,44 @@
         seleccionarTiendaAnalisis('', '');
     }
 
-    // --- PROVEEDOR SEARCH LOGIC ---
+    // Muestra el menú desplegable al hacer clic o posicionarse en el buscador
     function mostrarOpcionesProvAnalisis() {
-        document.getElementById('opciones_proveedor_analisis').classList.remove('hidden');
+        const dropdown = document.getElementById('opciones_proveedor_analisis'); // Obtiene el contenedor de la lista
+        if (dropdown) dropdown.classList.remove('hidden'); // Remueve la clase que lo oculta
     }
 
+    // Filtra los proveedores en tiempo real a medida que el usuario escribe
     function filtrarProveedoresAnalisis() {
-        const texto = document.getElementById('buscar_proveedor_analisis').value.toLowerCase().trim();
-        const opciones = document.querySelectorAll('.opcion-prov-analisis');
-        document.getElementById('opciones_proveedor_analisis').classList.remove('hidden');
+        const input = document.getElementById('buscar_proveedor_analisis'); // Campo de texto
+        const filtro = input.value.toLowerCase().trim(); // Convierte la búsqueda a minúsculas y quita espacios
+        const opciones = document.querySelectorAll('.opcion-prov-analisis'); // Lista de opciones dinámicas
+        const dropdown = document.getElementById('opciones_proveedor_analisis'); // Contenedor del menú
 
-        indiceDestacadoAnalisis = -1;
+        dropdown.classList.remove('hidden'); // Mantiene visible el menú mientras se escribe
+
         opciones.forEach(opcion => {
-            const nombre = opcion.getAttribute('data-nombre') || '';
-            opcion.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold');
-            if (nombre.includes(texto)) {
-                opcion.classList.remove('hidden');
+            // Lee el nombre desde el data-nombre o el texto visible
+            const nombre = (opcion.dataset.nombre || opcion.textContent).toLowerCase();
+
+            // Compara si el texto escrito está incluido en el nombre del proveedor
+            if (nombre.includes(filtro)) {
+                opcion.classList.remove('hidden'); // Muestra la opción si coincide
             } else {
-                opcion.classList.add('hidden');
+                opcion.classList.add('hidden'); // Oculta la opción si no coincide
             }
         });
     }
+
+    // Cierra automáticamente el menú desplegable al hacer clic fuera del campo
+    document.addEventListener('click', function (e) {
+        const combo = document.getElementById('combo-proveedor-analisis'); // Contenedor padre
+        const dropdown = document.getElementById('opciones_proveedor_analisis'); // Menú flotante
+
+        // Si el clic ocurrió fuera del buscador y del menú, lo oculta
+        if (combo && dropdown && !combo.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
 
     function navegarProveedoresAnalisis(e) {
         const dropdown = document.getElementById('opciones_proveedor_analisis');
@@ -558,30 +625,72 @@
     // Variable global para almacenar la estructura de clasificación del proveedor activo
     let datosClasificacionAnalisis = [];
 
+    // Extrae los datos desde los atributos HTML data-* y llama a la función de selección
+    function seleccionarProveedorDesdeElemento(el) {
+        const d = el.dataset; // Lee todos los valores data-* del elemento cliqueado
+        seleccionarProveedorAnalisis(
+            d.id || '',
+            d.nombre || '',
+            d.contacto || '',
+            d.telefono || '',
+            d.diasCredito || '',
+            d.frecuencia || '',
+            d.etiquetas || ''
+        );
+    }
+
     // --- SELECCIÓN Y ACTIVACIÓN DE PROVEEDOR EN CASCADA ---
-    function seleccionarProveedorAnalisis(id, nombre) {
-        // Asigna el ID y nombre del proveedor seleccionado a los inputs del buscador
+    function seleccionarProveedorAnalisis(id, nombre, contacto = '', telefono = '', diasCredito = '', frecuencia = '', etiquetas = '') {
+        const inputBuscar = document.getElementById('buscar_proveedor_analisis');
         document.getElementById('proveedor_id_analisis').value = id;
-        document.getElementById('buscar_proveedor_analisis').value = id ? nombre : '';
+        inputBuscar.value = id ? nombre : '';
         document.getElementById('opciones_proveedor_analisis').classList.add('hidden');
 
         const secFiltros = document.getElementById('sec-filtros-clasificacion');
         const inpDepto = document.getElementById('buscar_depto_analisis');
         const btnImportar = document.getElementById('btn_importar_productos');
 
-        // Reinicia selecciones previas de departamento, grupo y subgrupo
+        // Bloquea o desbloquea el campo de búsqueda de proveedor al seleccionar
+        if (id) {
+            inputBuscar.readOnly = true; // Bloquea edición directa
+            inputBuscar.classList.add('bg-slate-100', 'cursor-default'); // Estilo visual de bloqueo
+        } else {
+            inputBuscar.readOnly = false; // Desbloquea edición
+            inputBuscar.classList.remove('bg-slate-100', 'cursor-default'); // Restaura estilo
+        }
+
+        // Carga los datos de solo lectura en la ficha del proveedor
+        document.getElementById('prov_contacto').value = contacto || '-';
+        document.getElementById('prov_telefono').value = telefono || '-';
+        document.getElementById('prov_dias_credito').value = diasCredito || '-';
+        document.getElementById('prov_frecuencia').value = frecuencia || '-';
+
+        // Renderiza las etiquetas registradas en la ficha del proveedor
+        const contEtiquetas = document.getElementById('prov_etiquetas');
+        if (contEtiquetas) {
+            contEtiquetas.innerHTML = '';
+            if (etiquetas) {
+                const lista = typeof etiquetas === 'string' ? etiquetas.split(',') : etiquetas;
+                lista.forEach(tag => {
+                    const badge = document.createElement('span');
+                    badge.className = 'px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold';
+                    badge.textContent = tag.trim();
+                    contEtiquetas.appendChild(badge);
+                });
+            } else {
+                contEtiquetas.innerHTML = '<span class="text-xs text-slate-400 italic">Sin etiquetas</span>';
+            }
+        }
+
+        // Reinicia selecciones previas de departamento y filtros
         limpiarDeptoAnalisis();
 
         if (id) {
-            // Remueve el estado bloqueado y opaco de la tarjeta de filtros
             secFiltros.classList.remove('opacity-50', 'pointer-events-none');
-            // Desbloquea el input de departamento para que el usuario empiece la selección
             inpDepto.disabled = false;
             btnImportar.disabled = false;
-            // Consulta en la API los departamentos/grupos/subgrupos asociados a este proveedor
             cargarClasificacionProveedor(id);
         } else {
-            // Si se borra la selección, vuelve a bloquear los filtros e importación
             secFiltros.classList.add('opacity-50', 'pointer-events-none');
             inpDepto.disabled = true;
             btnImportar.disabled = true;
@@ -589,7 +698,41 @@
     }
 
     function limpiarProveedorAnalisis() {
-        seleccionarProveedorAnalisis('', '');
+        seleccionarProveedorAnalisis('', '', '', '', '', '', '');
+    }
+
+    // Maneja el flujo visual y estados del botón 'Calcular Sugerido'
+    async function ejecutarCalculoSugeridoConSpinner() {
+        const btn = document.getElementById('btn-calcular-sugerido');
+        const icono = document.getElementById('icono-btn-calcular');
+        const texto = document.getElementById('texto-btn-calcular');
+
+        if (!btn) return;
+
+        // Deshabilita el botón y cambia el icono por un Spinner activo
+        btn.disabled = true;
+        icono.className = 'fa-solid fa-spinner fa-spin';
+        texto.textContent = 'Calculado...'; // Muestra estado inicial de cálculo
+
+        // Simula la transición hacia la carga a la tabla
+        setTimeout(async () => {
+            texto.textContent = 'Cargando a la tabla...'; // Muestra estado de inserción en tabla
+
+            try {
+                if (typeof calcularSugeridoSedeActual === 'function') {
+                    await calcularSugeridoSedeActual();
+                }
+            } catch (e) {
+                console.error('Error durante el cálculo:', e);
+            } finally {
+                // Restablece el botón a su estado original al terminar
+                setTimeout(() => {
+                    icono.className = 'fa-solid fa-bolt';
+                    texto.textContent = 'Calcular Sugerido';
+                    btn.disabled = false;
+                }, 300);
+            }
+        }, 400);
     }
 
     // --- CARGA Y FILTRADO EN CASCADA (DEPTO -> GRUPO -> SUBGRUPO) ---
@@ -1823,9 +1966,14 @@
         window.matrizDatosPorSede = {};
     }
 
-    // Función adaptada para guardar la matriz real 'matrizTiendas' de tu archivo
+    // Función adaptada para guardar la plantilla actualizando el registro existente
     async function guardarPlantillaCompleta() {
         try {
+            // Reinicia la memoria de la pestaña activa antes de leer el HTML para descartar filas eliminadas
+            if (typeof tiendaActivaPestana !== 'undefined' && typeof matrizTiendas !== 'undefined') {
+                matrizTiendas[tiendaActivaPestana] = {};
+            }
+
             // Sincroniza la tabla en pantalla hacia la memoria de la pestaña activa
             if (typeof guardarEstadoTablaEnMemoria === 'function' && typeof tiendaActivaPestana !== 'undefined') {
                 guardarEstadoTablaEnMemoria(tiendaActivaPestana);
@@ -1852,23 +2000,48 @@
             const proveedorId = rawProvId ? parseInt(rawProvId) : null;
             const diasCobertura = parseInt(document.getElementById('dias_cobertura')?.value || 7);
 
-            // Upsert en la tabla principal analisis_pedidos
-            const { data: analisis, error: errorAnalisis } = await supabaseClient
+            // 1. Consultar si ya existe un registro guardado previamente para este usuario
+            const { data: existente } = await supabaseClient
                 .from('analisis_pedidos')
-                .upsert({
-                    usuario_id: userId,
-                    proveedor_id: proveedorId,
-                    dias_cobertura: diasCobertura,
-                    updated_at: new Date().toISOString()
-                }, { onConflict: 'usuario_id' })
                 .select('id')
-                .single();
+                .eq('usuario_id', userId)
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
 
-            if (errorAnalisis) throw errorAnalisis;
+            let analisisId = null;
 
-            const analisisId = analisis.id;
+            if (existente && existente.id) {
+                // Si existe, actualizamos la cabecera sobreescribiendo el registro previo
+                analisisId = existente.id;
+                const { error: errorUpdate } = await supabaseClient
+                    .from('analisis_pedidos')
+                    .update({
+                        proveedor_id: proveedorId,
+                        dias_cobertura: diasCobertura,
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', analisisId);
 
-            // Limpia detalle anterior antes de reinsertar
+                if (errorUpdate) throw errorUpdate;
+            } else {
+                // Si no existe ninguno previo, insertamos un registro nuevo
+                const { data: nuevoAnalisis, error: errorInsert } = await supabaseClient
+                    .from('analisis_pedidos')
+                    .insert({
+                        usuario_id: userId,
+                        proveedor_id: proveedorId,
+                        dias_cobertura: diasCobertura,
+                        updated_at: new Date().toISOString()
+                    })
+                    .select('id')
+                    .single();
+
+                if (errorInsert) throw errorInsert;
+                analisisId = nuevoAnalisis.id;
+            }
+
+            // Limpia el detalle anterior vinculado a este ID antes de reinsertar los nuevos datos
             const { error: errorBorrado } = await supabaseClient
                 .from('analisis_pedidos_detalle')
                 .delete()
@@ -1904,21 +2077,20 @@
                 return;
             }
 
-            // Insertar datos a Supabase
+            // Insertar detalle actualizado a Supabase
             const { error: errorInsertDetalle } = await supabaseClient
                 .from('analisis_pedidos_detalle')
                 .insert(filasDetalle);
 
             if (errorInsertDetalle) throw errorInsertDetalle;
 
-            alert('✅ Pedido guardado exitosamente en Supabase.');
+            alert('✅ Pedido guardado y sobreescrito exitosamente en Supabase.');
         } catch (err) {
             console.error('Error al guardar el pedido:', err);
             alert('❌ Error de Supabase al guardar: ' + (err.message || JSON.stringify(err)));
         }
     }
-
-    // Función adaptada para cargar asignando los valores recuperados a 'matrizTiendas'
+    // Función adaptada para cargar el pedido más reciente del usuario
     async function cargarUltimoPedidoGuardado() {
         try {
             let userId = null;
@@ -1936,11 +2108,13 @@
                 return;
             }
 
-            // Consulta la cabecera
+            // Consulta la cabecera ordenando por updated_at descendente para obtener el registro más reciente
             const { data: analisis, error } = await supabaseClient
                 .from('analisis_pedidos')
                 .select('*')
                 .eq('usuario_id', userId)
+                .order('updated_at', { ascending: false })
+                .limit(1)
                 .maybeSingle();
 
             if (error || !analisis) {
@@ -1968,7 +2142,7 @@
                 }
             }
 
-            // Consulta el detalle guardado
+            // Consulta el detalle guardado para el ID del análisis recuperado
             const { data: detalles, error: detallesError } = await supabaseClient
                 .from('analisis_pedidos_detalle')
                 .select('*')
@@ -1977,11 +2151,18 @@
             if (detallesError) throw detallesError;
 
             if (detalles && detalles.length > 0) {
-                // 1. Limpiar el contenido actual de la tabla HTML para evitar acumular filas vacías
+                // Vacía completamente la memoria global para descarta cualquier pedido o fila previa
+                if (typeof matrizTiendas !== 'undefined') {
+                    for (const key in matrizTiendas) {
+                        delete matrizTiendas[key];
+                    }
+                }
+
+                // 1. Limpiar el contenido actual de la tabla HTML para evitar filas vacías
                 const tbody = document.getElementById('filas-tabla-analisis');
                 if (tbody) tbody.innerHTML = '';
 
-                // 2. Extraer la lista de códigos válidos descartando la palabra 'NULL', valores nulos y textos vacíos
+                // 2. Extraer la lista de códigos válidos descartando nulos/vacíos
                 const codigosUnicos = [...new Set(detalles.map(d => d.codigo))]
                     .filter(c => c && String(c).trim().toUpperCase() !== 'NULL' && String(c).trim() !== '');
 
@@ -1995,7 +2176,7 @@
                     }
                 }
 
-                // 4. Asignar las cantidades guardadas (inventario/sugerido y pedido) a la matriz en memoria
+                // 4. Asignar las cantidades guardadas a la matriz en memoria
                 detalles.forEach(item => {
                     if (typeof asegurarEstructuraTienda === 'function') {
                         asegurarEstructuraTienda(item.sede);
@@ -2011,7 +2192,7 @@
                     matrizTiendas[item.sede][item.codigo].emp = item.pedido_final || 0; // Restaura empaques de pedido
                 });
 
-                // 5. Renderizar los datos en la pantalla para la tienda actualmente seleccionada
+                // 5. Renderizar los datos en la pantalla para la tienda activa
                 if (typeof cargarEstadoTablaDesdeMemoria === 'function') {
                     cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
                 }

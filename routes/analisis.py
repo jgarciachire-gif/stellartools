@@ -135,16 +135,30 @@ async def actualizar_productos_desde_analisis(
     if not productos:
         return {"status": "success", "mensaje": "Sin cambios que procesar"}
 
-    # 1. Construcción del payload para actualización masiva (Bulk Upsert)
-    payload_actualizacion = [
-        {
-            "codigo_st": prod.codigo,
-            "unidad_manejo": prod.unidad_manejo,
-            "precio": prod.precio
-        }
-        for prod in productos
-    ]
+# 1. Filtra y limpia los productos asignando valores por defecto a columnas NOT NULL de PostgreSQL
+    payload_actualizacion = []
+    for prod in productos:
+        codigo_limpio = str(prod.codigo).strip() if prod.codigo else ""
+        
+        # Ignora registros vacíos o no válidos
+        if not codigo_limpio or codigo_limpio.lower() == "null":
+            continue
 
+        # Extrae atributos opcionales evitando enviar nulos a la BD
+        descripcion_valida = str(getattr(prod, "descripcion", "") or "").strip()
+        departamento_valido = str(getattr(prod, "departamento", "") or "").strip()
+        grupo_valido = str(getattr(prod, "grupo", "") or "").strip()
+        subgrupo_valido = str(getattr(prod, "subgrupo", "") or "").strip()
+
+        payload_actualizacion.append({
+            "codigo_st": codigo_limpio,
+            "descripcion": descripcion_valida,    # Evita error NOT NULL en descripcion
+            "departamento": departamento_valido, # Evita error NOT NULL en departamento
+            "grupo": grupo_valido,               # Evita error NOT NULL si la columna exige valor
+            "subgrupo": subgrupo_valido,         # Evita error NOT NULL si la columna exige valor
+            "unidad_manejo": str(prod.unidad_manejo or "1").strip(),
+            "precio": float(prod.precio) if prod.precio is not None else 0.0
+        })
     try:
         # 2. Ejecución asíncrona masiva en 1 sola consulta HTTP/PostgreSQL
         await config.supabase_async.table("productos") \
