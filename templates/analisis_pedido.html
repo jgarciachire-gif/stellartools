@@ -90,14 +90,14 @@
                         class="flex items-center gap-1.5 border-b border-slate-300 focus-within:border-blue-500 pb-0.5 transition-colors">
                         <label for="buscar_proveedor_analisis"
                             class="text-1.5xs font-semibold text-slate-700 whitespace-nowrap flex items-center cursor-pointer">
-                            <i class="fa-solid fa-truck-field text-blue-600 mr-1"></i>Proveedor:
+                            <i class="fa-solid fa-truck-field text-amber-600 mr-1"></i>Proveedor:
                         </label>
 
                         <div class="relative flex-1 min-w-0">
                             <input type="text" id="buscar_proveedor_analisis" placeholder="Escriba para buscar..."
                                 autocomplete="none" oninput="filtrarProveedoresAnalisis()"
                                 onfocus="mostrarOpcionesProvAnalisis()" onkeydown="navegarProveedoresAnalisis(event)"
-                                class="w-full bg-transparent border-0 p-0 text-1.5xs text-slate-800 font-medium focus:ring-0 focus:outline-none pr-5 placeholder:text-slate-400 placeholder:italic autofill:shadow-[0_0_0_1000px_white_inset]">
+                                class="w-full bg-transparent border-0 p-0 text-xs text-slate-800 font-semibold focus:ring-0 focus:outline-none pr-5 placeholder:text-slate-400 placeholder:italic autofill:shadow-[0_0_0_1000px_white_inset]">
 
                             <button type="button" onclick="limpiarProveedorAnalisis()" id="btn-limpiar-prov"
                                 class="absolute right-0 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
@@ -130,23 +130,22 @@
                 <!-- Fila Inferior: Etiquetas alineadas exactamente bajo la línea del Proveedor -->
                 <div class="flex items-center gap-1.5 min-w-0">
                     <span class="text-xs font-semibold text-slate-700 whitespace-nowrap flex items-center">
-                        <i class="fa-solid fa-tags text-slate-500 mr-1"></i>Etiquetas:
+                        <i class="fa-solid fa-tags text-indigo-500 mr-1"></i>Etiquetas:
                     </span>
                     <!-- Receptor de etiquetas de JS (limitado al ancho exacto de la columna) -->
                     <div id="prov_etiquetas" class="flex flex-wrap gap-1 items-center min-w-0 truncate">
-                        <span class="text-1.5xs text-slate-400 italic">Sin proveedor</span>
+                        <span class="text-xs text-slate-400 italic">Sin proveedor</span>
                     </div>
                 </div>
 
             </div>
 
             <!-- Columna 2: Contacto (arriba) y Teléfono (abajo) -->
-            <!-- Columna 2: Contacto (arriba) y Teléfono (abajo) -->
             <div class="flex flex-col gap-2.5 min-w-0">
                 <!-- Fila Superior -->
                 <div class="flex items-center gap-1.5 min-w-0">
                     <span class="font-semibold text-slate-700 whitespace-nowrap">
-                        <i class="fa-solid fa-user text-indigo-600 mr-1"></i>Contacto:
+                        <i class="fa-solid fa-user text-slate-500 mr-1"></i>Contacto:
                     </span>
                     <!-- tabindex="-1" evita el foco por teclado, pointer-events-none deshabilita el click y select-none evita seleccionar texto -->
                     <input type="text" id="prov_contacto" readonly tabindex="-1" placeholder="-"
@@ -169,7 +168,7 @@
                 <!-- Fila Superior -->
                 <div class="flex items-center gap-1.5 min-w-0">
                     <span class="font-semibold text-slate-700 whitespace-nowrap">
-                        <i class="fa-solid fa-clock-rotate-left text-amber-600 mr-1"></i>Días de Crédito:
+                        <i class="fa-solid fa-clock-rotate-left text-sky-600 mr-1"></i>Días de Crédito:
                     </span>
                     <!-- Sin respuesta al evento click/focus -->
                     <input type="text" id="prov_dias_credito" readonly tabindex="-1" placeholder="-"
