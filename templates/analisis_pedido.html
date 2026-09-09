@@ -14,56 +14,61 @@
         <p class="text-xs text-slate-500 mt-1">Planificación y estimación de cantidades por tienda y proveedor</p>
     </div>
 
-    <!-- Botones de Acción Cuadrados con Bordes Redondeados (Mismo Formato del Header) -->
-    <div class="flex items-center gap-2 flex-wrap">
+    <!-- Botones de Acción Cuadrados con Bordes Redondeados -->
+    <div class="flex items-center justify-start md:justify-end gap-2 flex-wrap ml-auto">
         <!-- Guardar -->
         <button type="button" onclick="guardarPlantillaCompleta()"
-            class="px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
-            <i class="fa-solid fa-floppy-disk"></i> Guardar
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-floppy-disk text-lg"></i>
+            <span>Guardar Plantilla</span>
         </button>
 
         <!-- Cargar Pedido Guardado -->
         <button type="button" onclick="cargarUltimoPedidoGuardado()"
-            class="px-3.5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
-            <i class="fa-solid fa-folder-open"></i> Cargar Pedido
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-folder-open text-lg"></i>
+            <span>Cargar Pedido</span>
         </button>
 
         <!-- Exportar Separados -->
         <button onclick="abrirModalExportarSeparado()"
-            class="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
-            <i class="fa-solid fa-boxes-packing"></i> Exportar Separados
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-warehouse text-lg"></i>
+            <span>Exportar individual</span>
         </button>
 
         <!-- Exportar Consolidado -->
         <button type="button" onclick="exportarConsolidado()"
-            class="px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
-            <i class="fa-solid fa-warehouse"></i> Exportar Consolidado
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-warehouse text-lg"></i>
+            <span>Exportar todo</span>
         </button>
 
         <!-- Limpiar Lista -->
         <button type="button" onclick="limpiarListaProductos()"
-            class="px-3.5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-xs transition flex items-center gap-2 cursor-pointer">
-            <i class="fa-solid fa-trash-can"></i> Limpiar lista
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-trash-can text-lg"></i>
+            <span>Limpiar tabla</span>
+        </button>
+    </div>
+
+    <!-- Menú 3 Puntos -->
+    <div class="relative">
+        <button id="btn-menu-opciones" type="button"
+            class="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none border border-slate-200 bg-white shadow-xs">
+            <i class="fa-solid fa-ellipsis-vertical text-base"></i>
         </button>
 
-        <!-- Menú 3 Puntos -->
-        <div class="relative">
-            <button id="btn-menu-opciones" type="button"
-                class="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none border border-slate-200 bg-white shadow-xs">
-                <i class="fa-solid fa-ellipsis-vertical text-base"></i>
+        <div id="dropdown-opciones"
+            class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+            <button type="button" onclick="document.getElementById('input-csv-stellar').click();"
+                class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 rounded-xl flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-file-csv text-emerald-500"></i> Cargar Ventas (CSV)
             </button>
-
-            <div id="dropdown-opciones"
-                class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
-                <button type="button" onclick="document.getElementById('input-csv-stellar').click();"
-                    class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 rounded-xl flex items-center gap-2 transition-colors">
-                    <i class="fa-solid fa-file-csv text-emerald-500"></i> Cargar Ventas (CSV)
-                </button>
-                <input type="file" id="input-csv-stellar" accept=".csv" class="hidden"
-                    onchange="subirCSVStellar(event)">
-            </div>
+            <input type="file" id="input-csv-stellar" accept=".csv" class="hidden" onchange="subirCSVStellar(event)">
         </div>
     </div>
+</div>
 </div>
 
 <!-- CONTENEDOR PRINCIPAL DE CONTROLES (PROVEEDOR Y FILTROS) -->
