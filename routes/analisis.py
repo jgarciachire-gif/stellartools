@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 import config
 from config import templates, obtener_usuario_actual  # Dependencias globales
 from models import ProductoModificado  # Modelo Pydantic
-
+import asyncio
 router = APIRouter()
 
 @router.get("/analisis-pedido")
@@ -121,7 +121,7 @@ async def api_importar_productos_analisis(
     ]
 
 
-# RUTA OPTIMIZADA: Procesa miles de cambios en 1 solo viaje a la base de datos
+# RUTA OPTIMIZADA: Compara con la BD y actualiza únicamente los campos modificados
 @router.post("/api/productos/actualizar-analisis")
 async def actualizar_productos_desde_analisis(
     productos: List[ProductoModificado], 
@@ -135,42 +135,64 @@ async def actualizar_productos_desde_analisis(
     if not productos:
         return {"status": "success", "mensaje": "Sin cambios que procesar"}
 
-# 1. Filtra y limpia los productos asignando valores por defecto a columnas NOT NULL de PostgreSQL
-    payload_actualizacion = []
-    for prod in productos:
-        codigo_limpio = str(prod.codigo).strip() if prod.codigo else ""
-        
-        # Ignora registros vacíos o no válidos
-        if not codigo_limpio or codigo_limpio.lower() == "null":
-            continue
-
-        # Extrae atributos opcionales evitando enviar nulos a la BD
-        descripcion_valida = str(getattr(prod, "descripcion", "") or "").strip()
-        departamento_valido = str(getattr(prod, "departamento", "") or "").strip()
-        grupo_valido = str(getattr(prod, "grupo", "") or "").strip()
-        subgrupo_valido = str(getattr(prod, "subgrupo", "") or "").strip()
-
-        payload_actualizacion.append({
-            "codigo_st": codigo_limpio,
-            "descripcion": descripcion_valida,    # Evita error NOT NULL en descripcion
-            "departamento": departamento_valido, # Evita error NOT NULL en departamento
-            "grupo": grupo_valido,               # Evita error NOT NULL si la columna exige valor
-            "subgrupo": subgrupo_valido,         # Evita error NOT NULL si la columna exige valor
-            "unidad_manejo": str(prod.unidad_manejo or "1").strip(),
-            "precio": float(prod.precio) if prod.precio is not None else 0.0
-        })
     try:
-        # 2. Ejecución asíncrona masiva en 1 sola consulta HTTP/PostgreSQL
-        await config.supabase_async.table("productos") \
-            .upsert(payload_actualizacion, on_conflict="codigo_st") \
+        # 1. Filtra los códigos válidos recibidos desde la plantilla
+        codigos = [str(prod.codigo).strip() for prod in productos if prod.codigo and str(prod.codigo).strip().lower() != "null"]
+        if not codigos:
+            return {"status": "success", "mensaje": "No hay códigos válidos para procesar"}
+
+        # 2. Consulta los datos actuales en la base de datos para comparar
+        res = await config.supabase_async.table("productos") \
+            .select("codigo_st, unidad_manejo, precio") \
+            .in_("codigo_st", codigos) \
             .execute()
-        
+
+        # Mapea los registros existentes por su código de producto
+        db_map = {item["codigo_st"]: item for item in (res.data or [])}
+
+        tareas = []
+        for prod in productos:
+            codigo = str(prod.codigo).strip() if prod.codigo else ""
+            if not codigo or codigo not in db_map:
+                continue
+
+            db_prod = db_map[codigo]
+            campos_a_actualizar = {}
+
+            # Verifica unidad_manejo: actualiza si en BD está vacío/nulo o si es diferente
+            db_um = str(db_prod.get("unidad_manejo") or "").strip()
+            nuevo_um = str(prod.unidad_manejo or "1").strip()
+            if not db_um or db_um != nuevo_um:
+                campos_a_actualizar["unidad_manejo"] = nuevo_um
+
+            # Verifica precio: actualiza si el valor difiere del guardado en la BD
+            if prod.precio is not None:
+                db_precio = float(db_prod.get("precio") or 0.0)
+                nuevo_precio = float(prod.precio)
+                if abs(db_precio - nuevo_precio) > 0.0001:  # Compara la diferencia decimal
+                    campos_a_actualizar["precio"] = nuevo_precio
+
+            # Agrega la consulta UPDATE solo si se detectaron diferencias
+            if campos_a_actualizar:
+                tarea = config.supabase_async.table("productos") \
+                    .update(campos_a_actualizar) \
+                    .eq("codigo_st", codigo) \
+                    .execute()
+                tareas.append(tarea)
+
+        if not tareas:
+            return {"status": "success", "mensaje": "No se detectaron cambios con respecto a la base de datos"}
+
+        # 3. Ejecuta las actualizaciones necesarias en paralelo
+        await asyncio.gather(*tareas)
+
         return {
             "status": "success", 
-            "mensaje": f"{len(payload_actualizacion)} productos actualizados correctamente"
+            "mensaje": f"{len(tareas)} productos actualizados correctamente"
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error en actualización masiva: {str(e)}")
+        print(f"❌ ERROR EN /api/productos/actualizar-analisis: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error al actualizar productos: {str(e)}")
 
 
 # Endpoint asíncrono para carga masiva de Ventas CSV

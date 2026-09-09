@@ -3,7 +3,7 @@ from typing import Optional  # Anotaciones de tipos opcionales
 import xml.etree.ElementTree as ET  # Procesamiento de archivos XML
 from datetime import datetime  # Fechas
 from fastapi import APIRouter, Request, Form, UploadFile, File, Cookie  # Dependencias FastAPI
-from fastapi.responses import RedirectResponse, HTMLResponse, Response  # Tipos de respuesta
+from fastapi.responses import RedirectResponse, HTMLResponse, Response, JSONResponse  # Importa JSONResponse para respuestas de API
 from config import supabase, templates, obtener_usuario_actual, script_alerta_error  # Entorno global
 
 router = APIRouter()
@@ -170,3 +170,26 @@ async def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
         return script_alerta_error("No se puede eliminar el proveedor porque tiene Órdenes de Compra asociadas a su registro.", redireccionar=f"/proveedores?select={prov_id}")
 
     return RedirectResponse(url="/proveedores", status_code=303)
+
+@router.get("/api/proveedores/{proveedor_id}")
+async def obtener_proveedor_api(proveedor_id: int, access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "No autorizado"})
+
+    # Consulta el proveedor en Supabase usando el ID solicitado
+    res = supabase.table("proveedores").select("*").eq("id", proveedor_id).maybe_single().execute()
+    if not res or not res.data:
+        return JSONResponse(status_code=404, content={"error": "Proveedor no encontrado"})
+
+    p = res.data
+    # Estructura y devuelve los datos del proveedor en formato JSON para autocompletar el formulario
+    return {
+        "id": p.get("id"),
+        "nombre": p.get("nombre") or "",
+        "contacto": p.get("contacto") or "",
+        "telefono": p.get("telefono") or "",
+        "dias_credito": p.get("dias_credito") if p.get("dias_credito") is not None else "",
+        "frecuencia": p.get("dias_despacho") or p.get("frecuencia") or "",
+        "etiquetas": p.get("categorias") or p.get("etiquetas") or ""
+    }

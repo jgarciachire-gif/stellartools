@@ -104,12 +104,13 @@
                     -- Seleccionar Proveedor --
                 </div>
                 {% for p in proveedores %}
-                <!-- Opción dinámica limpia mediante atributos data-* -->
-                <div onclick="seleccionarProveedorDesdeElemento(this)" data-id="{{ p.id }}" data-nombre="{{ p.nombre }}"
-                    data-contacto="{{ p.contacto|default('') }}" data-telefono="{{ p.telefono|default('') }}"
-                    data-dias-credito="{{ p.dias_credito|default('') }}"
+                <!-- Opción con evaluaciones Jinja 'or' para evitar que campos nulos impriman la palabra 'None' -->
+                <div onclick="seleccionarProveedorDesdeElemento(this)" data-id="{{ p.id }}"
+                    data-nombre="{{ p.nombre or '' }}" data-contacto="{{ p.contacto or '' }}"
+                    data-telefono="{{ p.telefono or '' }}"
+                    data-dias-credito="{{ p.dias_credito if p.dias_credito is not none else '' }}"
                     data-frecuencia="{{ p.frecuencia_pedidos or p.frecuencia or '' }}"
-                    data-etiquetas="{{ p.etiquetas|default('') }}"
+                    data-etiquetas="{{ p.etiquetas or '' }}"
                     class="opcion-prov-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
                     {{ p.nombre }}
                 </div>
@@ -141,7 +142,7 @@
                 <i class="fa-solid fa-clock-rotate-left text-slate-500 mr-1"></i> Días de Crédito
             </label>
             <input type="text" id="prov_dias_credito" readonly placeholder="-"
-                class="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
+                class="w-15 px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
         </div>
 
         <!-- Campo Frecuencia de Pedidos (Solo lectura) -->
@@ -150,7 +151,7 @@
                 <i class="fa-solid fa-calendar-check text-slate-500 mr-1"></i> Frecuencia Pedidos
             </label>
             <input type="text" id="prov_frecuencia" readonly placeholder="-"
-                class="w-full px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
+                class="w-15 px-3 py-2 border border-slate-200 bg-slate-100 rounded-xl text-xs text-slate-700 font-medium focus:outline-none cursor-default">
         </div>
 
     </div>
@@ -554,8 +555,13 @@
 
     // Muestra el menú desplegable al hacer clic o posicionarse en el buscador
     function mostrarOpcionesProvAnalisis() {
-        const dropdown = document.getElementById('opciones_proveedor_analisis'); // Obtiene el contenedor de la lista
-        if (dropdown) dropdown.classList.remove('hidden'); // Remueve la clase que lo oculta
+        const input = document.getElementById('buscar_proveedor_analisis'); // Campo de búsqueda
+
+        // Si el input está en modo lectura (proveedor seleccionado), no despliega la lista
+        if (input && input.readOnly) return;
+
+        const dropdown = document.getElementById('opciones_proveedor_analisis'); // Contenedor del menú
+        if (dropdown) dropdown.classList.remove('hidden'); // Muestra la lista desplegable
     }
 
     // Filtra los proveedores en tiempo real a medida que el usuario escribe
@@ -625,9 +631,15 @@
     // Variable global para almacenar la estructura de clasificación del proveedor activo
     let datosClasificacionAnalisis = [];
 
-    // Extrae los datos desde los atributos HTML data-* y llama a la función de selección
+    // Filtra y reemplaza valores nulos, vacíos o cadenas 'None'/'null' por un guion '-'
+    function limpiarValorBD(val) {
+        if (!val || val === 'None' || val === 'null' || val === 'undefined') return '-';
+        return val;
+    }
+
+    // Extrae los datos sanitizados desde los atributos data-* del elemento
     function seleccionarProveedorDesdeElemento(el) {
-        const d = el.dataset; // Lee todos los valores data-* del elemento cliqueado
+        const d = el.dataset; // Lee los atributos data-* en notación camello
         seleccionarProveedorAnalisis(
             d.id || '',
             d.nombre || '',
@@ -639,66 +651,105 @@
         );
     }
 
-    // --- SELECCIÓN Y ACTIVACIÓN DE PROVEEDOR EN CASCADA ---
-    function seleccionarProveedorAnalisis(id, nombre, contacto = '', telefono = '', diasCredito = '', frecuencia = '', etiquetas = '') {
-        const inputBuscar = document.getElementById('buscar_proveedor_analisis');
-        document.getElementById('proveedor_id_analisis').value = id;
-        inputBuscar.value = id ? nombre : '';
-        document.getElementById('opciones_proveedor_analisis').classList.add('hidden');
+    // --- SELECCIÓN LIMPIA Y CARGA AUTOMÁTICA DEL PROVEEDOR DESDE LA BD ---
+    async function seleccionarProveedorAnalisis(id, nombre) {
+        const inputBuscar = document.getElementById('buscar_proveedor_analisis'); // Campo de búsqueda visible
+        const inputId = document.getElementById('proveedor_id_analisis'); // Campo de ID oculto
+
+        if (inputId) inputId.value = id;
+        if (inputBuscar) {
+            inputBuscar.value = id ? nombre : '';
+            inputBuscar.readOnly = !!id; // Bloquea la edición del campo si hay un proveedor seleccionado
+            if (id) {
+                inputBuscar.classList.add('bg-slate-100', 'cursor-default');
+            } else {
+                inputBuscar.classList.remove('bg-slate-100', 'cursor-default');
+            }
+        }
+
+        const dropdown = document.getElementById('opciones_proveedor_analisis');
+        if (dropdown) dropdown.classList.add('hidden'); // Oculta el menú desplegable
 
         const secFiltros = document.getElementById('sec-filtros-clasificacion');
         const inpDepto = document.getElementById('buscar_depto_analisis');
         const btnImportar = document.getElementById('btn_importar_productos');
 
-        // Bloquea o desbloquea el campo de búsqueda de proveedor al seleccionar
-        if (id) {
-            inputBuscar.readOnly = true; // Bloquea edición directa
-            inputBuscar.classList.add('bg-slate-100', 'cursor-default'); // Estilo visual de bloqueo
-        } else {
-            inputBuscar.readOnly = false; // Desbloquea edición
-            inputBuscar.classList.remove('bg-slate-100', 'cursor-default'); // Restaura estilo
+        if (typeof limpiarDeptoAnalisis === 'function') limpiarDeptoAnalisis();
+
+        // Si se limpia el proveedor (ID vacío), resetea el formulario
+        if (!id) {
+            if (secFiltros) secFiltros.classList.add('opacity-50', 'pointer-events-none');
+            if (inpDepto) inpDepto.disabled = true;
+            if (btnImportar) btnImportar.disabled = true;
+
+            if (document.getElementById('prov_contacto')) document.getElementById('prov_contacto').value = '-';
+            if (document.getElementById('prov_telefono')) document.getElementById('prov_telefono').value = '-';
+            if (document.getElementById('prov_dias_credito')) document.getElementById('prov_dias_credito').value = '-';
+            if (document.getElementById('prov_frecuencia')) document.getElementById('prov_frecuencia').value = '-';
+
+            const contEtiquetas = document.getElementById('prov_etiquetas');
+            if (contEtiquetas) contEtiquetas.innerHTML = '<span class="text-xs text-slate-400 italic">Sin proveedor seleccionado</span>';
+            return;
         }
 
-        // Carga los datos de solo lectura en la ficha del proveedor
-        document.getElementById('prov_contacto').value = contacto || '-';
-        document.getElementById('prov_telefono').value = telefono || '-';
-        document.getElementById('prov_dias_credito').value = diasCredito || '-';
-        document.getElementById('prov_frecuencia').value = frecuencia || '-';
+        // Habilita los controles adyacentes
+        if (secFiltros) secFiltros.classList.remove('opacity-50', 'pointer-events-none');
+        if (inpDepto) inpDepto.disabled = false;
+        if (btnImportar) btnImportar.disabled = false;
 
-        // Renderiza las etiquetas registradas en la ficha del proveedor
-        const contEtiquetas = document.getElementById('prov_etiquetas');
-        if (contEtiquetas) {
-            contEtiquetas.innerHTML = '';
-            if (etiquetas) {
-                const lista = typeof etiquetas === 'string' ? etiquetas.split(',') : etiquetas;
-                lista.forEach(tag => {
-                    const badge = document.createElement('span');
-                    badge.className = 'px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold';
-                    badge.textContent = tag.trim();
-                    contEtiquetas.appendChild(badge);
-                });
-            } else {
-                contEtiquetas.innerHTML = '<span class="text-xs text-slate-400 italic">Sin etiquetas</span>';
+        try {
+            // Consulta asíncrona a la API de FastAPI
+            const respuesta = await fetch(`/api/proveedores/${id}`);
+            if (respuesta.ok) {
+                const data = await respuesta.json();
+
+                // Vuelca los datos obtenidos de Supabase a los inputs del HTML
+                const elemContacto = document.getElementById('prov_contacto');
+                const elemTelefono = document.getElementById('prov_telefono');
+                const elemCredito = document.getElementById('prov_dias_credito');
+                const elemFrecuencia = document.getElementById('prov_frecuencia');
+
+                if (elemContacto) elemContacto.value = data.contacto || '-';
+                if (elemTelefono) elemTelefono.value = data.telefono || '-';
+                if (elemCredito) elemCredito.value = (data.dias_credito !== undefined && data.dias_credito !== null && data.dias_credito !== '') ? data.dias_credito : '-';
+                if (elemFrecuencia) elemFrecuencia.value = data.frecuencia || '-';
+
+                // Dibuja las etiquetas/categorías
+                const contEtiquetas = document.getElementById('prov_etiquetas');
+                if (contEtiquetas) {
+                    contEtiquetas.innerHTML = '';
+                    const etiquetas = data.etiquetas || '';
+                    if (etiquetas && etiquetas.length > 0) {
+                        const lista = typeof etiquetas === 'string' ? etiquetas.split(',') : etiquetas;
+                        lista.forEach(tag => {
+                            const badge = document.createElement('span');
+                            badge.className = 'px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg text-[11px] font-semibold';
+                            badge.textContent = String(tag).trim();
+                            contEtiquetas.appendChild(badge);
+                        });
+                    } else {
+                        contEtiquetas.innerHTML = '<span class="text-xs text-slate-400 italic">Sin etiquetas</span>';
+                    }
+                }
             }
+        } catch (error) {
+            console.error("Error al obtener los datos del proveedor:", error);
         }
 
-        // Reinicia selecciones previas de departamento y filtros
-        limpiarDeptoAnalisis();
-
-        if (id) {
-            secFiltros.classList.remove('opacity-50', 'pointer-events-none');
-            inpDepto.disabled = false;
-            btnImportar.disabled = false;
+        // Carga los departamentos asignados al proveedor
+        if (typeof cargarClasificacionProveedor === 'function') {
             cargarClasificacionProveedor(id);
-        } else {
-            secFiltros.classList.add('opacity-50', 'pointer-events-none');
-            inpDepto.disabled = true;
-            btnImportar.disabled = true;
         }
     }
 
     function limpiarProveedorAnalisis() {
-        seleccionarProveedorAnalisis('', '', '', '', '', '', '');
+        seleccionarProveedorAnalisis('', ''); // Llama a la selección vacía para restablecer los inputs y desbloquear el campo
+
+        const inputBuscar = document.getElementById('buscar_proveedor_analisis');
+        if (inputBuscar) {
+            inputBuscar.value = ''; // Limpia el texto
+            inputBuscar.focus(); // Coloca el cursor listo para escribir una nueva búsqueda
+        }
     }
 
     // Maneja el flujo visual y estados del botón 'Calcular Sugerido'
@@ -1767,7 +1818,6 @@
         });
     }
 
-    // Obtiene de forma prioritaria la cantidad en Unidades (UNI.) reales
     // Obtiene directamente y de forma estricta el valor de la columna Unidades (UNI.)
     function obtenerUnidadesTienda(tienda, codigo) {
         const codNorm = typeof normalizarCodigoAnalisis === 'function' ? normalizarCodigoAnalisis(codigo) : codigo;
@@ -1969,42 +2019,104 @@
     // Función adaptada para guardar la plantilla actualizando el registro existente
     async function guardarPlantillaCompleta() {
         try {
-            // Reinicia la memoria de la pestaña activa antes de leer el HTML para descartar filas eliminadas
-            if (typeof tiendaActivaPestana !== 'undefined' && typeof matrizTiendas !== 'undefined') {
-                matrizTiendas[tiendaActivaPestana] = {};
+            // Captura los datos del encabezado de la página antes de procesar la tabla
+            const rawProvId = document.getElementById('proveedor_id_analisis')?.value; // Obtiene el valor del input del proveedor
+            const proveedorId = rawProvId ? parseInt(rawProvId) : null; // Convierte a número o deja en null si está vacío
+            const diasCobertura = parseInt(document.getElementById('dias_cobertura')?.value || 7); // Obtiene los días o asigna 7 por defecto
+            // 1. Obtiene únicamente los códigos que existen actualmente en la tabla visual HTML
+            const codigosVisiblesEnHTML = new Set(
+                Array.from(document.querySelectorAll('#filas-tabla-analisis .inp-codigo'))
+                    .map(input => input.value.trim())
+                    .filter(codigo => codigo !== '')
+            );
+
+            // 2. Sincroniza la sede activa y asegura que CENTRO o la sede actual capturen el inventario del HTML
+            const sedeActual = (typeof tiendaActivaPestana !== 'undefined' && tiendaActivaPestana) ? tiendaActivaPestana.trim().toUpperCase() : 'CENTRO';
+            if (!matrizTiendas[sedeActual]) matrizTiendas[sedeActual] = {};
+
+            const filasHTML = document.querySelectorAll('#filas-tabla-analisis tr');
+            filasHTML.forEach(tr => {
+                const codigo = tr.querySelector('.inp-codigo')?.value?.trim();
+                if (!codigo) return;
+
+                // Busca el campo de inventario/sugerido en el HTML probando inputs y celdas
+                const elInv = tr.querySelector('.inp-sugerido, .inp-invemp, .inp-inv, .inp-stock, .inp-inventario, [data-inv]');
+                const valInv = parseFloat(elInv?.value || elInv?.innerText || elInv?.textContent || 0) || 0;
+
+                // Busca el campo de pedido final en el HTML
+                const elEmp = tr.querySelector('.inp-pedido, .inp-emp, .inp-ped');
+                const valEmp = parseFloat(elEmp?.value || elEmp?.innerText || elEmp?.textContent || 0) || 0;
+
+                // Guarda en memoria conservando el inventario previo si en la pestaña actual no se modificó
+                const invPrevio = matrizTiendas[sedeActual][codigo]?.invEmp || 0;
+                matrizTiendas[sedeActual][codigo] = {
+                    invEmp: valInv > 0 ? valInv : invPrevio,
+                    emp: valEmp
+                };
+            });
+
+            // 3. Purga únicamente los códigos eliminados de la tienda activa actual sin borrar los datos guardados de CENTRO u otras sedes
+            if (matrizTiendas[sedeActual]) {
+                for (const codigo in matrizTiendas[sedeActual]) {
+                    if (!codigosVisiblesEnHTML.has(codigo)) {
+                        delete matrizTiendas[sedeActual][codigo]; // Elimina el código borrado solo dentro de la sede activa
+                    }
+                }
             }
 
-            // Sincroniza la tabla en pantalla hacia la memoria de la pestaña activa
-            if (typeof guardarEstadoTablaEnMemoria === 'function' && typeof tiendaActivaPestana !== 'undefined') {
-                guardarEstadoTablaEnMemoria(tiendaActivaPestana);
-            }
-
-            // Obtiene el ID del usuario autenticado
-            let userId = null;
+            // 4. Prepara las filas limpias de todas las sedes para registrarlas en Supabase
+            const filasDetalleTemp = [];
+            // Obtiene el ID del usuario usando el cliente supabaseClient o la sesión inyectada por FastAPI
+            let userId = null; // Inicializa la variable del ID de usuario
             try {
-                const { data: { user } } = await supabaseClient.auth.getUser();
-                if (user) userId = user.id;
+                const { data: { user } } = await supabaseClient.auth.getUser(); // Consulta la sesión en el cliente correcto
+                if (user) userId = user.id; // Asigna el ID de Supabase si existe
             } catch (e) { }
 
+            // Si no hay sesión en Supabase, utiliza el ID que viene desde Jinja2/FastAPI
             if (!userId && typeof USUARIO_ID_SESION !== 'undefined' && USUARIO_ID_SESION) {
-                userId = USUARIO_ID_SESION;
+                userId = USUARIO_ID_SESION; // Asigna el valor de reserva de la plantilla
+            }
+            for (const sede in matrizTiendas) {
+                for (const codigo in matrizTiendas[sede]) {
+                    const item = matrizTiendas[sede][codigo];
+                    if (!item) continue;
+
+                    // Evalúa invEmp y todas las propiedades alternativas donde CENTRO pueda tener guardado el inventario
+                    const valInv = parseFloat(item.invEmp ?? item.inv ?? item.inventario ?? item.sugerido ?? item.stock ?? 0) || 0;
+                    const valEmp = parseFloat(item.emp ?? item.pedido_final ?? 0) || 0;
+
+                    if (valInv > 0 || valEmp > 0) {
+                        filasDetalleTemp.push({
+                            sede: sede,
+                            codigo: codigo,
+                            sugerido: valInv,
+                            pedido_final: valEmp
+                        });
+                    }
+                }
             }
 
-            if (!userId) {
-                alert('Debe iniciar sesión para guardar en la base de datos.');
+            // Muestra en consola exactamente lo que se enviará a Supabase
+            console.log("📦 Filas reales filtradas para guardar:", filasDetalleTemp);
+
+            // Si la tabla está vacía, frena aquí sin alterar la base de datos
+            if (filasDetalleTemp.length === 0) {
+                alert('⚠️ No hay datos ingresados en la tabla para guardar.');
                 return;
             }
 
-            // Datos de la cabecera
-            const rawProvId = document.getElementById('proveedor_id_analisis')?.value;
-            const proveedorId = rawProvId ? parseInt(rawProvId) : null;
-            const diasCobertura = parseInt(document.getElementById('dias_cobertura')?.value || 7);
-
-            // 1. Consultar si ya existe un registro guardado previamente para este usuario
-            const { data: existente } = await supabaseClient
+            // 5. Consulta si ya existe un registro previo para este usuario y proveedor
+            let query = supabaseClient
                 .from('analisis_pedidos')
                 .select('id')
-                .eq('usuario_id', userId)
+                .eq('usuario_id', userId);
+
+            if (proveedorId) {
+                query = query.eq('proveedor_id', proveedorId);
+            }
+
+            const { data: existente } = await query
                 .order('updated_at', { ascending: false })
                 .limit(1)
                 .maybeSingle();
@@ -2012,7 +2124,7 @@
             let analisisId = null;
 
             if (existente && existente.id) {
-                // Si existe, actualizamos la cabecera sobreescribiendo el registro previo
+                // Actualiza la cabecera sobreescribiendo el registro previo
                 analisisId = existente.id;
                 const { error: errorUpdate } = await supabaseClient
                     .from('analisis_pedidos')
@@ -2025,7 +2137,7 @@
 
                 if (errorUpdate) throw errorUpdate;
             } else {
-                // Si no existe ninguno previo, insertamos un registro nuevo
+                // Inserta una cabecera nueva si no existía ninguna
                 const { data: nuevoAnalisis, error: errorInsert } = await supabaseClient
                     .from('analisis_pedidos')
                     .insert({
@@ -2041,7 +2153,7 @@
                 analisisId = nuevoAnalisis.id;
             }
 
-            // Limpia el detalle anterior vinculado a este ID antes de reinsertar los nuevos datos
+            // 6. Elimina únicamente el detalle anterior vinculado a este ID
             const { error: errorBorrado } = await supabaseClient
                 .from('analisis_pedidos_detalle')
                 .delete()
@@ -2049,35 +2161,12 @@
 
             if (errorBorrado) throw errorBorrado;
 
-            // Recorre matrizTiendas e incluye la clave/código de cada producto
-            const filasDetalle = [];
+            // 7. Enlaza el analisisId a cada fila preparada e inserta en lote
+            const filasDetalle = filasDetalleTemp.map(fila => ({
+                ...fila,
+                analisis_id: analisisId
+            }));
 
-            for (const sede in matrizTiendas) {
-                for (const codigo in matrizTiendas[sede]) {
-                    const item = matrizTiendas[sede][codigo];
-                    if (!item) continue;
-
-                    const valInv = parseFloat(item.invEmp) || 0;
-                    const valEmp = parseFloat(item.emp) || 0;
-
-                    if (valInv > 0 || valEmp > 0) {
-                        filasDetalle.push({
-                            analisis_id: analisisId,
-                            sede: sede,
-                            codigo: codigo,       // Guarda la clave del producto
-                            sugerido: valInv,     // Guarda empaques de inventario/sugerido
-                            pedido_final: valEmp  // Guarda empaques finales
-                        });
-                    }
-                }
-            }
-
-            if (filasDetalle.length === 0) {
-                alert('⚠️ No hay datos ingresados en la tabla para guardar.');
-                return;
-            }
-
-            // Insertar detalle actualizado a Supabase
             const { error: errorInsertDetalle } = await supabaseClient
                 .from('analisis_pedidos_detalle')
                 .insert(filasDetalle);
