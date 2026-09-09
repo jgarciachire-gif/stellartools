@@ -8,15 +8,15 @@ router = APIRouter()
 async def chrome_devtools_silencer():
     return Response(status_code=204)
 
+# Convertimos la función a async y agregamos los parámetros de cookies
 @router.get("/login")
-def vista_login(request: Request):
-    access_token = request.cookies.get("access_token")
-    refresh_token = request.cookies.get("refresh_token")
-    
+async def vista_login(request: Request, access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
     if not access_token and not refresh_token:
         return templates.TemplateResponse(request=request, name="login.html", context={})
 
-    if obtener_usuario_actual(access_token, refresh_token):
+    # Esperamos la respuesta asíncrona para validar la sesión del usuario
+    user = await obtener_usuario_actual(access_token, refresh_token)
+    if user:
         return RedirectResponse(url="/", status_code=303)
 
     return templates.TemplateResponse(request=request, name="login.html", context={})
@@ -103,9 +103,11 @@ def enviar_recuperacion(request: Request, email: str = Form(...)):
 def vista_reset_password(request: Request):
     return templates.TemplateResponse(request=request, name="login.html", context={"reset_mode": True})
 
+# Convertimos la función a async para permitir la ejecución de await
 @router.post("/reset-password")
-def procesar_reset_password(access_token: str = Cookie(None), nueva_password: str = Form(...)):
-    user = obtener_usuario_actual(access_token)
+async def procesar_reset_password(access_token: str = Cookie(None), nueva_password: str = Form(...)):
+    # Obtenemos el usuario esperando la corrutina
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return script_alerta_modal(tipo="error", titulo="Sesión Expirada", mensaje="El enlace de recuperación ha expirado o es inválido.")
     try:
@@ -122,15 +124,19 @@ def cerrar_sesion(request: Request):
     response.delete_cookie("refresh_token", path="/")
     return response
 
+# Definición asíncrona para la vista principal del perfil
 @router.get("/perfil")
-def vista_perfil(request: Request, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def vista_perfil(request: Request, access_token: str = Cookie(None)):
+    # Esperamos el objeto usuario real devuelto por la corrutina
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
+    # Consulta a la tabla perfiles usando la ID del usuario ya resuelta
     res_perfil = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
     perfil = res_perfil.data if res_perfil and res_perfil.data else {"nombre_comprador": "", "cargo": ""}
 
+    # Consulta de categorías creadas por el usuario activo
     res_cats = supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
     categorias = res_cats.data if res_cats and res_cats.data else []
 
@@ -140,13 +146,14 @@ def vista_perfil(request: Request, access_token: str = Cookie(None)):
         "categorias": categorias
     })
 
+# Guardar información personal del perfil
 @router.post("/perfil/guardar")
-def guardar_perfil(
+async def guardar_perfil(
     nombre_comprador: str = Form(""),
     cargo: str = Form(""),
     access_token: str = Cookie(None)
 ):
-    user = obtener_usuario_actual(access_token)
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -166,9 +173,10 @@ def guardar_perfil(
 
     return RedirectResponse(url="/perfil", status_code=303)
 
+# Cambio de contraseña desde la vista de perfil
 @router.post("/perfil/cambiar-clave")
-def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -178,9 +186,10 @@ def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(No
     except Exception as e:
         return script_alerta_error(f"Error al cambiar contraseña: {str(e)}")
 
+# Creación de nueva categoría
 @router.post("/perfil/categorias/crear")
-def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -192,9 +201,10 @@ def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(None)):
 
     return RedirectResponse(url="/perfil", status_code=303)
 
+# Actualización de categoría existente
 @router.post("/perfil/categorias/actualizar/{cat_id}")
-def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
@@ -203,9 +213,10 @@ def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_token: str
 
     return RedirectResponse(url="/perfil", status_code=303)
 
+# Eliminación de categoría
 @router.post("/perfil/categorias/eliminar/{cat_id}")
-def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
-    user = obtener_usuario_actual(access_token)
+async def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
