@@ -1952,59 +1952,106 @@
         }
 
         // Exporta un archivo .txt consolidado sumando las unidades de todas las tiendas
+        // Exporta un archivo .xml consolidado sumando los empaques (Emp) de todas las tiendas
         function exportarConsolidado() {
-            guardarEstadoTablaEnMemoria(tiendaActivaPestana); // Sincroniza la tabla visible
-            const proveedor = obtenerNombreProveedor(); // Obtiene el nombre del proveedor
-            const hoy = new Date();
-            const dia = String(hoy.getDate()).padStart(2, '0'); // Día a 2 dígitos
-            const mes = String(hoy.getMonth() + 1).padStart(2, '0'); // Mes a 2 dígitos
-            const anio = String(hoy.getFullYear()).slice(-2); // Año a 2 dígitos (AA)
-            const fechaActual = `${dia}-${mes}-${anio}`; // Formato DD-MM-AA
+            // Sincroniza la tienda actual visible en la matriz de memoria
+            guardarEstadoTablaEnMemoria(tiendaActivaPestana);
 
+            // Obtiene el nombre del proveedor y la fecha actual formateada
+            const proveedor = obtenerNombreProveedor();
+            const hoy = new Date();
+            const dia = String(hoy.getDate()).padStart(2, '0');
+            const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+            const anio = String(hoy.getFullYear()).slice(-2);
+            const fechaActual = `${dia}-${mes}-${anio}`;
+
+            // Lista de las sedes o tiendas disponibles
             const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
 
-            // Recolecta códigos únicos de la tabla y la matriz
-            const codigosSet = new Set();
+            // Mapa para asociar de forma única cada código con su descripción
+            const mapaProductos = new Map();
+
+            // 1. Recolecta códigos y descripciones desde la tabla visual activa
             document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
                 const cod = obtenerCodigoFila(tr);
-                if (cod) codigosSet.add(cod);
-            });
-
-            Object.keys(matrizTiendas).forEach(tienda => {
-                Object.keys(matrizTiendas[tienda] || {}).forEach(cod => {
-                    const codNorm = normalizarCodigoAnalisis(cod);
-                    if (codNorm) codigosSet.add(codNorm);
-                });
-            });
-
-            let lineas = [];
-
-            codigosSet.forEach(codigo => {
-                let totalUnidades = 0;
-                sedes.forEach(tienda => {
-                    totalUnidades += obtenerUnidadesTienda(tienda, codigo); // Suma unidades de todas las tiendas
-                });
-
-                if (totalUnidades > 0) {
-                    lineas.push(`${codigo}|${totalUnidades}|`); // Formato exacto CODIGO|TOTAL_UNIDADES|
+                if (cod) {
+                    const desc = tr.querySelector('.inp-desc')?.value || '';
+                    mapaProductos.set(cod, desc);
                 }
             });
 
-            if (lineas.length === 0) {
-                alert('No hay productos con unidades consolidadas mayores a cero para exportar.');
+            // 2. Recolecta códigos guardados previamente en memoria para otras sedes
+            Object.keys(matrizTiendas).forEach(tienda => {
+                Object.keys(matrizTiendas[tienda] || {}).forEach(cod => {
+                    const codNorm = typeof normalizarCodigoAnalisis === 'function' ? normalizarCodigoAnalisis(cod) : cod;
+                    if (codNorm && !mapaProductos.has(codNorm)) {
+                        mapaProductos.set(codNorm, '');
+                    }
+                });
+            });
+
+            // Función de seguridad para escapar caracteres especiales XML (&, <, >, ", ')
+            const escaparXML = (str) => String(str || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+
+            let nodosProductosXML = [];
+
+            // 3. Recorre cada código único y calcula la suma total de Empaques (Emp) entre todas las tiendas
+            mapaProductos.forEach((descripcion, codigo) => {
+                let totalEmpaques = 0;
+
+                sedes.forEach(tienda => {
+                    // Si la tienda es la activa en pantalla, lee el input directamente
+                    if (tienda === tiendaActivaPestana) {
+                        document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+                            if (obtenerCodigoFila(tr) === codigo) {
+                                totalEmpaques += obtenerValorCelda(tr, '.inp-emp');
+                            }
+                        });
+                    } else if (matrizTiendas[tienda] && matrizTiendas[tienda][codigo]) {
+                        // Si la tienda está en memoria, toma el valor guardado
+                        totalEmpaques += parseFloat(matrizTiendas[tienda][codigo].emp) || 0;
+                    }
+                });
+
+                // Solo agrega al XML los productos con empaques totales mayores a cero
+                if (totalEmpaques > 0) {
+                    nodosProductosXML.push(`    <producto>
+        <codigo>${escaparXML(codigo)}</codigo>
+        <descripcion>${escaparXML(descripcion)}</descripcion>
+        <emp>${totalEmpaques}</emp>
+    </producto>`);
+                }
+            });
+
+            // Muestra alerta si no hay registros con empaques
+            if (nodosProductosXML.length === 0) {
+                alert('No hay productos con empaques consolidados mayores a cero para exportar.');
                 return;
             }
 
-            const contenido = lineas.join('\r\n') + '\r\n'; // Salto de línea CRLF Windows
-            const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+            // 4. Construye la estructura jerárquica del archivo XML
+            const contenidoXML = `<?xml version="1.0" encoding="UTF-8"?>
+<consolidado proveedor="${escaparXML(proveedor)}" fecha="${fechaActual}">
+${nodosProductosXML.join('\n')}
+</consolidado>`;
+
+            // 5. Genera el archivo Blob con codificación UTF-8 e inicia la descarga .xml
+            const blob = new Blob([contenidoXML], { type: 'application/xml;charset=utf-8' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            // Nombre: NOMBRE PROVEEDOR - CONSOLIDADO GLOBAL - DD-MM-AA.txt
+
+            // Nombre de archivo: NOMBRE PROVEEDOR - CONSOLIDADO GLOBAL - DD-MM-AA.xml
             const nombreLimpio = `${proveedor} - CONSOLIDADO GLOBAL - ${fechaActual}`.replace(/[/\\?%*:|"<>]/g, '');
-            a.download = `${nombreLimpio}.txt`;
+            a.download = `${nombreLimpio}.xml`;
+
             document.body.appendChild(a);
-            a.click(); // Descarga archivo
+            a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
         }
