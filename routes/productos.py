@@ -382,6 +382,36 @@ async def cargar_lista_productos(
     msj = f"Proceso finalizado: {total_nuevos} productos creados y {total_actualizados} actualizados."
     return script_alerta_modal("exito", "Carga Completada", msj, "/productos")
 
+# Endpoint asíncrono para buscar productos por coincidencia parcial en la descripción
+@router.get("/api/productos/buscar")
+async def buscar_productos_por_descripcion(
+    q: Optional[str] = "", # Captura el texto de búsqueda enviado desde el frontend
+    access_token: str = Cookie(None), # Galleta de autenticación de acceso
+    refresh_token: str = Cookie(None) # Galleta de autenticación de refresco
+):
+    user = await obtener_usuario_actual(access_token, refresh_token) # Verifica el usuario logueado
+    if not user or not q.strip(): # Si no está autenticado o la búsqueda está vacía
+        return [] # Retorna un listado vacío
+
+    query_limpia = q.strip() # Remueve espacios en blanco innecesarios
+    
+    # Consulta en la tabla productos filtrando coincidencias en la columna descripcion
+    res = await config.supabase_async.table("productos") \
+        .select("codigo_st, descripcion, precio, unidad_manejo") \
+        .ilike("descripcion", f"%{query_limpia}%") \
+        .limit(30) \
+        .execute()
+
+    # Mapea los resultados adecuando la columna codigo_st como codigo para la plantilla
+    return [
+        {
+            "codigo": p.get("codigo_st") or "",
+            "descripcion": p.get("descripcion") or "",
+            "precio": float(p.get("precio") or 0.0),
+            "unidad_manejo": p.get("unidad_manejo") or "1"
+        }
+        for p in (res.data or [])
+    ]
 
 @router.get("/api/productos/buscar-codigo/{codigo}")
 async def buscar_producto_por_codigo(
@@ -407,3 +437,22 @@ async def buscar_producto_por_codigo(
         }
     
     return {"encontrado": False}
+
+    # Endpoint asíncrono para obtener departamento, grupo, subgrupo y marca según el proveedor
+@router.get("/api/clasificacion")
+async def obtener_clasificacion_proveedor(
+    proveedor_id: int, # Recibe el ID del proveedor enviado desde el frontend
+    access_token: str = Cookie(None), # Galleta de autenticación de acceso
+    refresh_token: str = Cookie(None) # Galleta de autenticación de refresco
+):
+    user = await obtener_usuario_actual(access_token, refresh_token) # Verifica el usuario logueado
+    if not user: # Si la sesión expiró o no existe
+        return [] # Devuelve una lista vacía
+
+    # Consulta en Supabase filtrando por proveedor y extrayendo departamento, grupo, subgrupo y marca
+    res = await config.supabase_async.table("productos") \
+        .select("departamento, grupo, subgrupo, marca") \
+        .eq("proveedor_id", proveedor_id) \
+        .execute()
+
+    return res.data or [] # Retorna la lista de clasificaciones

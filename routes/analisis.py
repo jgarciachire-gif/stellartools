@@ -41,8 +41,9 @@ async def api_obtener_clasificacion(
     if not user or not proveedor_id:
         return []
 
+    # Consulta agregando el campo marca
     res = await config.supabase_async.table("productos") \
-        .select("departamento, grupo, subgrupo") \
+        .select("departamento, grupo, subgrupo, marca") \
         .eq("proveedor_id", proveedor_id) \
         .execute()
         
@@ -54,18 +55,20 @@ async def api_obtener_clasificacion(
         depto = p.get("departamento") or ""
         grupo = p.get("grupo") or ""
         subgrupo = p.get("subgrupo") or ""
+        marca = p.get("marca") or ""
         
-        clave = (depto, grupo, subgrupo)
+        # Incluye la marca en la tupla de unicidad
+        clave = (depto, grupo, subgrupo, marca)
         if clave not in vistos:
             vistos.add(clave)
             resultado.append({
                 "departamento": depto,
                 "grupo": grupo,
-                "subgrupo": subgrupo
+                "subgrupo": subgrupo,
+                "marca": marca
             })
 
     return resultado
-
 
 @router.get("/api/productos/importar-analisis")
 async def api_importar_productos_analisis(
@@ -73,6 +76,7 @@ async def api_importar_productos_analisis(
     departamento: Optional[str] = "",
     grupo: Optional[str] = "",
     subgrupo: Optional[str] = "",
+    marca: Optional[str] = "",  # Nuevo parámetro para filtrar por marca
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
@@ -90,6 +94,8 @@ async def api_importar_productos_analisis(
         query = query.eq("grupo", grupo.strip())
     if subgrupo and subgrupo.strip():
         query = query.eq("subgrupo", subgrupo.strip())
+    if marca and marca.strip():
+        query = query.eq("marca", marca.strip())  # Filtra exactamente por la marca seleccionada
 
     productos = []
     bloque = 1000

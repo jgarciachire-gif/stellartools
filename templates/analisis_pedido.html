@@ -95,7 +95,7 @@
 
                         <div class="relative flex-1 min-w-0">
                             <input type="text" id="buscar_proveedor_analisis" placeholder="Escriba para buscar..."
-                                autocomplete="none" oninput="filtrarProveedoresAnalisis()"
+                                autocomplete="off" spellcheck="false" oninput="filtrarProveedoresAnalisis()"
                                 onfocus="mostrarOpcionesProvAnalisis()" onkeydown="navegarProveedoresAnalisis(event)"
                                 class="w-full bg-transparent border-0 p-0 text-xs text-slate-800 font-semibold focus:ring-0 focus:outline-none pr-5 placeholder:text-slate-400 placeholder:italic autofill:shadow-[0_0_0_1000px_white_inset]">
 
@@ -192,7 +192,7 @@
     <!-- CONTENEDOR 2: FILTROS EN CASCADA -->
     <div id="sec-filtros-clasificacion"
         class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 opacity-50 pointer-events-none transition-all">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
             <!-- 1er Campo: Departamento -->
             <div class="relative" id="combo-depto-analisis">
                 <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
@@ -254,6 +254,29 @@
                     class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
                 </div>
             </div>
+            <!-- 4to Campo: Marca (No bloqueado) -->
+            <div class="relative" id="combo-marca-analisis">
+                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                    <i class="fa-solid fa-copyright text-blue-600 mr-1"></i> Marca
+                </label>
+                <!-- Almacena la marca seleccionada -->
+                <input type="hidden" id="marca_analisis" value="">
+                <div class="relative">
+                    <!-- Campo de búsqueda no bloqueado por defecto -->
+                    <input type="text" id="buscar_marca_analisis" placeholder="Todas las marcas..." autocomplete="off"
+                        oninput="filtrarMarcasAnalisis()" onfocus="mostrarOpcionesMarcaAnalisis()"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                    <!-- Botón para deseleccionar/limpiar marca -->
+                    <button type="button" onclick="limpiarMarcaAnalisis()"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <!-- Menú desplegable flotante de marcas -->
+                <div id="opciones_marca_analisis"
+                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+                </div>
+            </div>
 
             <!-- Botón Importar Productos -->
             <div>
@@ -283,7 +306,8 @@
                 <label class="block text-xs font-semibold text-slate-700 whitespace-nowrap">
                     <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i> Días:
                 </label>
-                <input type="number" id="dias_cobertura" value="7" min="1" step="1" oninput="recargarSugeridosEnTabla()"
+                <input type="number" id="dias_cobertura" value="7" min="1" step="1"
+                    oninput="if(this.value < 1 && this.value !== '') this.value = 1; recargarSugeridosEnTabla()"
                     class="w-16 px-2 py-1.5 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
             </div>
 
@@ -451,6 +475,47 @@
                     class="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 text-xs shadow-sm">
                     Aceptar
                 </button>
+            </div>
+        </div>
+    </div>
+    <!-- Modal Buscador de Productos por Descripción -->
+    <div id="modal-buscador-productos"
+        class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+        <!-- Contenedor principal del modal -->
+        <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 flex flex-col max-h-[80vh]">
+            <!-- Encabezado con título e icono -->
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-magnifying-glass text-blue-600"></i> Buscar Producto
+                </h3>
+                <button type="button" onclick="cerrarModalBuscadorProductos()"
+                    class="text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-base"></i>
+                </button>
+            </div>
+
+            <!-- Campo de texto para ingresar la descripción -->
+            <div class="relative mb-4">
+                <input type="text" id="input-buscar-producto-modal" autocomplete="off" spellcheck="false"
+                    placeholder="Escriba la descripción y presione Enter..." onkeydown="manejarKeySearchModal(event)"
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+
+            <!-- Contenedor dinámico con scroll para renderizar los resultados -->
+            <div id="contenedor-resultados-productos"
+                class="flex-1 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 min-h-[160px] max-h-60">
+                <div class="p-4 text-center text-xs text-slate-400 italic">Lista de productos</div>
+            </div>
+
+            <!-- Pie de modal con atajos de teclado y botón cancelar -->
+            <div
+                class="flex items-center justify-between pt-4 border-t border-slate-100 mt-4 text-[11px] text-slate-500">
+                <span>Navegar: <kbd class="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px]">↑</kbd>
+                    <kbd class="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px]">↓</kbd> |
+                    Seleccionar: <kbd
+                        class="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px]">Enter</kbd></span>
+                <button type="button" onclick="cerrarModalBuscadorProductos()"
+                    class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg">Cancelar</button>
             </div>
         </div>
     </div>
@@ -817,7 +882,8 @@
             try {
                 const res = await fetch(`/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`);
                 datosClasificacionAnalisis = await res.json();
-                poblarDepartamentosAnalisis();
+                poblarDepartamentosAnalisis(); // Genera departamentos
+                poblarMarcasAnalisis(); // Genera marcas iniciales del proveedor
             } catch (e) {
                 console.error('Error al obtener clasificaciones:', e);
             }
@@ -848,6 +914,7 @@
             } else {
                 inpGrupo.disabled = true;
             }
+            poblarMarcasAnalisis(); // Refresca las marcas según el departamento
         }
 
         function poblarGruposAnalisis(deptoSel) {
@@ -875,6 +942,7 @@
             } else {
                 inpSubgrupo.disabled = true;
             }
+            poblarMarcasAnalisis(); // Refresca las marcas según el grupo
         }
 
         function poblarSubgruposAnalisis(deptoSel, grupoSel) {
@@ -892,6 +960,69 @@
             document.getElementById('subgrupo_analisis').value = val;
             document.getElementById('buscar_subgrupo_analisis').value = val ? label : '';
             document.getElementById('opciones_subgrupo_analisis').classList.add('hidden');
+            poblarMarcasAnalisis(); // Refresca las marcas según el subgrupo
+        }
+
+        // --- LÓGICA DEL FILTRO DE MARCA ---
+        // Actualiza el listado de marcas según los filtros de depto, grupo y subgrupo seleccionados
+        function poblarMarcasAnalisis() {
+            const container = document.getElementById('opciones_marca_analisis');
+            if (!container) return;
+
+            // Obtiene los valores actualmente seleccionados en la cascada
+            const deptoSel = document.getElementById('depto_analisis')?.value || '';
+            const grupoSel = document.getElementById('grupo_analisis')?.value || '';
+            const subgrupoSel = document.getElementById('subgrupo_analisis')?.value || '';
+
+            // Si depto, grupo y subgrupo están vacíos, usa todo el universo del proveedor; si hay selección, filtra
+            let itemsFiltrados = datosClasificacionAnalisis;
+            if (deptoSel) itemsFiltrados = itemsFiltrados.filter(item => item.departamento === deptoSel);
+            if (grupoSel) itemsFiltrados = itemsFiltrados.filter(item => item.grupo === grupoSel);
+            if (subgrupoSel) itemsFiltrados = itemsFiltrados.filter(item => item.subgrupo === subgrupoSel);
+
+            // Extrae marcas únicas del conjunto filtrado y las ordena alfabéticamente
+            const marcas = [...new Set(itemsFiltrados.map(item => item.marca))].filter(Boolean).sort();
+
+            // Si había una marca seleccionada que ya no pertenece al nuevo filtro, se resetea
+            const marcaActual = document.getElementById('marca_analisis')?.value || '';
+            if (marcaActual && !marcas.includes(marcaActual)) {
+                limpiarMarcaAnalisis();
+            }
+
+            // Renderiza la lista desplegable
+            let html = `<div onclick="seleccionarMarcaAnalisis('', 'Todas las marcas')" class="px-4 py-2 text-sm text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todas las marcas</div>`;
+            marcas.forEach(m => {
+                html += `<div onclick="seleccionarMarcaAnalisis('${m}', '${m}')" data-nombre="${m.toLowerCase()}" class="opcion-marca-analisis px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${m}</div>`;
+            });
+            container.innerHTML = html;
+        }
+
+        // Asigna el valor seleccionado al input oculto y cierra el menú
+        function seleccionarMarcaAnalisis(val, label) {
+            document.getElementById('marca_analisis').value = val;
+            document.getElementById('buscar_marca_analisis').value = val ? label : '';
+            document.getElementById('opciones_marca_analisis').classList.add('hidden');
+        }
+
+        // Filtra las opciones de marca visibles en tiempo real
+        function filtrarMarcasAnalisis() {
+            const texto = document.getElementById('buscar_marca_analisis').value.toLowerCase().trim();
+            document.querySelectorAll('.opcion-marca-analisis').forEach(op => {
+                op.classList.toggle('hidden', !op.getAttribute('data-nombre').includes(texto));
+            });
+            document.getElementById('opciones_marca_analisis').classList.remove('hidden');
+        }
+
+        // Muestra el desplegable de marcas
+        function mostrarOpcionesMarcaAnalisis() {
+            document.getElementById('opciones_marca_analisis').classList.remove('hidden');
+        }
+
+        // Restablece el campo de marca
+        function limpiarMarcaAnalisis() {
+            document.getElementById('marca_analisis').value = '';
+            document.getElementById('buscar_marca_analisis').value = '';
+            document.getElementById('opciones_marca_analisis').classList.add('hidden');
         }
 
         // Funciones de filtro de texto para los combos
@@ -934,21 +1065,22 @@
             document.getElementById('buscar_depto_analisis').value = '';
             document.getElementById('opciones_depto_analisis').classList.add('hidden');
             limpiarGrupoAnalisis();
+            poblarMarcasAnalisis(); // Refresca marcas con la cascada limpia
         }
 
         function limpiarGrupoAnalisis() {
             document.getElementById('grupo_analisis').value = '';
             document.getElementById('buscar_grupo_analisis').value = '';
             document.getElementById('opciones_grupo_analisis').classList.add('hidden');
-            document.getElementById('buscar_grupo_analisis').disabled = true;
-            limpiarSubgrupoAnalisis();
+            limpiarSubgrupoAnalisis(); // Limpia subgrupo en cadena
+            poblarMarcasAnalisis(); // Refresca las marcas disponibles
         }
 
         function limpiarSubgrupoAnalisis() {
             document.getElementById('subgrupo_analisis').value = '';
             document.getElementById('buscar_subgrupo_analisis').value = '';
             document.getElementById('opciones_subgrupo_analisis').classList.add('hidden');
-            document.getElementById('buscar_subgrupo_analisis').disabled = true;
+            poblarMarcasAnalisis(); // Refresca las marcas disponibles
         }
 
         // --- IMPORTACIÓN MASIVA DE PRODUCTOS A LA TABLA ---
@@ -961,12 +1093,14 @@
             const depto = document.getElementById('depto_analisis').value;
             const grupo = document.getElementById('grupo_analisis').value;
             const subgrupo = document.getElementById('subgrupo_analisis').value;
+            const marca = document.getElementById('marca_analisis').value; // Captura la marca seleccionada
 
             const params = new URLSearchParams({
                 proveedor_id: proveedorId,
                 departamento: depto,
                 grupo: grupo,
-                subgrupo: subgrupo
+                subgrupo: subgrupo,
+                marca: marca // Envía el filtro de marca a la consulta de importación
             });
 
             try {
@@ -1256,43 +1390,43 @@
 
             tr.innerHTML = `
         <td class="border border-slate-200 p-0 celda-interactiva relative">
-            <input type="text" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:outline-none bg-transparent"
+            <input type="text" autocomplete="off" spellcheck="false" class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:outline-none bg-transparent"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
                 ondblclick="desbloquearCeldaCodigo(this)"
                 onkeydown="manejarKeyNav(event, this, 'codigo')" onchange="consultarProductoCodigo(this)" onpaste="manejarPegadoCodigo(event, this)">
         </td>
         <td class="border border-slate-200 p-0 celda-interactiva relative">
-            <input type="text" readonly class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
+            <input type="text" readonly tabindex="-1" class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)">
         </td>
         <td class="border border-slate-200 p-0 celda-interactiva relative">
             <input type="number" step="1" min="1" value="1" class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                onkeydown="manejarKeyNav(event, this, 'pre')" oninput="recancularFilaConInventario(this)" onpaste="manejarPegadoColumna(event, this, 'pre')"
+                onkeydown="manejarKeyNav(event, this, 'pre')" oninput="if(this.value < 1 && this.value !== '') this.value = 1; recancularFilaConInventario(this)" onpaste="manejarPegadoColumna(event, this, 'pre')"
                 onfocus="iniciarEdicion(this)">
         </td>
         <td class="border border-slate-200 p-0 celda-interactiva relative bg-amber-50/30">
             <input type="number" step="1" min="0" value="0" class="inp-inv-emp text-center w-full px-2 py-1.5 border-0 text-xs font-semibold text-amber-800 focus:bg-white focus:outline-none bg-transparent"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                onkeydown="manejarKeyNav(event, this, 'inv-emp')" oninput="recancularFilaConInventario(this)" onpaste="manejarPegadoColumna(event, this, 'inv-emp')"
+                onkeydown="manejarKeyNav(event, this, 'inv-emp')" oninput="if(this.value < 0) this.value = 0; recancularFilaConInventario(this)" onpaste="manejarPegadoColumna(event, this, 'inv-emp')"
                 onfocus="iniciarEdicion(this)">
         </td>
         <td class="border border-slate-200 p-0 celda-interactiva relative">
             <input type="number" step="1" min="0" value="0" class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                onkeydown="manejarKeyNav(event, this, 'emp')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')"
+                onkeydown="manejarKeyNav(event, this, 'emp')" oninput="if(this.value < 0) this.value = 0; calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'emp')"
                 onfocus="iniciarEdicion(this)">
         </td>
         <td class="border border-slate-200 p-0 celda-interactiva relative">
             <input type="number" step="1" min="0" value="0" class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                onkeydown="manejarKeyNav(event, this, 'uni')" oninput="ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')"
+                onkeydown="manejarKeyNav(event, this, 'uni')" oninput="if(this.value < 0) this.value = 0; ajustarPorUnidades(this)" onpaste="manejarPegadoColumna(event, this, 'uni')"
                 onfocus="iniciarEdicion(this)">
         </td>
         <td class="border border-slate-200 p-0 celda-interactiva relative">
             <input type="number" step="0.01" min="0" value="0.00" class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
                 onmousedown="iniciarArrastre(this)" onmouseenter="arrastrarSobreCelda(this)"
-                onkeydown="manejarKeyNav(event, this, 'costo')" oninput="calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'costo')">
+                onkeydown="manejarKeyNav(event, this, 'costo')" oninput="if(this.value < 0) this.value = 0; calcularFila(this)" onpaste="manejarPegadoColumna(event, this, 'costo')">
         </td>
         <td class="border border-slate-200 px-2 py-1.5 text-right font-normal text-slate-700 bg-slate-50/50">
             <span class="txt-subtotal">$ 0,00</span>
@@ -1548,6 +1682,12 @@
         }
         // --- NAVEGACIÓN COMPLETA Y EDICIÓN TECLADO ---
         function manejarKeyNav(e, elem, campoActual) {
+            // Captura la tecla F2 únicamente en la columna de código para abrir el buscador
+            if (e.key === 'F2' && campoActual === 'codigo') {
+                e.preventDefault(); // Evita el comportamiento predeterminado de la tecla F2 en el navegador
+                abrirModalBuscadorProductos(elem); // Despliega el modal de búsqueda asignando la celda actual
+                return; // Corta la ejecución del resto de eventos de teclado
+            }
             const tr = elem.closest('tr');
             const tbody = tr.parentElement;
             const filas = Array.from(tbody.children);
@@ -1715,6 +1855,10 @@
             }
             if (!e.target.closest('#combo-subgrupo-analisis')) {
                 document.getElementById('opciones_subgrupo_analisis')?.classList.add('hidden');
+            }
+            // Oculta el desplegable de marca al hacer clic fuera
+            if (!e.target.closest('#combo-marca-analisis')) {
+                document.getElementById('opciones_marca_analisis')?.classList.add('hidden');
             }
         });
 
@@ -2744,6 +2888,149 @@ ${nodosProductosXML.join('\n')}
         // Cierra la ventana emergente
         function cerrarModalExportarTiendas() {
             document.getElementById('modal-exportar-tiendas').style.display = 'none'; // Ocultar modal
+        }
+        // --- LÓGICA DE MODAL DE BÚSQUEDA DE PRODUCTOS (TECLA F2) ---
+        let celdaCodigoActivaModal = null; // Referencia global a la celda tipo input desde donde se accionó F2
+        let indiceProductoDestacadoModal = -1; // Índice seleccionado para la navegación con flechas arriba/abajo
+
+        // Despliega el modal de búsqueda y guarda la referencia de la celda de origen
+        function abrirModalBuscadorProductos(inputElem) {
+            celdaCodigoActivaModal = inputElem; // Almacena el input activo de la tabla
+            const modal = document.getElementById('modal-buscador-productos'); // Referencia al modal
+            const inputBuscar = document.getElementById('input-buscar-producto-modal'); // Campo de texto del modal
+            const contRes = document.getElementById('contenedor-resultados-productos'); // Div de resultados
+
+            if (!modal) return;
+            modal.classList.remove('hidden'); // Muestra el modal en pantalla
+            if (inputBuscar) {
+                inputBuscar.value = ''; // Limpia las búsquedas previas
+                setTimeout(() => inputBuscar.focus(), 100); // Coloca el foco de forma automática en el input
+            }
+            if (contRes) {
+                contRes.innerHTML = '<div class="p-4 text-center text-xs text-slate-400 italic">Lista de productos</div>';
+            }
+            indiceProductoDestacadoModal = -1; // Reinicia la posición del cursor de la lista
+        }
+
+        // Oculta el modal de búsqueda y regresa el foco a la tabla
+        function cerrarModalBuscadorProductos() {
+            const modal = document.getElementById('modal-buscador-productos'); // Referencia al modal
+            if (modal) modal.classList.add('hidden'); // Agrega la clase de ocultado
+            if (celdaCodigoActivaModal) {
+                celdaCodigoActivaModal.focus(); // Retorna el cursor a la celda de código
+            }
+        }
+
+        // Consulta en el servidor FastAPI los productos coincidentes por descripción
+        async function ejecutarBusquedaProductoModal() {
+            const inputBuscar = document.getElementById('input-buscar-producto-modal'); // Referencia al campo de búsqueda
+            const contRes = document.getElementById('contenedor-resultados-productos'); // Referencia al contenedor de resultados
+            const query = inputBuscar?.value.trim(); // Captura el texto sin espacios extra
+
+            if (!query) return; // Cancela la operación si el campo está vacío
+
+            if (contRes) {
+                contRes.innerHTML = '<div class="p-4 text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Buscando productos...</div>';
+            }
+
+            try {
+                // Realiza la petición HTTP GET a la ruta API recién agregada
+                const response = await fetch(`/api/productos/buscar?q=${encodeURIComponent(query)}`);
+                if (!response.ok) throw new Error('Error al consultar el servidor');
+
+                const data = await response.json(); // Parsea la lista de productos devuelta
+
+                if (!data || data.length === 0) {
+                    if (contRes) contRes.innerHTML = '<div class="p-4 text-center text-xs text-slate-400 italic">No se encontraron productos coincidentes</div>';
+                    return;
+                }
+
+                // Limpia el contenedor de la lista y resetea el índice seleccionado
+                contRes.innerHTML = '';
+                indiceProductoDestacadoModal = -1;
+
+                data.forEach((item, index) => {
+                    const div = document.createElement('div'); // Crea la fila contenedora para el producto
+                    div.className = 'opcion-prod-modal p-2.5 text-xs flex justify-between items-center cursor-pointer hover:bg-blue-50 transition border-b border-slate-100 last:border-b-0';
+                    div.dataset.codigo = item.codigo; // Guarda el código de producto en atributo dataset
+
+                    div.innerHTML = `
+                        <div class="flex flex-col min-w-0 pr-2">
+                            <span class="font-bold text-slate-800 truncate">${item.descripcion || 'Sin descripción'}</span>
+                            <span class="text-[10px] text-slate-400">Código: ${item.codigo}</span>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <span class="font-bold text-blue-600 block">$ ${(parseFloat(item.precio) || 0).toFixed(2)}</span>
+                            <span class="text-[10px] text-slate-400">Emp: ${item.unidad_manejo || 1}</span>
+                        </div>
+                    `;
+
+                    // Clic doble para seleccionar el producto de inmediato
+                    div.ondblclick = () => seleccionarProductoDesdeModal(item.codigo);
+
+                    // Clic simple para marcar la opción activa
+                    div.onclick = () => {
+                        indiceProductoDestacadoModal = index;
+                        resaltarOpcionProductoModal();
+                    };
+
+                    contRes.appendChild(div); // Agrega el nodo a la lista visible
+                });
+            } catch (err) {
+                console.error('Error al buscar productos:', err);
+                if (contRes) contRes.innerHTML = '<div class="p-4 text-center text-xs text-rose-500">Error al realizar la búsqueda</div>';
+            }
+        }
+
+        // Controla la navegación del teclado dentro del input de búsqueda del modal
+        function manejarKeySearchModal(e) {
+            const opciones = Array.from(document.querySelectorAll('.opcion-prod-modal')); // Elementos de la lista renderizados
+
+            if (e.key === 'Enter') {
+                e.preventDefault(); // Detiene el salto por defecto
+                if (indiceProductoDestacadoModal >= 0 && opciones[indiceProductoDestacadoModal]) {
+                    const cod = opciones[indiceProductoDestacadoModal].dataset.codigo; // Captura el código seleccionado
+                    seleccionarProductoDesdeModal(cod); // Transfiere el código a la celda
+                } else {
+                    ejecutarBusquedaProductoModal(); // Si no hay selección, ejecuta la búsqueda en BD
+                }
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault(); // Evita scroll vertical de pantalla
+                if (opciones.length > 0) {
+                    indiceProductoDestacadoModal = Math.min(indiceProductoDestacadoModal + 1, opciones.length - 1); // Desplaza hacia abajo
+                    resaltarOpcionProductoModal();
+                }
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault(); // Evita scroll vertical de pantalla
+                if (opciones.length > 0) {
+                    indiceProductoDestacadoModal = Math.max(indiceProductoDestacadoModal - 1, 0); // Desplaza hacia arriba
+                    resaltarOpcionProductoModal();
+                }
+            } else if (e.key === 'Escape') {
+                cerrarModalBuscadorProductos(); // Cierra el modal de búsqueda
+            }
+        }
+
+        // Aplica estilo visual de resaltado a la opción activa
+        function resaltarOpcionProductoModal() {
+            const opciones = document.querySelectorAll('.opcion-prod-modal'); // Lista de elementos HTML
+            opciones.forEach((op, idx) => {
+                if (idx === indiceProductoDestacadoModal) {
+                    op.classList.add('bg-blue-100', 'border-l-4', 'border-l-blue-600'); // Resalta elemento
+                    op.scrollIntoView({ block: 'nearest' }); // Mantiene visible el elemento enfocado dentro del contenedor
+                } else {
+                    op.classList.remove('bg-blue-100', 'border-l-4', 'border-l-blue-600'); // Remueve resaltado
+                }
+            });
+        }
+
+        // Asigna el código del producto seleccionado a la celda de la tabla y ejecuta la consulta de información
+        function seleccionarProductoDesdeModal(codigo) {
+            if (celdaCodigoActivaModal) {
+                celdaCodigoActivaModal.value = codigo; // Inserta el código en el input
+                consultarProductoCodigo(celdaCodigoActivaModal); // Invoca la función existente para cargar datos
+            }
+            cerrarModalBuscadorProductos(); // Cierra el modal
         }
     </script>
 
