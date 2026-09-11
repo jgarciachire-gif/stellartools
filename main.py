@@ -9,7 +9,7 @@ import config
 from config import SUPABASE_URL, SUPABASE_KEY, supabase, obtener_usuario_actual
 
 # Importación de rutas modulares
-from routes import auth, dashboard, proveedores, ordenes, escanear, productos, analisis
+from routes import auth, dashboard, proveedores, ordenes, escanear, productos, analisis, calendario
 
 # Inicialización de la aplicación FastAPI
 app = FastAPI(title="Control de Compras", version="2.0")
@@ -47,3 +47,4 @@ app.include_router(ordenes.router)
 app.include_router(escanear.router)
 app.include_router(productos.router)
 app.include_router(analisis.router)
+app.include_router(calendario.router)

@@ -1,0 +1,828 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div x-data="calendarioReposicion()" x-init="cargarProveedoresAPI(); cargarProgramaciones();"
+    class="max-w-8xl mx-auto space-y-8">
+
+    <!-- Encabezado y Controles de Mes -->
+    <div
+        class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">Calendario de Reposición</h1>
+            <p class="text-sm text-slate-500">Planificación recurrente de pedidos a proveedores</p>
+        </div>
+
+        <!-- Controles para navegar entre meses -->
+        <div class="flex items-center gap-3">
+            <button @click="mesAnterior()"
+                class="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
+                <i class="fa-solid fa-chevron-left text-slate-600"></i>
+            </button>
+            <span class="text-lg font-bold text-slate-700 min-w-[160px] text-center" x-text="nombreMesAno"></span>
+            <button @click="mesSiguiente()"
+                class="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 transition-colors">
+                <i class="fa-solid fa-chevron-right text-slate-600"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Layout Principal: Panel Izquierdo de Detalle + Calendario -->
+    <div class="grid grid-cols-1 lg:grid-cols-8 gap-8">
+
+        <!-- Contenedor Izquierdo: Programación del Día Seleccionado -->
+        <div class="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-200 space-y-4 flex flex-col">
+            <!-- Botón Programar Pedido -->
+            <button @click="abrirModal()"
+                class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-3 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-md shadow-indigo-200 cursor-pointer">
+                <i class="fa-solid fa-plus"></i>
+                <span>Programar Pedido</span>
+            </button>
+
+            <!-- Titular de la Fecha Seleccionada -->
+            <div class="border-b border-slate-100 pb-3">
+                <h3 class="text-sm font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-calendar-day text-indigo-600"></i>
+                    <span>Programación del Día</span>
+                </h3>
+                <p class="text-xs text-slate-500 font-medium mt-0.5" x-text="formatearFechaSeleccionada()"></p>
+            </div>
+
+            <!-- Estructura Jerárquica: Proveedor -> Usuario -> Departamento - Grupo -->
+            <div class="flex-1 overflow-y-auto max-h-[480px] space-y-3 pr-1 scrollbar-thin">
+                <!-- Mensaje cuando no hay registros el día seleccionado -->
+                <template x-if="obtenerProgramacionAgrupadaDia().length === 0">
+                    <div class="p-4 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
+                        <p class="text-xs text-slate-400 italic">No hay pedidos agendados para esta fecha</p>
+                    </div>
+                </template>
+
+                <!-- Iteración por Proveedor Único -->
+                <template x-for="grupoProv in obtenerProgramacionAgrupadaDia()" :key="grupoProv.proveedor">
+                    <div class="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                        <!-- Nivel 1: Encabezado desplegable del Proveedor -->
+                        <div @click="toggleProveedor(grupoProv.proveedor)"
+                            class="flex items-center justify-between text-[14px] font-bold text-indigo-950 border-b border-slate-200 pb-1.5 cursor-pointer select-none hover:text-indigo-600 transition-colors">
+                            <span class="flex items-center gap-1.5 truncate">
+                                <!-- Icono de indicador con animación de rotación al desplegar -->
+                                <i class="fa-solid fa-chevron-right text-indigo-500 text-[10px] transition-transform duration-200"
+                                    :class="{ 'rotate-90': esProveedorAbierto(grupoProv.proveedor) }"></i>
+
+                                <span x-text="grupoProv.proveedor"></span>
+                            </span>
+                        </div>
+
+                        <!-- Nivel 2: Contenido desplegable (Usuarios y Departamento - Grupo) -->
+                        <div x-show="esProveedorAbierto(grupoProv.proveedor)" x-transition
+                            class="pl-2 space-y-2 border-l-2 border-indigo-300 ml-1 pt-1">
+                            <template x-for="usr in grupoProv.usuarios" :key="usr.usuarioNombre">
+                                <div class="space-y-1">
+                                    <!-- Nombre del Comprador -->
+                                    <div
+                                        class="text-[14px] font-semibold text-slate-700 flex items-center justify-between">
+                                        <span class="flex items-center gap-1 truncate">
+                                            <i class="fa-solid fa-user-tag text-indigo-500 text-[10px]"></i>
+                                            <span x-text="usr.usuarioNombre" class="text-slate-800 font-bold"></span>
+                                        </span>
+                                    </div>
+
+                                    <!-- Nivel 3: Lista de Departamento - Grupo apilados -->
+                                    <div class="space-y-1 pl-2">
+                                        <template x-for="(det, idx) in usr.detalles" :key="idx">
+                                            <div
+                                                class="text-[11px] font-semibold text-slate-600 flex items-center justify-between bg-white p-1.5 rounded-lg border border-slate-200 shadow-2xs">
+                                                <span x-text="`${det.departamento} – ${det.grupo}`"
+                                                    class="truncate"></span>
+
+                                                <template x-if="esCreador(usr)">
+                                                    <!-- .stop evita que eliminar abra o cierre el acordeón -->
+                                                    <button @click.stop="eliminarProgramacion(det.id)"
+                                                        title="Eliminar este registro"
+                                                        class="text-rose-400 hover:text-rose-600 transition-colors ml-1 p-0.5">
+                                                        <i class="fa-solid fa-xmark text-xs"></i>
+                                                    </button>
+                                                </template>
+                                            </div>
+                                        </template>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Cuadrícula de Calendario (Columna Derecha) -->
+        <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-600 overflow-hidden flex flex-col">
+            <!-- Encabezados de días -->
+            <div
+                class="grid grid-cols-7 bg-slate-900 border-b border-slate-600 text-center text-xs font-bold text-slate-100 uppercase tracking-wider py-3">
+                <div>Dom</div>
+                <div>Lun</div>
+                <div>Mar</div>
+                <div>Mié</div>
+                <div>Jue</div>
+                <div>Vie</div>
+                <div>Sáb</div>
+            </div>
+
+            <!-- Celdas de los días seleccionables con resaltado y conteo -->
+            <div class="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-300 bg-slate-200/50 flex-1">
+                <template x-for="(dia, index) in diasMes" :key="index">
+                    <div @click="seleccionarDia(dia.fechaStr)"
+                        class="min-h-[110px] bg-white p-2 flex flex-col justify-between transition-all cursor-pointer select-none"
+                        :class="{ 
+                            'bg-slate-100/50 opacity-40': !dia.esMesActual, 
+                            'ring-2 ring-indigo-600 bg-indigo-50/80 shadow-md z-10': diaSeleccionado === dia.fechaStr,
+                            'bg-emerald-100/40': dia.esHoy && diaSeleccionado !== dia.fechaStr 
+                        }">
+
+                        <!-- Número del Día -->
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs font-bold px-2 py-0.5 rounded-full"
+                                :class="diaSeleccionado === dia.fechaStr ? 'bg-indigo-600 text-white' : (dia.esHoy ? 'bg-emerald-600 text-white' : 'text-slate-700')"
+                                x-text="dia.numero"></span>
+                        </div>
+
+                        <!-- Badge de Conteo de Proveedores Agendados (No muestra nombres) -->
+                        <div class="mt-2 flex-1 flex items-center justify-center">
+                            <template x-if="obtenerProveedoresAgendadosDia(dia.fechaStr).length > 0">
+                                <div
+                                    class="p-1.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-2xs w-full">
+                                    <span
+                                        x-text="`${obtenerProveedoresAgendadosDia(dia.fechaStr).length} Proveedor(es) en planificación.`"></span>
+                                </div>
+                            </template>
+                        </div>
+
+                    </div>
+                </template>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal para Agregar/Programar Pedido -->
+    <div x-show="modalAbierto" x-cloak
+        class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+        <div @click.outside="modalAbierto = false"
+            class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 border border-slate-100">
+            <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h3 class="text-lg font-bold text-slate-800">Programar Reposición</h3>
+                <button @click="modalAbierto = false" class="text-slate-400 hover:text-slate-600">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+
+            <form @submit.prevent="guardarProgramacion()" class="space-y-4">
+                <!-- Colocar dentro del modal "Programar pedido" donde va la selección del proveedor -->
+                <div class="relative w-full" id="combo-proveedor-modal">
+                    <!-- Campo oculto para almacenar el ID del proveedor seleccionado -->
+                    <input type="hidden" id="proveedor_id_modal" name="proveedor_id" value="">
+
+                    <label for="buscar_proveedor_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-truck-field text-amber-600 mr-1"></i>Proveedor:
+                    </label>
+
+                    <div class="relative">
+                        <!-- Campo de texto del buscador -->
+                        <input type="text" id="buscar_proveedor_modal" placeholder="Escriba para buscar proveedor..."
+                            autocomplete="off" spellcheck="false" oninput="filtrarProveedoresCalendario()"
+                            onfocus="mostrarOpcionesProvCalendario()" onkeydown="navegarProveedoresCalendario(event)"
+                            class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7">
+
+                        <!-- Botón para deseleccionar / limpiar -->
+                        <button type="button" onclick="limpiarProveedorCalendario()" id="btn-limpiar-prov-modal"
+                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+
+                    <!-- Lista desplegable flotante de opciones -->
+                    <div id="opciones_proveedor_modal"
+                        class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50">
+                        <div onclick="seleccionarProveedorCalendario('', '-- Seleccionar Proveedor --')"
+                            class="px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+                            -- Seleccionar Proveedor --
+                        </div>
+                        {% for p in proveedores_db %}
+                        <div onclick="seleccionarProveedorCalendario('{{ p.id }}', '{{ p.nombre }}')"
+                            data-id="{{ p.id }}" data-nombre="{{ p.nombre or '' }}"
+                            class="opcion-prov-modal px-4 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
+                            {{ p.nombre }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <!-- Campo Departamento (Filtro en Cascada) -->
+                <div class="mt-3 relative" id="combo-depto-modal">
+                    <input type="hidden" id="depto_modal" name="departamento" value="">
+                    <label for="buscar_depto_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-layer-group text-blue-600 mr-1"></i>Departamento:
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="buscar_depto_modal" placeholder="Seleccione departamento..."
+                            autocomplete="off" spellcheck="false" oninput="filtrarDeptosModal()"
+                            onfocus="mostrarOpcionesDeptoModal()" disabled
+                            class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7 bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="button" onclick="limpiarDeptoModal()"
+                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="opciones_depto_modal"
+                        class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-36 overflow-y-auto z-50">
+                    </div>
+                </div>
+
+                <!-- Campo Grupo (Filtro en Cascada) -->
+                <div class="mt-3 relative" id="combo-grupo-modal">
+                    <input type="hidden" id="grupo_modal" name="grupo" value="">
+                    <label for="buscar_grupo_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-boxes-stacked text-blue-600 mr-1"></i>Grupo:
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="buscar_grupo_modal" placeholder="Seleccione grupo..." autocomplete="off"
+                            spellcheck="false" oninput="filtrarGruposModal()" onfocus="mostrarOpcionesGrupoModal()"
+                            disabled
+                            class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7 bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <button type="button" onclick="limpiarGrupoModal()"
+                            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+                    <div id="opciones_grupo_modal"
+                        class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-36 overflow-y-auto z-50">
+                    </div>
+                </div>
+
+                <!-- Campo "Frecuencia de Pedidos" para capturar dias_despacho -->
+                <div class="mt-3">
+                    <label for="frecuencia_pedidos" class="block text-xs font-semibold text-slate-700 mb-1">
+                        Frecuencia de Pedidos (días):
+                    </label>
+                    <input type="number" id="frecuencia_pedidos" name="frecuencia_pedidos" min="1" placeholder="Ej. 7"
+                        autocomplete="off" spellcheck="false" class=" w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold
+                        text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <!-- Campo "Fecha de Inicio" para la programación -->
+                <div class="mt-3">
+                    <label for="fecha_inicio_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                        <i class="fa-solid fa-calendar-day text-blue-600 mr-1"></i>Fecha de Inicio:
+                    </label>
+                    <input type="date" id="fecha_inicio_modal" name="fecha_inicio" required
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <!-- Botones de Acción (Cancelar / Aceptar) -->
+                <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                    <button type="button" @click="modalAbierto = false"
+                        class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                        Cancelar
+                    </button>
+                    <button type="submit"
+                        class="px-4 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md shadow-indigo-200 transition-colors">
+                        <i class="fa-solid fa-check mr-1"></i>Programar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<!-- Script con datos serializados (seguro contra auto-formateadores de código) -->
+<script id="proveedores-data" type="application/json">
+    {{ (proveedores_db or []) | tojson | safe }}
+</script>
+
+<script>
+    // Nombre completo del usuario activo recuperado de la sesión
+    const USUARIO_NOMBRE_SESION = "{{ request.state.perfil.nombre_comprador if request.state and request.state.perfil and request.state.perfil.nombre_comprador else (request.state.perfil.nombre_completo if request.state and request.state.perfil and request.state.perfil.nombre_completo else 'Usuario Sistema') }}";
+    function calendarioReposicion() {
+        return {
+            fechaActual: new Date(),
+            diaSeleccionado: new Date().toISOString().split('T')[0], // Almacena el día seleccionado por clic
+            modalAbierto: false,
+            programaciones: [], // Registros cargados desde la API
+            listaProveedoresBD: JSON.parse(document.getElementById('proveedores-data')?.textContent || '[]'),
+            proveedorSeleccionadoId: '',
+            proveedoresAbiertos: {}, // Guarda el estado abierto/cerrado por cada proveedor
+
+            // Alterna la visibilidad del contenido del proveedor al hacer clic
+            toggleProveedor(nombreProv) {
+                this.proveedoresAbiertos[nombreProv] = !this.proveedoresAbiertos[nombreProv];
+            },
+
+            // Determina si las pestañas están desplegadas (por defecto cerradas)
+            esProveedorAbierto(nombreProv) {
+                return !!this.proveedoresAbiertos[nombreProv];
+            },
+
+            get nombreMesAno() {
+                return this.fechaActual.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' })
+                    .replace(/^\w/, c => c.toUpperCase());
+            },
+
+            get diasMes() {
+                const año = this.fechaActual.getFullYear();
+                const mes = this.fechaActual.getMonth();
+                const primerDia = new Date(año, mes, 1);
+                const ultimoDia = new Date(año, mes + 1, 0);
+
+                const dias = [];
+                const hoyStr = new Date().toISOString().split('T')[0];
+
+                const diaSemanaInicio = primerDia.getDay();
+                for (let i = diaSemanaInicio - 1; i >= 0; i--) {
+                    const d = new Date(año, mes, -i);
+                    dias.push({
+                        numero: d.getDate(),
+                        fechaStr: d.toISOString().split('T')[0],
+                        esMesActual: false,
+                        esHoy: d.toISOString().split('T')[0] === hoyStr
+                    });
+                }
+
+                for (let i = 1; i <= ultimoDia.getDate(); i++) {
+                    const fStr = `${año}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+                    dias.push({
+                        numero: i,
+                        fechaStr: fStr,
+                        esMesActual: true,
+                        esHoy: fStr === hoyStr
+                    });
+                }
+
+                const celdasRestantes = (7 - (dias.length % 7)) % 7;
+                for (let i = 1; i <= celdasRestantes; i++) {
+                    const d = new Date(año, mes + 1, i);
+                    dias.push({
+                        numero: d.getDate(),
+                        fechaStr: d.toISOString().split('T')[0],
+                        esMesActual: false,
+                        esHoy: d.toISOString().split('T')[0] === hoyStr
+                    });
+                }
+
+                return dias;
+            },
+
+            // Selecciona una celda del calendario al hacer click
+            seleccionarDia(fechaStr) {
+                this.diaSeleccionado = fechaStr;
+            },
+
+            // Formatea la fecha para el título del panel izquierdo
+            formatearFechaSeleccionada() {
+                if (!this.diaSeleccionado) return '';
+                const partes = this.diaSeleccionado.split('-');
+                const f = new Date(partes[0], partes[1] - 1, partes[2]);
+                return f.toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+                    .replace(/^\w/, c => c.toUpperCase());
+            },
+
+            // Carga los proveedores de la BD
+            async cargarProveedoresAPI() {
+                try {
+                    const res = await fetch('/api/proveedores');
+                    if (res.ok) this.listaProveedoresBD = await res.json();
+                } catch (e) {
+                    console.error("Error al obtener proveedores:", e);
+                }
+            },
+
+            // Carga las programaciones incluyendo usuario, departamento y grupo
+            async cargarProgramaciones() {
+                try {
+                    const res = await fetch('/api/programaciones');
+                    if (res.ok) {
+                        const datos = await res.json();
+                        this.programaciones = datos.map(item => ({
+                            id: item.id,
+                            proveedor: item.proveedor,
+                            // Se toman los valores reales de BD; si están vacíos se muestra texto explicativo
+                            departamento: item.departamento || 'Sin Depto.',
+                            grupo: item.grupo || 'Todos los Grupos',
+                            // Prioriza nombre_comprador de la BD enviado por la API
+                            usuarioNombre: item.nombre_comprador || item.usuario_nombre || 'Usuario Desconocido',
+                            usuarioId: item.usuario_id || null,
+                            fechaInicio: item.fecha_inicio,
+                            frecuencia: parseInt(item.frecuencia)
+                        }));
+                    }
+                } catch (e) {
+                    console.error("Error al cargar programaciones:", e);
+                }
+            },
+
+            abrirModal() {
+                this.modalAbierto = true;
+                this.$nextTick(() => {
+                    limpiarProveedorCalendario();
+                    limpiarDeptoModal();
+                    const inputFrecuencia = document.getElementById('frecuencia_pedidos');
+                    if (inputFrecuencia) inputFrecuencia.value = '';
+                    const inputFecha = document.getElementById('fecha_inicio_modal');
+                    if (inputFecha) inputFecha.value = this.diaSeleccionado || new Date().toISOString().split('T')[0];
+                });
+            },
+
+            mesAnterior() {
+                this.fechaActual = new Date(this.fechaActual.getFullYear(), this.fechaActual.getMonth() - 1, 1);
+            },
+
+            mesSiguiente() {
+                this.fechaActual = new Date(this.fechaActual.getFullYear(), this.fechaActual.getMonth() + 1, 1);
+            },
+
+            // Retorna los items programados para una fecha dada
+            obtenerProgramacionDia(fechaStr) {
+                const fechaEvaluada = new Date(fechaStr + 'T00:00:00');
+
+                return this.programaciones.filter(prog => {
+                    const fechaInicio = new Date(prog.fechaInicio + 'T00:00:00');
+                    if (fechaEvaluada < fechaInicio) return false;
+
+                    const diferenciaTiempo = fechaEvaluada.getTime() - fechaInicio.getTime();
+                    const diferenciaDias = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
+
+                    return diferenciaDias % prog.frecuencia === 0;
+                });
+            },
+
+            // Obtiene la lista sin duplicados de proveedores para mostrar el conteo en el calendario
+            obtenerProveedoresAgendadosDia(fechaStr) {
+                const progs = this.obtenerProgramacionDia(fechaStr);
+                return [...new Set(progs.map(p => p.proveedor))];
+            },
+
+            // Agrupa la información evitando imprimir registros duplicados en pantalla
+            // Agrupa la información por proveedor, usuario y departamento/grupo, ordenando proveedores de la A a la Z
+            obtenerProgramacionAgrupadaDia() {
+                if (!this.diaSeleccionado) return []; // Retorna lista vacía si no hay día seleccionado
+                const items = this.obtenerProgramacionDia(this.diaSeleccionado); // Obtiene registros del día
+
+                const mapaGrupos = {}; // Objeto temporal para agrupar registros
+                items.forEach(item => {
+                    // Crea el grupo del proveedor si aún no existe
+                    if (!mapaGrupos[item.proveedor]) {
+                        mapaGrupos[item.proveedor] = {
+                            proveedor: item.proveedor,
+                            usuariosMap: {}
+                        };
+                    }
+
+                    // Agrupa por usuario para no repetir su nombre
+                    if (!mapaGrupos[item.proveedor].usuariosMap[item.usuarioNombre]) {
+                        mapaGrupos[item.proveedor].usuariosMap[item.usuarioNombre] = {
+                            usuarioNombre: item.usuarioNombre,
+                            detalles: []
+                        };
+                    }
+
+                    const deptos = (item.departamento || '').split(',').map(s => s.trim()); // Separa departamentos
+                    const grupos = (item.grupo || '').split(',').map(s => s.trim()); // Separa grupos
+                    const maxLen = Math.max(deptos.length, grupos.length); // Determina la cantidad total de pares
+
+                    for (let i = 0; i < maxLen; i++) {
+                        const depto = deptos[i] || deptos[0] || 'Sin Depto.';
+                        const grupo = grupos[i] || grupos[0] || 'Sin Grupo';
+
+                        // Evita insertar combinaciones duplicadas
+                        const yaExiste = mapaGrupos[item.proveedor].usuariosMap[item.usuarioNombre].detalles.some(
+                            d => d.departamento === depto && d.grupo === grupo
+                        );
+
+                        if (!yaExiste) {
+                            mapaGrupos[item.proveedor].usuariosMap[item.usuarioNombre].detalles.push({
+                                id: item.id,
+                                departamento: depto,
+                                grupo: grupo
+                            });
+                        }
+                    }
+                });
+
+                // Convierte el mapa a arreglo y ordena los proveedores alfabéticamente (A-Z)
+                return Object.values(mapaGrupos)
+                    .map(g => ({
+                        proveedor: g.proveedor,
+                        usuarios: Object.values(g.usuariosMap)
+                    }))
+                    .sort((a, b) => a.proveedor.localeCompare(b.proveedor, 'es', { numeric: true, sensitivity: 'base' }));
+            },
+            // Guarda el registro en la API incluyendo Departamento, Grupo y Usuario
+            esCreador(usr) {
+                return usr.usuarioNombre === USUARIO_NOMBRE_SESION;
+            },
+
+            // Guarda el registro asignando los datos exactos seleccionados
+            // Guarda o actualiza la programación reemplazando el registro local si ya existe
+            async guardarProgramacion() {
+                const proveedor = document.getElementById('buscar_proveedor_modal')?.value;
+                const departamento = document.getElementById('depto_modal')?.value || '';
+                const grupo = document.getElementById('grupo_modal')?.value || '';
+                const fechaInicio = document.getElementById('fecha_inicio_modal')?.value;
+                const frecuencia = parseInt(document.getElementById('frecuencia_pedidos')?.value) || 0;
+
+                if (!proveedor || !fechaInicio || !frecuencia) return;
+
+                try {
+                    const res = await fetch('/api/programaciones', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            proveedor,
+                            departamento,
+                            grupo,
+                            nombre_comprador: USUARIO_NOMBRE_SESION,
+                            fechaInicio,
+                            frecuencia
+                        })
+                    });
+
+                    if (res.ok) {
+                        const creado = await res.json();
+                        const nuevoItem = {
+                            id: creado.id,
+                            proveedor: creado.proveedor,
+                            departamento: creado.departamento || departamento || 'Sin Depto.',
+                            grupo: creado.grupo || grupo || 'Sin Grupo',
+                            usuarioNombre: creado.nombre_comprador || USUARIO_NOMBRE_SESION,
+                            usuarioId: creado.usuario_id || null,
+                            fechaInicio: creado.fecha_inicio,
+                            frecuencia: parseInt(creado.frecuencia)
+                        };
+
+                        // Si el ID ya existe en memoria, actualiza la posición; si no, agrega el nuevo
+                        const idx = this.programaciones.findIndex(p => p.id === creado.id);
+                        if (idx !== -1) {
+                            this.programaciones[idx] = nuevoItem; // Reemplaza en lugar de duplicar
+                        } else {
+                            this.programaciones.push(nuevoItem); // Agrega solo si es nuevo
+                        }
+
+                        this.modalAbierto = false;
+                    }
+                } catch (e) {
+                    console.error("Error al guardar programación:", e);
+                }
+            },
+
+            async eliminarProgramacion(id) {
+                try {
+                    const res = await fetch(`/api/programaciones/${id}`, { method: 'DELETE' });
+                    if (res.ok) {
+                        this.programaciones = this.programaciones.filter(p => p.id !== id);
+                    }
+                } catch (e) {
+                    console.error("Error al eliminar programación:", e);
+                }
+            }
+        };
+    }
+    // Variable global para controlar la posición de la opción resaltada con el teclado
+    let indiceDestacadoModal = -1;
+
+    // Muestra el menú desplegable del proveedor
+    function mostrarOpcionesProvCalendario() {
+        const input = document.getElementById('buscar_proveedor_modal'); // Campo de búsqueda
+        if (input && input.readOnly) return; // No despliega si ya hay un proveedor fijo
+        const dropdown = document.getElementById('opciones_proveedor_modal'); // Menú flotante
+        if (dropdown) dropdown.classList.remove('hidden'); // Despliega la lista
+    }
+
+    // Filtra la lista desplegable en tiempo real
+    function filtrarProveedoresCalendario() {
+        const input = document.getElementById('buscar_proveedor_modal'); // Input de búsqueda
+        const filtro = input.value.toLowerCase().trim(); // Valor tipeado en minúsculas
+        const opciones = document.querySelectorAll('.opcion-prov-modal'); // Elementos de la lista
+        const dropdown = document.getElementById('opciones_proveedor_modal'); // Contenedor del menú
+
+        dropdown.classList.remove('hidden'); // Mantiene visible el menú
+        indiceDestacadoModal = -1; // Resetea el índice del teclado
+
+        opciones.forEach(opcion => {
+            const nombre = (opcion.dataset.nombre || opcion.textContent).toLowerCase(); // Nombre del proveedor
+            if (nombre.includes(filtro)) {
+                opcion.classList.remove('hidden'); // Muestra coincidencia
+            } else {
+                opcion.classList.add('hidden'); // Oculta si no coincide
+            }
+        });
+    }
+
+    // Navegación con teclado (Flechas Arriba/Abajo y Enter)
+    function navegarProveedoresCalendario(e) {
+        const dropdown = document.getElementById('opciones_proveedor_modal'); // Menú flotante
+        const opciones = Array.from(document.querySelectorAll('.opcion-prov-modal')).filter(el => !el.classList.contains('hidden')); // Solo visibles
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault(); // Cancela scroll de ventana
+            if (dropdown.classList.contains('hidden')) mostrarOpcionesProvCalendario();
+            indiceDestacadoModal = Math.min(indiceDestacadoModal + 1, opciones.length - 1); // Baja selección
+            resaltarOpcionProvCalendario(opciones);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault(); // Cancela scroll de ventana
+            indiceDestacadoModal = Math.max(indiceDestacadoModal - 1, 0); // Sube selección
+            resaltarOpcionProvCalendario(opciones);
+        } else if (e.key === 'Enter') {
+            if (!dropdown.classList.contains('hidden') && indiceDestacadoModal >= 0 && opciones[indiceDestacadoModal]) {
+                e.preventDefault(); // Cancela envío del formulario
+                opciones[indiceDestacadoModal].click(); // Hace click en la opción resaltada
+            }
+        } else if (e.key === 'Escape') {
+            dropdown.classList.add('hidden'); // Cierra menú
+        }
+    }
+
+    // Aplica el resaltado visual a la opción seleccionada por teclado
+    function resaltarOpcionProvCalendario(opciones) {
+        opciones.forEach(op => op.classList.remove('bg-blue-100', 'text-blue-700', 'font-semibold')); // Limpia previos
+        if (opciones[indiceDestacadoModal]) {
+            opciones[indiceDestacadoModal].classList.add('bg-blue-100', 'text-blue-700', 'font-semibold'); // Resalta actual
+            opciones[indiceDestacadoModal].scrollIntoView({ block: 'nearest' }); // Scroll automático al elemento
+        }
+    }
+
+    // Selecciona el proveedor y consulta dias_despacho en la BD
+    async function seleccionarProveedorCalendario(id, nombre) {
+        const inputBuscar = document.getElementById('buscar_proveedor_modal'); // Input visible
+        const inputId = document.getElementById('proveedor_id_modal'); // Hidden ID
+        const inputFrecuencia = document.getElementById('frecuencia_pedidos'); // Campo Frecuencia de Pedidos
+
+        if (inputId) inputId.value = id; // Asigna ID
+        if (inputBuscar) {
+            inputBuscar.value = id ? nombre : ''; // Asigna nombre
+            inputBuscar.readOnly = !!id; // Bloquea edición si fue seleccionado
+            if (id) {
+                inputBuscar.classList.add('bg-slate-100', 'cursor-default');
+            } else {
+                inputBuscar.classList.remove('bg-slate-100', 'cursor-default');
+            }
+        }
+
+        const dropdown = document.getElementById('opciones_proveedor_modal');
+        if (dropdown) dropdown.classList.add('hidden'); // Oculta lista desplegable
+
+        if (!id) {
+            if (inputFrecuencia) inputFrecuencia.value = ''; // Limpia campo
+            return;
+        }
+
+        try {
+            // Consulta asíncrona a la API para traer datos del proveedor
+            const respuesta = await fetch(`/api/proveedores/${id}`);
+            if (respuesta.ok) {
+                const data = await respuesta.json(); // Parsea respuesta
+                if (inputFrecuencia) {
+                    // Asigna dias_despacho al input "Frecuencia de Pedidos"
+                    inputFrecuencia.value = data.dias_despacho || data.frecuencia || '-';
+                }
+            }
+        } catch (error) {
+            console.error("Error al obtener los datos del proveedor:", error);
+        }
+    }
+
+    // Limpia la selección actual del proveedor
+    function limpiarProveedorCalendario() {
+        seleccionarProveedorCalendario('', ''); // Resetea campos
+        const inputBuscar = document.getElementById('buscar_proveedor_modal');
+        if (inputBuscar) {
+            inputBuscar.value = ''; // Vacía texto
+            inputBuscar.focus(); // Coloca foco para escribir de nuevo
+        }
+    }
+
+    // Cierra automáticamente la lista desplegable al hacer clic fuera del buscador
+    document.addEventListener('click', function (e) {
+        const combo = document.getElementById('combo-proveedor-modal');
+        const dropdown = document.getElementById('opciones_proveedor_modal');
+        if (combo && dropdown && !combo.contains(e.target)) {
+            dropdown.classList.add('hidden');
+        }
+    });
+    // Variables globales para la cascada del modal
+    let datosClasificacionModal = [];
+
+    // Carga la clasificación (Departamento - Grupo) al seleccionar proveedor en el modal
+    async function cargarClasificacionProveedorModal(proveedorId) {
+        limpiarDeptoModal();
+        if (!proveedorId) return;
+
+        try {
+            const res = await fetch(`/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`);
+            if (res.ok) {
+                datosClasificacionModal = await res.json();
+                poblarDepartamentosModal();
+            }
+        } catch (e) {
+            console.error("Error al obtener clasificación del proveedor:", e);
+        }
+    }
+
+    // Poblar departamentos únicos en el modal
+    function poblarDepartamentosModal() {
+        const container = document.getElementById('opciones_depto_modal');
+        const inpDepto = document.getElementById('buscar_depto_modal');
+        if (!container || !inpDepto) return;
+
+        const deptos = [...new Set(datosClasificacionModal.map(item => item.departamento))].filter(Boolean);
+
+        if (deptos.length > 0) {
+            inpDepto.disabled = false;
+            let html = `<div onclick="seleccionarDeptoModal('', 'Todos los departamentos')" class="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todos los departamentos</div>`;
+            deptos.forEach(d => {
+                html += `<div onclick="seleccionarDeptoModal('${d}', '${d}')" data-nombre="${d.toLowerCase()}" class="opcion-depto-modal px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${d}</div>`;
+            });
+            container.innerHTML = html;
+        } else {
+            inpDepto.disabled = true;
+        }
+    }
+
+    function seleccionarDeptoModal(val, label) {
+        document.getElementById('depto_modal').value = val;
+        document.getElementById('buscar_depto_modal').value = val ? label : '';
+        document.getElementById('opciones_depto_modal').classList.add('hidden');
+
+        limpiarGrupoModal();
+
+        const inpGrupo = document.getElementById('buscar_grupo_modal');
+        if (val) {
+            inpGrupo.disabled = false;
+            poblarGruposModal(val);
+        } else {
+            inpGrupo.disabled = true;
+        }
+    }
+
+    // Poblar grupos pertenecientes al departamento seleccionado
+    function poblarGruposModal(deptoSel) {
+        const container = document.getElementById('opciones_grupo_modal');
+        if (!container) return;
+
+        const grupos = [...new Set(datosClasificacionModal.filter(item => item.departamento === deptoSel).map(item => item.grupo))].filter(Boolean);
+
+        let html = `<div onclick="seleccionarGrupoModal('', 'Todos los grupos')" class="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todos los grupos</div>`;
+        grupos.forEach(g => {
+            html += `<div onclick="seleccionarGrupoModal('${g}', '${g}')" data-nombre="${g.toLowerCase()}" class="opcion-grupo-modal px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${g}</div>`;
+        });
+        container.innerHTML = html;
+    }
+
+    function seleccionarGrupoModal(val, label) {
+        document.getElementById('grupo_modal').value = val;
+        document.getElementById('buscar_grupo_modal').value = val ? label : '';
+        document.getElementById('opciones_grupo_modal').classList.add('hidden');
+    }
+
+    function filtrarDeptosModal() {
+        const texto = document.getElementById('buscar_depto_modal').value.toLowerCase().trim();
+        document.querySelectorAll('.opcion-depto-modal').forEach(op => {
+            op.classList.toggle('hidden', !op.getAttribute('data-nombre').includes(texto));
+        });
+        document.getElementById('opciones_depto_modal').classList.remove('hidden');
+    }
+
+    function mostrarOpcionesDeptoModal() {
+        document.getElementById('opciones_depto_modal').classList.remove('hidden');
+    }
+
+    function limpiarDeptoModal() {
+        document.getElementById('depto_modal').value = '';
+        document.getElementById('buscar_depto_modal').value = '';
+        document.getElementById('buscar_depto_modal').disabled = true;
+        document.getElementById('opciones_depto_modal').classList.add('hidden');
+        limpiarGrupoModal();
+    }
+
+    function filtrarGruposModal() {
+        const texto = document.getElementById('buscar_grupo_modal').value.toLowerCase().trim();
+        document.querySelectorAll('.opcion-grupo-modal').forEach(op => {
+            op.classList.toggle('hidden', !op.getAttribute('data-nombre').includes(texto));
+        });
+        document.getElementById('opciones_grupo_modal').classList.remove('hidden');
+    }
+
+    function mostrarOpcionesGrupoModal() {
+        document.getElementById('opciones_grupo_modal').classList.remove('hidden');
+    }
+
+    function limpiarGrupoModal() {
+        document.getElementById('grupo_modal').value = '';
+        document.getElementById('buscar_grupo_modal').value = '';
+        document.getElementById('buscar_grupo_modal').disabled = true;
+        document.getElementById('opciones_grupo_modal').classList.add('hidden');
+    }
+
+    // Extensión de seleccionarProveedorCalendario para cargar la cascada del modal
+    const seleccionarProveedorCalendarioOriginal = seleccionarProveedorCalendario;
+    seleccionarProveedorCalendario = async function (id, nombre) {
+        await seleccionarProveedorCalendarioOriginal(id, nombre);
+        cargarClasificacionProveedorModal(id);
+    };
+</script>
+{% endblock %}

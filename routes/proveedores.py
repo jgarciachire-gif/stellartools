@@ -171,6 +171,16 @@ async def eliminar_proveedor(prov_id: int, access_token: str = Cookie(None)):
 
     return RedirectResponse(url="/proveedores", status_code=303)
 
+@router.get("/api/proveedores")
+async def listar_proveedores_api(access_token: str = Cookie(None)):
+    user = await obtener_usuario_actual(access_token)
+    if not user:
+        return JSONResponse(status_code=401, content={"error": "No autorizado"})
+
+    res = supabase.table("proveedores").select("id, nombre, dias_despacho").order("nombre").execute()
+    proveedores = res.data if res and res.data else []
+    return proveedores
+    
 @router.get("/api/proveedores/{proveedor_id}")
 async def obtener_proveedor_api(proveedor_id: int, access_token: str = Cookie(None)):
     user = await obtener_usuario_actual(access_token)
