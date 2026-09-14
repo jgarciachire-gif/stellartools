@@ -116,13 +116,22 @@ async def procesar_reset_password(access_token: str = Cookie(None), nueva_passwo
     except Exception as e:
         return script_alerta_modal(tipo="error", titulo="Error", mensaje=f"Error al actualizar la contraseña: {str(e)}")
 
+# Cierre de sesión y limpieza de rastro en navegador
 @router.get("/logout")
 def cerrar_sesion(request: Request):
-    request.session.clear()
-    response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie("access_token", path="/")
-    response.delete_cookie("refresh_token", path="/")
-    return response
+    request.session.clear()  # Elimina todos los datos guardados en la sesión del servidor
+    response = RedirectResponse(url="/login", status_code=303)  # Prepara la redirección a la vista de login
+    
+    # Forzado de eliminación de las cookies de autenticación en todo el dominio
+    response.delete_cookie(key="access_token", path="/", httponly=True)  # Borra cookie de acceso
+    response.delete_cookie(key="refresh_token", path="/", httponly=True)  # Borra cookie de refresco
+    
+    # Encabezados anti-caché aplicados a la respuesta del cierre de sesión
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"  # Impide guardar el estado anterior
+    response.headers["Pragma"] = "no-cache"  # Encabezado secundario para denegar almacenamiento
+    response.headers["Expires"] = "0"  # Expiración instantánea
+    
+    return response  # Retorna la redirección limpia hacia el login
 
 # Definición asíncrona para la vista principal del perfil
 @router.get("/perfil")
