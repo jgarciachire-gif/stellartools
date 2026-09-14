@@ -275,7 +275,7 @@
 </script>
 <!-- MODAL FLOTANTE DE DETALLE DE ORDEN DE COMPRA -->
 <div id="modal-detalle-oc"
-    class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    class="fixed inset-0 z-[9999] bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
     <div
         class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-2xl border border-slate-100 text-slate-800 space-y-4 max-h-[90vh] flex flex-col">
 
@@ -306,7 +306,6 @@
     </div>
 </div>
 <script>
-    // Colocar dentro de la etiqueta <script> reemplazando abrirModalOC y cerrarModalOC existentes
 
     // Función para formatear montos en formato moneda ($0,00)
     function formatearMoneda(valor) {
@@ -316,6 +315,13 @@
 
     // Función asíncrona para consultar el detalle de la OC desde el backend y renderizar la tabla
     async function abrirModalOC(ultima_oc, proveedor, tienda, dias, estatus) {
+        const modal = document.getElementById('modal-detalle-oc');
+
+        // Mueve el elemento directamente a la raíz del <body> para ignorar transformaciones o límites de altura de contenedores superiores
+        if (modal.parentElement !== document.body) {
+            document.body.appendChild(modal);
+        }
+
         // 1. Asignar datos del encabezado
         document.getElementById('modal-oc-numero').textContent = `Orden de Compra: ${ultima_oc}`;
         document.getElementById('modal-oc-proveedor').textContent = `Proveedor: ${proveedor}`;
@@ -331,8 +337,9 @@
         </div>
     `;
 
-        // 3. Abrir modal
-        document.getElementById('modal-detalle-oc').classList.remove('hidden');
+        // 3. Abrir modal y bloquear el scroll del fondo
+        modal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
 
         try {
             // Consultar el endpoint del backend que retorna el detalle JSON de la orden
@@ -404,7 +411,9 @@
     }
 
     function cerrarModalOC() {
+        // Ocultar modal y reactivar el scroll normal de la página
         document.getElementById('modal-detalle-oc').classList.add('hidden');
+        document.body.classList.remove('overflow-hidden'); // Restablece el scroll
     }
 </script>
 
