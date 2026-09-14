@@ -3,7 +3,7 @@ from fastapi import FastAPI, Request  # Framework principal web
 from fastapi.responses import RedirectResponse  # Redirección HTTP para bloqueo de rutas desprotegidas
 from fastapi.staticfiles import StaticFiles  # Soporte de archivos estáticos
 from starlette.middleware.sessions import SessionMiddleware  # Middleware para manejo de sesiones
-from supabase import create_async_client  # Cliente asíncrono Supabase
+from supabase import create_async_client, ClientOptions  # Importa cliente asíncrono y opciones de timeout
 
 # Importación de configuración y utilidades compartidas
 import config
@@ -19,7 +19,8 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.on_event("startup")
 async def startup_event():
-    config.supabase_async = await create_async_client(SUPABASE_URL, SUPABASE_KEY)
+    # Garantiza la preparación de la instancia asíncrona al levantar FastAPI
+    await config.obtener_supabase_async()
 
 # Middleware global de autenticación y control de caché
 @app.middleware("http")

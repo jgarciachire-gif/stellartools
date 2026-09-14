@@ -13,6 +13,15 @@ from supabase import create_async_client  # Cliente asíncrono de Supabase
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# Parche global para httpx: deshabilita HTTP/2 (causante del cuelgue en Windows) y eleva el timeout de lectura a 60s
+_original_async_init = httpx.AsyncClient.__init__
+
+def _patched_async_init(self, *args, **kwargs):
+    kwargs["http2"] = False  # Fuerza el uso de HTTP/1.1 para evitar el ReadTimeout en http2.py
+    kwargs["timeout"] = httpx.Timeout(60.0, connect=30.0)  # Extiende el tiempo de espera de lectura
+    _original_async_init(self, *args, **kwargs)
+
+httpx.AsyncClient.__init__ = _patched_async_init
 # Configuración de timeouts globales de red
 socket.setdefaulttimeout(30.0)
 httpx._config.DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(timeout=60.0, connect=30.0)
@@ -29,7 +38,54 @@ supabase: Client = create_client(
         storage_client_timeout=60
     )
 )
+# Adaptador de almacenamiento en memoria 100% asíncrono para el cliente de Supabase Auth
+class AsyncMemoryStorage:
+    def __init__(self):
+        self._storage = {}  # Diccionario interno de almacenamiento temporal
+
+    async def get_item(self, key: str):
+        return self._storage.get(key)  # Recuperación asíncrona del token
+
+    async def set_item(self, key: str, value: str):
+        self._storage[key] = value  # Guardado asíncrono del token
+
+    async def remove_item(self, key: str):
+        self._storage.pop(key, None)  # Eliminación asíncrona requerida por GoTrue
+
 supabase_async = None  # Instancia asíncrona global
+
+async def obtener_supabase_async():
+    global supabase_async
+    # Inicialización asíncrona inyectando AsyncMemoryStorage para solucionar el error NoneType en await
+    if supabase_async is None:
+        supabase_async = await create_async_client(
+            SUPABASE_URL, 
+            SUPABASE_KEY,
+            options=ClientOptions(
+                storage=AsyncMemoryStorage(),
+                postgrest_client_timeout=60,
+                storage_client_timeout=60
+            )
+        )
+    return supabase_async
+
+async def obtener_usuario_actual(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
+    if not access_token and not refresh_token:
+        return None
+    try:
+        # Obtiene el cliente asíncrono inicializado para validar la cookie de sesión
+        client = await obtener_supabase_async()
+        user_response = await client.auth.get_user(access_token)
+        return user_response.user
+    except Exception:
+        if refresh_token:
+            try:
+                client = await obtener_supabase_async()
+                res = await client.auth.refresh_session(refresh_token)
+                return res.user if res else None
+            except Exception:
+                return None
+        return None
 
 # Configuración del motor de plantillas HTML
 templates = Jinja2Templates(directory="templates")

@@ -1,5 +1,7 @@
 from fastapi import APIRouter, Request, Form, Cookie, Response  # Componentes web FastAPI
 from fastapi.responses import RedirectResponse  # Redirecciones HTTP
+import traceback
+import config  # Importa el módulo de configuración para acceder al cliente asíncrono
 from config import supabase, templates, obtener_usuario_actual, script_alerta_modal, script_alerta_error  # Importación de contexto global
 
 router = APIRouter()
@@ -38,21 +40,26 @@ def procesar_registro(email: str = Form(...), password: str = Form(...)):
         )
 
 @router.post("/login")
-def procesar_login(request: Request, email: str = Form(...), password: str = Form(...)):
+async def procesar_login(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
-        auth_res = supabase.auth.sign_in_with_password({"email": email.strip(), "password": password})
+        # Obtiene el cliente asíncrono resuelto
+        client_async = await config.obtener_supabase_async()
+        
+        # Inicio de sesión asíncrono
+        auth_res = await client_async.auth.sign_in_with_password({"email": email.strip(), "password": password})
         user = auth_res.user
         
-        # Consultamos el perfil una sola vez durante el inicio de sesión
-        res_perfil = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+        # Consulta de perfil asíncrona
+        res_perfil = await client_async.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
         perfil_data = res_perfil.data if res_perfil and res_perfil.data else None
 
-        # Guardamos los datos de usuario y perfil en la sesión cifrada
+        # Almacenamiento en sesión cifrada
         request.session["user"] = {"id": user.id, "email": user.email}
         request.session["perfil"] = perfil_data
 
         response = RedirectResponse(url="/", status_code=303)
         
+        # Asignación de cookies de autenticación
         response.set_cookie(
             key="access_token", 
             value=auth_res.session.access_token, 
@@ -71,7 +78,10 @@ def procesar_login(request: Request, email: str = Form(...), password: str = For
         )
         return response
     except Exception as e:
-        print(f"\n[DETALLE ERROR SUPABASE]: {e}\n")
+        print("\n================ DETALLE EXACTO DEL ERROR ================")
+        traceback.print_exc()  # Muestra en la terminal el archivo, la línea exacta y la causa del fallo
+        print("==========================================================\n")
+        
         res_error = script_alerta_modal(
             tipo="error", 
             titulo="Error de Acceso", 
@@ -81,7 +91,7 @@ def procesar_login(request: Request, email: str = Form(...), password: str = For
         res_error.delete_cookie("refresh_token")
         request.session.clear()
         return res_error
-
+        
 @router.post("/recuperar-password")
 def enviar_recuperacion(request: Request, email: str = Form(...)):
     try:
