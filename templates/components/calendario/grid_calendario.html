@@ -1,14 +1,14 @@
 <!-- Cuadrícula de Calendario (Columna Derecha) -->
 <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-600 overflow-hidden flex flex-col">
     <div
-        class="grid grid-cols-7 bg-slate-900 border-b border-slate-600 text-center text-xs font-bold text-slate-100 uppercase tracking-wider py-3">
-        <div>Dom</div>
-        <div>Lun</div>
-        <div>Mar</div>
-        <div>Mié</div>
-        <div>Jue</div>
-        <div>Vie</div>
-        <div>Sáb</div>
+        class="grid grid-cols-7 bg-gradient-to-r from-indigo-950 via-slate-800 to-emerald-800 border-b border-slate-600 text-center text-xs font-bold text-slate-100 tracking-wider py-3">
+        <div>Domingo</div>
+        <div>Lunes</div>
+        <div>Martes</div>
+        <div>Miércoles</div>
+        <div>Jueves</div>
+        <div>Viernes</div>
+        <div>Sábado</div>
     </div>
 
     <div class="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-300 bg-slate-200/50 flex-1">
@@ -17,7 +17,7 @@
                 class="min-h-[110px] bg-white p-2 flex flex-col justify-between transition-all cursor-pointer select-none"
                 :class="{ 
                     'bg-slate-100/50 opacity-40': !dia.esMesActual, 
-                    'ring-2 ring-indigo-600 bg-indigo-50/80 shadow-md z-10': diaSeleccionado === dia.fechaStr,
+                    'ring-1 ring-indigo-800 bg-indigo-50/80 shadow-md z-10': diaSeleccionado === dia.fechaStr,
                     'bg-emerald-100/40': dia.esHoy && diaSeleccionado !== dia.fechaStr 
                 }">
                 <div class="flex items-center justify-between">
