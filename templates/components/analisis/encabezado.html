@@ -1,0 +1,63 @@
+<!-- Encabezado y botones de acciones principales -->
+<div class="flex flex-col md:flex-row md:items-center justify-between mb-6 gap-4 relative">
+    <div>
+        <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+            <div
+                class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-400 to-teal-500 flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30">
+                <i class="fa-solid fa-calculator"></i>
+            </div>
+            <span>Análisis de Pedido</span>
+        </h1>
+        <p class="text-xs text-slate-500 mt-1">Planificación y estimación de cantidades por tienda y proveedor</p>
+    </div>
+
+    <!-- Botones de Acción -->
+    <div class="flex items-center justify-start md:justify-end gap-2 flex-wrap ml-auto">
+        <button type="button" onclick="guardarPlantillaCompleta()"
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-floppy-disk text-lg"></i>
+            <span>Guardar Plantilla</span>
+        </button>
+
+        <button type="button" onclick="cargarUltimoPedidoGuardado()"
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-folder-open text-lg"></i>
+            <span>Cargar Pedido</span>
+        </button>
+
+        <button type="button" onclick="abrirModalExportarSeparado()"
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-store text-lg"></i>
+            <span>Exportar individual</span>
+        </button>
+
+        <button type="button" onclick="exportarConsolidado()"
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-boxes-stacked text-lg"></i>
+            <span>Exportar todo</span>
+        </button>
+
+        <button type="button" onclick="limpiarListaProductos()"
+            class="w-20 h-20 bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-semibold rounded-xl shadow-xs transition flex flex-col items-center justify-center gap-1.5 p-2 text-center cursor-pointer">
+            <i class="fa-solid fa-trash-can text-lg"></i>
+            <span>Limpiar tabla</span>
+        </button>
+    </div>
+
+    <!-- Menú de Opciones Flotante -->
+    <div class="relative">
+        <button id="btn-menu-opciones" type="button"
+            class="p-2.5 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors focus:outline-none border border-slate-200 bg-white shadow-xs">
+            <i class="fa-solid fa-ellipsis-vertical text-base"></i>
+        </button>
+
+        <div id="dropdown-opciones"
+            class="hidden absolute right-0 mt-1 w-48 bg-white border border-slate-200 rounded-xl shadow-lg z-50">
+            <button type="button" onclick="document.getElementById('input-csv-stellar').click();"
+                class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-emerald-600 rounded-xl flex items-center gap-2 transition-colors">
+                <i class="fa-solid fa-file-csv text-emerald-500"></i> Cargar Ventas (CSV)
+            </button>
+            <input type="file" id="input-csv-stellar" accept=".csv" class="hidden" onchange="subirCSVStellar(event)">
+        </div>
+    </div>
+</div>

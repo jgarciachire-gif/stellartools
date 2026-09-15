@@ -1,0 +1,108 @@
+<!-- Modal para Crear Nuevo Producto -->
+<div id="modal-producto"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div
+        class="bg-white rounded-2xl max-w-2xl w-full p-6 shadow-xl border border-slate-100 max-h-[90vh] overflow-y-auto">
+        <h3 class="text-lg font-bold text-slate-800 mb-4">Crear Nuevo Producto</h3>
+
+        <!-- Formulario de creación de producto -->
+        <form action="/productos/guardar" method="POST" class="space-y-4">
+            <input type="hidden" name="id" value="">
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Código ST *</label>
+                    <input type="text" name="codigo_st" required placeholder="Ej. ST-001"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Código EAN</label>
+                    <input type="text" name="codigo_ean" placeholder="Ej. 7591234567"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Unidad de Manejo *</label>
+                    <input type="number" step="1" min="1" value="1" name="unidad_manejo" required placeholder="Ej. 12"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Descripción / Nombre *</label>
+                    <input type="text" name="descripcion" required placeholder="Nombre completo del producto"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Marca</label>
+                    <input type="text" name="marca" placeholder="Ej. Nestlé, PAN"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Precio ($) *</label>
+                    <input type="number" step="0.01" name="precio" value="0.00" required
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Departamento *</label>
+                    <input type="text" name="departamento" required placeholder="Ej. Víveres"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Grupo *</label>
+                    <input type="text" name="grupo" required placeholder="Ej. Enlatados"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Subgrupo *</label>
+                    <input type="text" name="subgrupo" required placeholder="Ej. Atún"
+                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                </div>
+
+                <!-- Buscador autocompletado de Proveedor -->
+                <div class="md:col-span-3 relative" id="combo-proveedor-modal">
+                    <label class="block text-xs font-medium text-slate-600 mb-1">Proveedor Habitual</label>
+                    <input type="hidden" name="proveedor_id" id="proveedor_id_modal" value="">
+
+                    <div class="relative">
+                        <input type="text" id="buscar_proveedor_modal" placeholder="Buscar proveedor..."
+                            autocomplete="off" oninput="filtrarProveedores('modal')"
+                            onfocus="mostrarOpcionesProv('modal')" onkeydown="navegarProveedores(event, 'modal')"
+                            class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8">
+
+                        <button type="button" onclick="limpiarProveedor('modal')"
+                            class="absolute right-3 top-2.5 text-slate-400 hover:text-rose-500">
+                            <i class="fa-solid fa-xmark text-xs"></i>
+                        </button>
+                    </div>
+
+                    <div id="opciones_proveedor_modal"
+                        class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+                        <div onclick="seleccionarProveedor('modal', '', '-- Sin Proveedor --')"
+                            class="px-4 py-2 text-sm text-slate-500 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+                            -- Sin Proveedor --
+                        </div>
+                        {% for p in proveedores %}
+                        <div onclick="seleccionarProveedor('modal', '{{ p.id }}', '{{ p.nombre }}')"
+                            data-nombre="{{ p.nombre|lower }}"
+                            class="opcion-prov-modal px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
+                            {{ p.nombre }}
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones de acción del modal -->
+            <div class="pt-4 flex justify-end gap-3 border-t border-slate-100">
+                <button type="button" onclick="cerrarModalCrear()"
+                    class="px-6 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-semibold rounded-xl text-sm transition">
+                    Cancelar
+                </button>
+                <button type="submit"
+                    class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl text-sm shadow-sm transition flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i> Guardar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

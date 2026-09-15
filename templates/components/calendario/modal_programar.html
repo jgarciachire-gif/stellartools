@@ -1,0 +1,113 @@
+<!-- Modal para Agregar/Programar Pedido -->
+<div x-show="modalAbierto" x-cloak
+    class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+    <div @click.outside="modalAbierto = false"
+        class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6 space-y-5 border border-slate-100">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="text-lg font-bold text-slate-800">Programar Reposición</h3>
+            <button @click="modalAbierto = false" class="text-slate-400 hover:text-slate-600">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <form @submit.prevent="guardarProgramacion()" class="space-y-4">
+            <div class="relative w-full" id="combo-proveedor-modal">
+                <input type="hidden" id="proveedor_id_modal" name="proveedor_id" value="">
+                <label for="buscar_proveedor_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                    <i class="fa-solid fa-truck-field text-amber-600 mr-1"></i>Proveedor:
+                </label>
+                <div class="relative">
+                    <input type="text" id="buscar_proveedor_modal" placeholder="Escriba para buscar proveedor..."
+                        autocomplete="off" spellcheck="false" oninput="filtrarProveedoresCalendario()"
+                        onfocus="mostrarOpcionesProvCalendario()" onkeydown="navegarProveedoresCalendario(event)"
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7">
+                    <button type="button" onclick="limpiarProveedorCalendario()" id="btn-limpiar-prov-modal"
+                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+
+                <div id="opciones_proveedor_modal"
+                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50">
+                    <div onclick="seleccionarProveedorCalendario('', '-- Seleccionar Proveedor --')"
+                        class="px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+                        -- Seleccionar Proveedor --
+                    </div>
+                    {% for p in proveedores_db %}
+                    <div onclick="seleccionarProveedorCalendario('{{ p.id }}', '{{ p.nombre }}')" data-id="{{ p.id }}"
+                        data-nombre="{{ p.nombre or '' }}"
+                        class="opcion-prov-modal px-4 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
+                        {{ p.nombre }}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="mt-3 relative" id="combo-depto-modal">
+                <input type="hidden" id="depto_modal" name="departamento" value="">
+                <label for="buscar_depto_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                    <i class="fa-solid fa-layer-group text-rose-600 mr-1"></i>Departamento:
+                </label>
+                <div class="relative">
+                    <input type="text" id="buscar_depto_modal" placeholder="Seleccione departamento..."
+                        autocomplete="off" spellcheck="false" oninput="filtrarDeptosModal()"
+                        onfocus="mostrarOpcionesDeptoModal()" disabled
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7 bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button type="button" onclick="limpiarDeptoModal()"
+                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <div id="opciones_depto_modal"
+                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-36 overflow-y-auto z-50">
+                </div>
+            </div>
+
+            <div class="mt-3 relative" id="combo-grupo-modal">
+                <input type="hidden" id="grupo_modal" name="grupo" value="">
+                <label for="buscar_grupo_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                    <i class="fa-solid fa-boxes-stacked text-blue-900 mr-1"></i>Grupo:
+                </label>
+                <div class="relative">
+                    <input type="text" id="buscar_grupo_modal" placeholder="Seleccione grupo..." autocomplete="off"
+                        spellcheck="false" oninput="filtrarGruposModal()" onfocus="mostrarOpcionesGrupoModal()" disabled
+                        class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7 bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <button type="button" onclick="limpiarGrupoModal()"
+                        class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                        <i class="fa-solid fa-xmark text-xs"></i>
+                    </button>
+                </div>
+                <div id="opciones_grupo_modal"
+                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-36 overflow-y-auto z-50">
+                </div>
+            </div>
+
+            <div class="mt-3">
+                <label for="frecuencia_pedidos" class="block text-xs font-semibold text-slate-700 mb-1">Frecuencia de
+                    Pedidos (días):</label>
+                <input type="number" id="frecuencia_pedidos" name="frecuencia_pedidos" min="1" placeholder="Ej. 7"
+                    autocomplete="off" spellcheck="false"
+                    class="w-20 px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+
+            <div class="mt-3">
+                <label for="fecha_inicio_modal" class="block text-xs font-semibold text-slate-700 mb-1">
+                    <i class="fa-solid fa-calendar-day text-red-600 mr-1"></i>Fecha de Inicio:
+                </label>
+                <input type="date" id="fecha_inicio_modal" name="fecha_inicio" required
+                    class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold text-slate-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100">
+                <button type="button" @click="modalAbierto = false"
+                    class="px-4 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">
+                    Cancelar
+                </button>
+                <button type="submit"
+                    class="px-4 py-2 text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 rounded-xl shadow-md shadow-indigo-200 transition-colors">
+                    <i class="fa-solid fa-check mr-1"></i>Programar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

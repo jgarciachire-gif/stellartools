@@ -1,0 +1,278 @@
+<!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
+<div id="modal-cargar-oc"
+    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+    <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF)
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">
+            Selecciona uno o varios archivos PDF para extraer datos de las órdenes (Máx. 4 MB total).
+        </p>
+
+        <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" id="form-pdf-modal"
+            onsubmit="validarYProcesarPDFModal(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Seleccionar archivo(s) PDF de Órdenes (Máx. 4 MB total)
+                </label>
+                <input type="file" id="input-pdf-modal" name="archivos_pdf" accept=".pdf" multiple required
+                    class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
+            </div>
+            <!-- Barra de Progreso de Carga -->
+            <div id="contenedor-progreso-pdf" class="hidden space-y-2 mb-4">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
+                    <span id="texto-estado-progreso">Subiendo archivos...</span>
+                    <span id="porcentaje-progreso">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                    <div id="barra-progreso-pdf"
+                        class="bg-gradient-to-r from-blue-400 to-indigo-600 h-2.5 rounded-full transition-all duration-150 ease-out w-0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones alineados de lado a lado -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
+                <button type="button" onclick="cerrarModalCargarOC()"
+                    class="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+                    Cancelar
+                </button>
+                <button type="submit" id="btn-procesar-pdf-modal"
+                    class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 text-xs shadow-sm">
+                    <span id="btn-texto-pdf-modal">Procesar</span>
+                    <svg id="btn-spinner-pdf-modal" class="hidden animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 2: Cargar Recepciones (XML) -->
+<div id="modal-cargar-xml"
+    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+    <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
+        <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+            <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML)
+        </h3>
+        <p class="text-xs text-slate-500 mb-4">
+            Subir archivo(s) XML con datos de recepción para actualizar el estado de las órdenes.
+        </p>
+
+        <!-- Formulario con procesamiento AJAX dinámico -->
+        <form action="/recepciones/procesar-xml" method="POST" enctype="multipart/form-data" id="form-xml-modal"
+            onsubmit="procesarXMLModal(event)">
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                    Seleccionar archivo(s) XML de Recepciones
+                </label>
+                <input type="file" id="input-xml-modal" name="archivos_xml" accept=".xml" multiple required
+                    class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
+            </div>
+
+            <!-- Barra de Progreso para XML -->
+            <div id="contenedor-progreso-xml" class="hidden space-y-2.5 mb-4">
+                <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
+                    <span id="texto-estado-progreso-xml">Subiendo archivos...</span>
+                    <span id="porcentaje-progreso-xml">0%</span>
+                </div>
+                <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden border border-slate-200">
+                    <div id="barra-progreso-xml"
+                        class="bg-gradient-to-r from-emerald-400 to-teal-600 h-2.5 rounded-full transition-all duration-150 ease-out w-0">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Botones alineados de lado a lado -->
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 mt-4">
+                <button type="button" onclick="cerrarModalCargarXML()"
+                    class="px-4 py-2.5 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+                    Cancelar
+                </button>
+                <button type="submit" id="btn-procesar-xml-modal"
+                    class="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-5 rounded-xl transition-all duration-200 text-xs shadow-sm">
+                    <span id="btn-texto-xml-modal">Procesar</span>
+                    <svg id="btn-spinner-xml-modal" class="hidden animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4">
+                        </circle>
+                        <path class="opacity-75" fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal 3: Resultado de Órdenes Extraídas de PDF -->
+<div id="modal-detalle-extraido-oc"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div
+        class="bg-slate-50 rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
+
+        <!-- Cabecera -->
+        <div
+            class="flex justify-between items-center pb-4 border-b border-slate-200 bg-white -mx-6 -mt-6 p-6 rounded-t-2xl">
+            <div>
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-blue-600"></i>
+                    Órdenes Procesadas (<span id="total-ordenes-count">0</span>)
+                </h3>
+                <p class="text-xs text-slate-500">Revisa, edita si es necesario y guarda las órdenes extraídas en el
+                    diario.</p>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <button type="button" id="btn-guardar-todo-modal"
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs">
+                    <i class="fa-solid fa-layer-group"></i> Guardar Todo
+                </button>
+                <button type="button" onclick="cerrarModalDetalleOC()"
+                    class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Contenedor dinámico con scroll para las tarjetas de órdenes -->
+        <div id="contenedor-tarjetas-oc" class="overflow-y-auto my-4 space-y-4 pr-1 flex-1">
+            <!-- Las tarjetas editables se renderizan aquí mediante JS -->
+        </div>
+
+        <!-- Pie del Modal Cargar PDF -->
+        <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-100 mt-4">
+            <button type="button" onclick="cerrarModalDetalleOC()"
+                class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
+                Cancelar
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal 4: Resultado del Procesamiento de Recepciones XML -->
+<div id="modal-detalle-xml-oc"
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[85vh]">
+
+        <!-- Cabecera -->
+        <div class="flex justify-between items-center pb-4 border-b border-slate-100">
+            <div>
+                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-file-code text-blue-600"></i> Resumen del Procesamiento XML
+                </h3>
+                <p class="text-xs text-slate-500">Resultado de la actualización automática de fechas de recepción.
+                </p>
+            </div>
+            <button type="button" onclick="cerrarModalDetalleXML()"
+                class="text-slate-400 hover:text-slate-600 transition-colors">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+        </div>
+
+        <!-- Contenedor principal -->
+        <div class="overflow-y-auto my-4 space-y-4 pr-1 flex-1">
+
+            <!-- Tabla de Órdenes Actualizadas -->
+            <div id="bloque-xml-exito" class="hidden">
+                <h4 class="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-2">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                    Órdenes Actualizadas Con Éxito (<span id="count-xml-exito">0</span>)
+                </h4>
+                <div class="border border-slate-100 rounded-xl overflow-hidden shadow-sm">
+                    <table class="w-full text-left border-collapse">
+                        <!-- Encabezados interactivos para ordenar la tabla -->
+                        <thead
+                            class="bg-slate-50 text-[11px] font-bold text-slate-500 uppercase tracking-wider select-none">
+                            <tr>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(0)">
+                                    <div class="flex items-center gap-1">N° Orden <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(1)">
+                                    <div class="flex items-center gap-1">Proveedor <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(2)">
+                                    <div class="flex items-center gap-1">Tienda Destino <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 cursor-pointer hover:bg-slate-100 transition-colors"
+                                    onclick="ordenarTablaXML(3)">
+                                    <div class="flex items-center gap-1">Fecha Recepción <i
+                                            class="fa-solid fa-sort text-[10px] text-slate-400"></i></div>
+                                </th>
+                                <th class="px-4 py-2.5 text-center">Estado</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-xml-exito-body" class="divide-y divide-slate-100 text-xs">
+                            <!-- Filas dinámicas -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- Resumen Informativo: OC No Procesadas en una sola línea -->
+            <div id="alerta-xml-no-encontradas"
+                class="hidden bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between text-xs text-amber-900">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm"></i>
+                    <span>Órdenes no procesadas:</span>
+                </div>
+                <span id="count-xml-no-encontradas"
+                    class="font-bold bg-amber-200/60 text-amber-900 px-2.5 py-0.5 rounded-lg">0</span>
+            </div>
+        </div>
+
+        <!-- Pie -->
+        <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <button type="button" onclick="location.reload()"
+                class="px-5 py-3 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all rounded-xl flex items-center gap-3 shadow-sm">
+                <i class="fa-solid fa-rotate-right"></i> Actualizar Órdenes
+            </button>
+        </div>
+
+    </div>
+</div>
+
+<!-- Modal Confirmar Eliminación (Fondo Blanco Claro Único) -->
+<div id="modalEliminarOrdenes"
+    class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 text-slate-800">
+
+        <!-- Icono de Advertencia -->
+        <div class="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-100 text-red-600 mb-4">
+            <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+        </div>
+
+        <!-- Encabezado y Texto -->
+        <div class="text-center">
+            <h3 class="text-lg font-bold text-slate-800 mb-2">Eliminar Registro(s)</h3>
+            <p id="textoConfirmacionEliminar" class="text-sm text-slate-500">
+                <!-- El mensaje dinámico se inserta desde JS -->
+            </p>
+        </div>
+
+        <!-- Botones de Acción -->
+        <div class="mt-6 flex justify-end gap-3">
+            <button type="button" onclick="cerrarModalEliminar()"
+                class="px-4 py-2 text-sm font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-xmark"></i> Cancelar
+            </button>
+            <button type="button" id="btnConfirmarEliminar" onclick="procesarEliminacionModal()"
+                class="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-xl transition-colors flex items-center gap-2">
+                <i class="fa-solid fa-trash-can"></i> Eliminar
+            </button>
+        </div>
+
+    </div>
+</div>

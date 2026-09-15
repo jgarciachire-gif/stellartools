@@ -1,0 +1,95 @@
+<!-- Filtros en cascada: Departamento, Grupo, Subgrupo, Marca e Importación -->
+<div id="sec-filtros-clasificacion"
+    class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 opacity-50 pointer-events-none transition-all">
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
+
+        <!-- Departamento -->
+        <div class="relative" id="combo-depto-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-layer-group text-blue-600 mr-1"></i> Departamento
+            </label>
+            <input type="hidden" id="depto_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_depto_analisis" placeholder="Todos los departamentos..."
+                    autocomplete="off" oninput="filtrarDeptosAnalisis()" onfocus="mostrarOpcionesDeptoAnalisis()"
+                    disabled
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                <button type="button" onclick="limpiarDeptoAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_depto_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- Grupo -->
+        <div class="relative" id="combo-grupo-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-boxes-stacked text-blue-600 mr-1"></i> Grupo
+            </label>
+            <input type="hidden" id="grupo_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_grupo_analisis" placeholder="Todos los grupos..." autocomplete="off"
+                    oninput="filtrarGruposAnalisis()" onfocus="mostrarOpcionesGrupoAnalisis()" disabled
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                <button type="button" onclick="limpiarGrupoAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_grupo_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- Subgrupo -->
+        <div class="relative" id="combo-subgrupo-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-tags text-blue-600 mr-1"></i> Subgrupo
+            </label>
+            <input type="hidden" id="subgrupo_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_subgrupo_analisis" placeholder="Todos los subgrupos..." autocomplete="off"
+                    oninput="filtrarSubgruposAnalisis()" onfocus="mostrarOpcionesSubgrupoAnalisis()" disabled
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                <button type="button" onclick="limpiarSubgrupoAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_subgrupo_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- Marca -->
+        <div class="relative" id="combo-marca-analisis">
+            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                <i class="fa-solid fa-copyright text-blue-600 mr-1"></i> Marca
+            </label>
+            <input type="hidden" id="marca_analisis" value="">
+            <div class="relative">
+                <input type="text" id="buscar_marca_analisis" placeholder="Todas las marcas..." autocomplete="off"
+                    oninput="filtrarMarcasAnalisis()" onfocus="mostrarOpcionesMarcaAnalisis()"
+                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                <button type="button" onclick="limpiarMarcaAnalisis()"
+                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                    <i class="fa-solid fa-xmark text-xs"></i>
+                </button>
+            </div>
+            <div id="opciones_marca_analisis"
+                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+            </div>
+        </div>
+
+        <!-- Botón Importar -->
+        <div>
+            <button type="button" id="btn_importar_productos" onclick="importarProductosAnalisis()" disabled
+                class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-default">
+                <i class="fa-solid fa-file-import"></i> Importar Productos
+            </button>
+        </div>
+    </div>
+</div>

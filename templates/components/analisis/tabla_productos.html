@@ -1,0 +1,76 @@
+<!-- Tabla Principal de Productos y Totales -->
+<div class="bg-white border border-slate-300 rounded-2xl shadow-xs overflow-hidden mb-6">
+    <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse border border-slate-900" id="tabla-analisis">
+            <thead>
+                <tr class="bg-slate-900 text-white text-[11px] font-bold uppercase tracking-wider select-none">
+                    <th onclick="ordenarTablaAnalisis(0, 'texto')"
+                        class="py-2.5 px-3 w-36 border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-between">CÓDIGO <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(1, 'texto')"
+                        class="py-2.5 px-3 border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-between">DESCRIPCIÓN <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(2, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-center gap-1">PRE. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(3, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 bg-slate-950/40 transition">
+                        <div class="flex items-center justify-center gap-1">INV. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(4, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-center gap-1">EMP. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(5, 'numero')"
+                        class="py-2.5 px-3 w-24 text-center border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-center gap-1">UNI. <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(6, 'numero')"
+                        class="py-2.5 px-3 w-32 text-right border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-end gap-1">COSTO UNI. ($) <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th onclick="ordenarTablaAnalisis(7, 'subtotal')"
+                        class="py-2.5 px-3 w-36 text-right border-r border-slate-800 cursor-pointer hover:bg-slate-800 transition">
+                        <div class="flex items-center justify-end gap-1">SUBTOTAL ($) <i
+                                class="fa-solid fa-sort text-[10px] opacity-40 th-icon"></i></div>
+                    </th>
+                    <th class="py-2.5 px-2 w-12 text-center"></th>
+                </tr>
+            </thead>
+            <tbody id="filas-tabla-analisis" class="bg-white text-xs"></tbody>
+        </table>
+    </div>
+
+    <!-- Pie con botón Agregar y Resumen Totales -->
+    <div class="p-3 bg-slate-50 border-t border-slate-300 flex flex-col md:flex-row justify-between items-center gap-4">
+        <button type="button" onclick="agregarFilaAnalisis()"
+            class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-normal rounded-lg text-xs transition shadow-xs flex items-center gap-2">
+            <i class="fa-solid fa-plus"></i> Agregar linea
+        </button>
+
+        <div class="flex flex-wrap items-center gap-6 text-xs text-slate-600">
+            <div>
+                <span class="text-slate-400 block font-normal">TOTAL EMPAQUES</span>
+                <span id="tot-empaques" class="text-sm font-normal text-slate-800">0</span>
+            </div>
+            <div>
+                <span class="text-slate-400 block font-normal">TOTAL UNIDADES</span>
+                <span id="tot-unidades" class="text-sm font-normal text-slate-800">0</span>
+            </div>
+            <div class="pl-4 border-l border-slate-300">
+                <span class="text-slate-400 block font-normal">MONTO TOTAL ESTIMADO</span>
+                <span id="tot-monto" class="text-base font-normal text-blue-600">$ 0,00</span>
+            </div>
+        </div>
+    </div>
+</div>

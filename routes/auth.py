@@ -24,9 +24,22 @@ async def vista_login(request: Request, access_token: str = Cookie(None), refres
     return templates.TemplateResponse(request=request, name="login.html", context={})
 
 @router.post("/registro")
-def procesar_registro(email: str = Form(...), password: str = Form(...)):
+def procesar_registro(
+    nombre_comprador: str = Form(...),  # Recibe el nombre completo enviado desde el formulario
+    email: str = Form(...), 
+    password: str = Form(...)
+):
     try:
-        supabase.auth.sign_up({"email": email, "password": password})
+        # Crea la cuenta de autenticación en Supabase
+        res = supabase.auth.sign_up({"email": email, "password": password})
+        
+        # Si la cuenta fue creada exitosamente, registra el nombre en la tabla de perfiles
+        if res and res.user:
+            supabase.table("perfiles").insert({
+                "usuario_id": res.user.id,
+                "nombre_comprador": nombre_comprador.strip()
+            }).execute()
+
         return script_alerta_modal(
             tipo="exito", 
             titulo="¡Registro Exitoso!", 
@@ -91,7 +104,7 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
         res_error.delete_cookie("refresh_token")
         request.session.clear()
         return res_error
-        
+
 @router.post("/recuperar-password")
 def enviar_recuperacion(request: Request, email: str = Form(...)):
     try:
