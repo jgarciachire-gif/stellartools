@@ -1165,15 +1165,6 @@
                 // Actualiza los totales de la tabla.
                 totalizarAnalisis();
 
-                // Obtiene solamente los códigos actualmente visibles.
-                const codigosTabla = obtenerCodigosTablaAnalisis();
-
-                // Descarga ventas únicamente para esos códigos.
-                await cargarVentasStellarEnMemoria(codigosTabla);
-
-                // Calcula completamente en memoria.
-                ejecutarCalculoSugeridosSync();
-
             } catch (e) {
                 console.error('Error al importar productos:', e);
                 alert('Ocurrió un error al importar los productos.');
