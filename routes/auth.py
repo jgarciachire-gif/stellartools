@@ -1,3 +1,4 @@
+import os
 from fastapi import APIRouter, Request, Form, Cookie, Response  # Componentes web FastAPI
 from fastapi.responses import RedirectResponse  # Redirecciones HTTP
 import traceback
@@ -5,6 +6,12 @@ import config  # Importa el módulo de configuración para acceder al cliente as
 from config import supabase, templates, obtener_usuario_actual, script_alerta_modal, script_alerta_error  # Importación de contexto global
 
 router = APIRouter()
+
+# En local HTTP permanece false; en Vercel puedes activarlo con COOKIE_SECURE=true.
+COOKIE_SECURE = (
+    os.getenv("COOKIE_SECURE", "false").lower()
+    == "true"
+)
 
 @router.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
 async def chrome_devtools_silencer():
@@ -64,7 +71,7 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
             key="access_token", 
             value=auth_res.session.access_token, 
             httponly=True, 
-            secure=False, 
+            secure=COOKIE_SECURE, 
             samesite="lax", 
             max_age=3600 * 24 * 7
         )
@@ -72,7 +79,7 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
             key="refresh_token", 
             value=auth_res.session.refresh_token, 
             httponly=True, 
-            secure=False, 
+            secure=COOKIE_SECURE, 
             samesite="lax", 
             max_age=3600 * 24 * 7
         )

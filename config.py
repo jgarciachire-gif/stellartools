@@ -139,22 +139,6 @@ def limpiar_monto_decimal(valor_str):
     except ValueError:
         return 0.0
 
-async def obtener_usuario_actual(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
-    if not access_token and not refresh_token:
-        return None
-    try:
-        # Usamos la instancia asíncrona global de Supabase
-        user_response = await supabase_async.auth.get_user(access_token)
-        return user_response.user
-    except Exception:
-        if refresh_token:
-            try:
-                res = await supabase_async.auth.refresh_session(refresh_token)
-                return res.user if res else None
-            except Exception:
-                return None
-        return None
-
 def script_alerta_error(mensaje: str, redireccionar: str = None) -> HTMLResponse:
     msj_limpio = mensaje.replace("'", "\\'").replace("\n", " ")
     if redireccionar:

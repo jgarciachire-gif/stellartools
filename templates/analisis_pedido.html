@@ -1162,9 +1162,16 @@
                     calcularFila(inpCod);
                 });
 
-                // Actualiza los datos de empaques, unidades y monto final en la barra inferior
+                // Actualiza los totales de la tabla.
                 totalizarAnalisis();
 
+                // Obtiene solamente los códigos actualmente visibles.
+                const codigosTabla = obtenerCodigosTablaAnalisis();
+
+                // Descarga ventas únicamente para esos códigos.
+                await cargarVentasStellarEnMemoria(codigosTabla);
+
+                // Calcula completamente en memoria.
                 ejecutarCalculoSugeridosSync();
 
             } catch (e) {
@@ -2247,78 +2254,90 @@ ${nodosProductosXML.join('\n')}
             window.matrizDatosPorSede = {};
         }
 
-        // Función adaptada para guardar la plantilla actualizando el registro existente
         async function guardarPlantillaCompleta() {
             try {
-                // Captura los datos del encabezado de la página antes de procesar la tabla
-                const rawProvId = document.getElementById('proveedor_id_analisis')?.value; // Obtiene el valor del input del proveedor
-                const proveedorId = rawProvId ? parseInt(rawProvId) : null; // Convierte a número o deja en null si está vacío
-                const diasCobertura = parseInt(document.getElementById('dias_cobertura')?.value || 7); // Obtiene los días o asigna 7 por defecto
-                // 1. Obtiene únicamente los códigos que existen actualmente en la tabla visual HTML
-                const codigosVisiblesEnHTML = new Set(
-                    Array.from(document.querySelectorAll('#filas-tabla-analisis .inp-codigo'))
-                        .map(input => input.value.trim())
-                        .filter(codigo => codigo !== '')
+                // Obtiene el proveedor actual.
+                const rawProvId = document.getElementById(
+                    'proveedor_id_analisis'
+                )?.value;
+
+                // Convierte el proveedor a número cuando exista.
+                const proveedorId = rawProvId
+                    ? parseInt(rawProvId, 10)
+                    : null;
+
+                // Obtiene los días de cobertura.
+                const diasCobertura = parseInt(
+                    document.getElementById('dias_cobertura')?.value || 7,
+                    10
                 );
 
-                // 2. Sincroniza la sede activa y asegura que CENTRO o la sede actual capturen el inventario del HTML
-                const sedeActual = (typeof tiendaActivaPestana !== 'undefined' && tiendaActivaPestana) ? tiendaActivaPestana.trim().toUpperCase() : 'CENTRO';
-                if (!matrizTiendas[sedeActual]) matrizTiendas[sedeActual] = {};
+                // Guarda antes la tienda visible.
+                const sedeActual = (
+                    typeof tiendaActivaPestana !== 'undefined'
+                    && tiendaActivaPestana
+                )
+                    ? tiendaActivaPestana.trim().toUpperCase()
+                    : 'CENTRO';
 
-                const filasHTML = document.querySelectorAll('#filas-tabla-analisis tr');
-                filasHTML.forEach(tr => {
-                    const codigo = tr.querySelector('.inp-codigo')?.value?.trim();
-                    if (!codigo) return;
+                // Garantiza que exista la estructura de memoria.
+                asegurarEstructuraTienda(sedeActual);
 
-                    // Busca el campo de inventario/sugerido en el HTML probando inputs y celdas
-                    const elInv = tr.querySelector('.inp-sugerido, .inp-invemp, .inp-inv, .inp-stock, .inp-inventario, [data-inv]');
-                    const valInv = parseFloat(elInv?.value || elInv?.innerText || elInv?.textContent || 0) || 0;
+                // Sincroniza lo visible con la memoria.
+                guardarEstadoTablaEnMemoria(sedeActual);
 
-                    // Busca el campo de pedido final en el HTML
-                    const elEmp = tr.querySelector('.inp-pedido, .inp-emp, .inp-ped');
-                    const valEmp = parseFloat(elEmp?.value || elEmp?.innerText || elEmp?.textContent || 0) || 0;
+                // Obtiene únicamente los códigos de la tabla.
+                const codigosVisiblesEnHTML = new Set(
+                    Array.from(
+                        document.querySelectorAll(
+                            '#filas-tabla-analisis .inp-codigo'
+                        )
+                    )
+                        .map(input =>
+                            normalizarCodigoAnalisis(input.value)
+                        )
+                        .filter(Boolean)
+                );
 
-                    // Guarda en memoria conservando el inventario previo si en la pestaña actual no se modificó
-                    const invPrevio = matrizTiendas[sedeActual][codigo]?.invEmp || 0;
-                    matrizTiendas[sedeActual][codigo] = {
-                        invEmp: valInv > 0 ? valInv : invPrevio,
-                        emp: valEmp
-                    };
-                });
-
-                // 3. Purga de TODAS las tiendas en memoria los códigos que ya no están visibles en la tabla HTML
+                // Elimina de memoria productos que ya no existen en pantalla.
                 for (const sede in matrizTiendas) {
                     for (const codigo in matrizTiendas[sede]) {
                         if (!codigosVisiblesEnHTML.has(codigo)) {
-                            delete matrizTiendas[sede][codigo]; // Elimina la línea borrada de la memoria global para todas las sedes
+                            delete matrizTiendas[sede][codigo];
                         }
                     }
                 }
 
-                // 4. Prepara las filas limpias de todas las sedes para registrarlas en Supabase
-                const filasDetalleTemp = [];
-                // Obtiene el ID del usuario usando el cliente supabaseClient o la sesión inyectada por FastAPI
-                let userId = null; // Inicializa la variable del ID de usuario
-                try {
-                    const { data: { user } } = await supabaseClient.auth.getUser(); // Consulta la sesión en el cliente correcto
-                    if (user) userId = user.id; // Asigna el ID de Supabase si existe
-                } catch (e) { }
+                // Construye un único arreglo para todas las sedes.
+                const filasDetalle = [];
 
-                // Si no hay sesión en Supabase, utiliza el ID que viene desde Jinja2/FastAPI
-                if (!userId && typeof USUARIO_ID_SESION !== 'undefined' && USUARIO_ID_SESION) {
-                    userId = USUARIO_ID_SESION; // Asigna el valor de reserva de la plantilla
-                }
                 for (const sede in matrizTiendas) {
                     for (const codigo in matrizTiendas[sede]) {
                         const item = matrizTiendas[sede][codigo];
+
+                        // Ignora registros inexistentes.
                         if (!item) continue;
 
-                        // Evalúa invEmp y todas las propiedades alternativas donde CENTRO pueda tener guardado el inventario
-                        const valInv = parseFloat(item.invEmp ?? item.inv ?? item.inventario ?? item.sugerido ?? item.stock ?? 0) || 0;
-                        const valEmp = parseFloat(item.emp ?? item.pedido_final ?? 0) || 0;
+                        // Obtiene inventario/empaque guardado.
+                        const valInv = parseFloat(
+                            item.invEmp
+                            ?? item.inv
+                            ?? item.inventario
+                            ?? item.sugerido
+                            ?? item.stock
+                            ?? 0
+                        ) || 0;
 
+                        // Obtiene pedido final.
+                        const valEmp = parseFloat(
+                            item.emp
+                            ?? item.pedido_final
+                            ?? 0
+                        ) || 0;
+
+                        // Mantiene el comportamiento actual de no guardar filas totalmente vacías.
                         if (valInv > 0 || valEmp > 0) {
-                            filasDetalleTemp.push({
+                            filasDetalle.push({
                                 sede: sede,
                                 codigo: codigo,
                                 sugerido: valInv,
@@ -2328,189 +2347,318 @@ ${nodosProductosXML.join('\n')}
                     }
                 }
 
-                // Muestra en consola exactamente lo que se enviará a Supabase
-                console.log("📦 Filas reales filtradas para guardar:", filasDetalleTemp);
-
-                // Si la tabla está vacía, frena aquí sin alterar la base de datos
-                if (filasDetalleTemp.length === 0) {
-                    alert('⚠️ No hay datos ingresados en la tabla para guardar.');
+                // No tiene sentido realizar una llamada si no hay datos.
+                if (filasDetalle.length === 0) {
+                    alert(
+                        '⚠️ No hay datos ingresados en la tabla para guardar.'
+                    );
                     return;
                 }
 
-                // 5. Elimina por completo cualquier pedido previo guardado para este usuario (independientemente del proveedor)
-                const { data: registrosPrevios } = await supabaseClient
-                    .from('analisis_pedidos')
-                    .select('id')
-                    .eq('usuario_id', userId); // Consulta todos los registros existentes del usuario
+                // Envía TODO el pedido en una sola petición a FastAPI.
+                const response = await fetch(
+                    '/analisis/guardar-pedido',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            proveedor_id: proveedorId,
+                            dias_cobertura: diasCobertura,
+                            detalles: filasDetalle
+                        })
+                    }
+                );
 
-                if (registrosPrevios && registrosPrevios.length > 0) {
-                    const idsPrevios = registrosPrevios.map(r => r.id); // Reúne todos los IDs de análisis a eliminar
+                // Intenta interpretar la respuesta.
+                const resultado = await response.json().catch(
+                    () => ({})
+                );
 
-                    // Borra los detalles viejos asociados a esos IDs para no romper restricciones de clave foránea
-                    const { error: errBorrarDetalle } = await supabaseClient
-                        .from('analisis_pedidos_detalle')
-                        .delete()
-                        .in('analisis_id', idsPrevios);
-
-                    if (errBorrarDetalle) throw errBorrarDetalle; // Lanza el error si falla el borrado de detalles
-
-                    // Borra las cabeceras previas del usuario
-                    const { error: errBorrarCabecera } = await supabaseClient
-                        .from('analisis_pedidos')
-                        .delete()
-                        .eq('usuario_id', userId);
-
-                    if (errBorrarCabecera) throw errBorrarCabecera; // Lanza el error si falla el borrado de cabecera
+                // Detiene el flujo ante un error HTTP.
+                if (!response.ok) {
+                    throw new Error(
+                        resultado.detail
+                        || 'No se pudo guardar el pedido.'
+                    );
                 }
 
-                // 6. Inserta el nuevo pedido desde cero como un registro limpio
-                const { data: nuevoAnalisis, error: errorInsertHeader } = await supabaseClient
-                    .from('analisis_pedidos')
-                    .insert({
-                        usuario_id: userId,
-                        proveedor_id: proveedorId,
-                        dias_cobertura: diasCobertura,
-                        updated_at: new Date().toISOString()
-                    })
-                    .select('id')
-                    .single();
+                // Confirma guardado exitoso.
+                alert(
+                    '✅ Pedido guardado correctamente.'
+                );
 
-                if (errorInsertHeader) throw errorInsertHeader; // Detiene el proceso si falla la inserción de cabecera
-
-                const analisisId = nuevoAnalisis.id; // Captura el nuevo ID generado por Supabase
-
-                // 7. Asigna el nuevo ID a las filas de detalle e inserta el lote de datos
-                const filasDetalle = filasDetalleTemp.map(fila => ({
-                    ...fila,
-                    analisis_id: analisisId
-                }));
-
-                const { error: errorInsertDetalle } = await supabaseClient
-                    .from('analisis_pedidos_detalle')
-                    .insert(filasDetalle);
-
-                if (errorInsertDetalle) throw errorInsertDetalle; // Detiene el proceso si falla la inserción de los detalles
-
-                alert('✅ Pedido guardado y sobreescrito exitosamente en Supabase.');
             } catch (err) {
-                console.error('Error al guardar el pedido:', err);
-                alert('❌ Error de Supabase al guardar: ' + (err.message || JSON.stringify(err)));
+                // Muestra el error real en consola.
+                console.error(
+                    'Error al guardar el pedido:',
+                    err
+                );
+
+                // Mensaje amigable al usuario.
+                alert(
+                    '❌ Error al guardar: '
+                    + (err.message || 'Error desconocido.')
+                );
             }
         }
         // Función adaptada para cargar el pedido más reciente del usuario
         async function cargarUltimoPedidoGuardado() {
             try {
-                let userId = null;
-                try {
-                    const { data: { user } } = await supabaseClient.auth.getUser();
-                    if (user) userId = user.id;
-                } catch (e) { }
+                // Solicita al backend el último pedido del usuario autenticado.
+                const response = await fetch(
+                    '/analisis/ultimo-pedido'
+                );
 
-                if (!userId && typeof USUARIO_ID_SESION !== 'undefined' && USUARIO_ID_SESION) {
-                    userId = USUARIO_ID_SESION;
+                // Convierte la respuesta.
+                const resultado = await response.json();
+
+                // Valida HTTP.
+                if (!response.ok) {
+                    throw new Error(
+                        resultado.detail
+                        || 'No se pudo cargar el pedido.'
+                    );
                 }
 
-                if (!userId) {
-                    alert('Debe iniciar sesión para cargar un pedido guardado.');
+                // Verifica que exista un pedido guardado.
+                if (!resultado.encontrado) {
+                    alert(
+                        'No se encontró ningún pedido guardado para este usuario.'
+                    );
                     return;
                 }
 
-                // Consulta la cabecera ordenando por updated_at descendente para obtener el registro más reciente
-                const { data: analisis, error } = await supabaseClient
-                    .from('analisis_pedidos')
-                    .select('*')
-                    .eq('usuario_id', userId)
-                    .order('updated_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle();
+                // Extrae las estructuras recibidas.
+                const analisis = resultado.analisis || {};
+                const proveedor = resultado.proveedor || {};
+                const detalles = resultado.detalles || [];
+                const productos = resultado.productos || [];
 
-                if (error || !analisis) {
-                    alert("No se encontró ningún pedido guardado para este usuario.");
-                    return;
+                // Restaura días de cobertura.
+                const inputDias = document.getElementById(
+                    'dias_cobertura'
+                );
+
+                if (
+                    inputDias
+                    && analisis.dias_cobertura !== null
+                    && analisis.dias_cobertura !== undefined
+                ) {
+                    inputDias.value = analisis.dias_cobertura;
                 }
 
-                // Restaura días de cobertura y proveedor
-                if (analisis.dias_cobertura && document.getElementById('dias_cobertura')) {
-                    document.getElementById('dias_cobertura').value = analisis.dias_cobertura;
+                // Restaura el proveedor.
+                const inputProvId = document.getElementById(
+                    'proveedor_id_analisis'
+                );
+
+                if (inputProvId) {
+                    inputProvId.value =
+                        analisis.proveedor_id || '';
                 }
 
-                if (analisis.proveedor_id) {
-                    const inputProvId = document.getElementById('proveedor_id_analisis');
-                    if (inputProvId) inputProvId.value = analisis.proveedor_id;
+                // Restaura el nombre visible.
+                const inputProvNombre = document.getElementById(
+                    'buscar_proveedor_analisis'
+                );
 
-                    const { data: prov } = await supabaseClient
-                        .from('proveedores')
-                        .select('nombre')
-                        .eq('id', analisis.proveedor_id)
-                        .maybeSingle();
+                if (inputProvNombre) {
+                    inputProvNombre.value =
+                        proveedor.nombre || '';
+                }
 
-                    if (prov && document.getElementById('buscar_proveedor_analisis')) {
-                        document.getElementById('buscar_proveedor_analisis').value = prov.nombre;
+                // Limpia la matriz anterior.
+                if (typeof matrizTiendas !== 'undefined') {
+                    for (const key in matrizTiendas) {
+                        delete matrizTiendas[key];
                     }
                 }
 
-                // Consulta el detalle guardado para el ID del análisis recuperado
-                const { data: detalles, error: detallesError } = await supabaseClient
-                    .from('analisis_pedidos_detalle')
-                    .select('*')
-                    .eq('analisis_id', analisis.id);
+                // Limpia las filas actuales.
+                const tbody = document.getElementById(
+                    'filas-tabla-analisis'
+                );
 
-                if (detallesError) throw detallesError;
+                if (tbody) {
+                    tbody.innerHTML = '';
+                }
 
-                if (detalles && detalles.length > 0) {
-                    // Vacía completamente la memoria global para descarta cualquier pedido o fila previa
-                    if (typeof matrizTiendas !== 'undefined') {
-                        for (const key in matrizTiendas) {
-                            delete matrizTiendas[key];
+                // Mapea productos por código para acceso inmediato.
+                const productosMap = new Map(
+                    productos.map(producto => [
+                        normalizarCodigoAnalisis(
+                            producto.codigo_st
+                        ),
+                        producto
+                    ])
+                );
+
+                // Obtiene códigos únicos del pedido.
+                const codigosUnicos = [
+                    ...new Set(
+                        detalles
+                            .map(item =>
+                                normalizarCodigoAnalisis(
+                                    item.codigo
+                                )
+                            )
+                            .filter(Boolean)
+                    )
+                ];
+
+                // Crea las filas sin realizar una petición por producto.
+                codigosUnicos.forEach(codigo => {
+                    const tr = agregarFilaAnalisis();
+
+                    const inpCod = tr.querySelector(
+                        '.inp-codigo'
+                    );
+
+                    const inpDesc = tr.querySelector(
+                        '.inp-desc'
+                    );
+
+                    const inpPre = tr.querySelector(
+                        '.inp-pre'
+                    );
+
+                    const inpCosto = tr.querySelector(
+                        '.inp-costo'
+                    );
+
+                    const producto = productosMap.get(
+                        codigo
+                    );
+
+                    // Escribe el código.
+                    if (inpCod) {
+                        inpCod.value = codigo;
+                    }
+
+                    // Restaura información del producto.
+                    if (producto) {
+                        if (inpDesc) {
+                            inpDesc.value =
+                                producto.descripcion || '';
                         }
-                    }
 
-                    // 1. Limpiar el contenido actual de la tabla HTML para evitar filas vacías
-                    const tbody = document.getElementById('filas-tabla-analisis');
-                    if (tbody) tbody.innerHTML = '';
+                        if (inpPre) {
+                            inpPre.value =
+                                producto.unidad_manejo || 1;
 
-                    // 2. Extraer la lista de códigos válidos descartando nulos/vacíos
-                    const codigosUnicos = [...new Set(detalles.map(d => d.codigo))]
-                        .filter(c => c && String(c).trim().toUpperCase() !== 'NULL' && String(c).trim() !== '');
+                            inpPre.dataset.original =
+                                producto.unidad_manejo || 1;
+                        }
 
-                    // 3. Generar únicamente las filas de productos válidos e importar su información
-                    for (const codigo of codigosUnicos) {
-                        const tr = agregarFilaAnalisis(); // Inserta una nueva fila en la tabla visual
-                        const inpCod = tr.querySelector('.inp-codigo'); // Captura el campo input del código
+                        if (inpCosto) {
+                            const precio =
+                                Number(producto.precio || 0)
+                                    .toFixed(2);
+
+                            inpCosto.value = precio;
+                            inpCosto.dataset.original =
+                                precio;
+                        }
+
+                        // Bloquea el código restaurado.
                         if (inpCod) {
-                            inpCod.value = codigo; // Asigna el código verificado
-                            await consultarProductoCodigo(inpCod); // Consulta descripción, costo y empaque en la API
+                            bloquearCeldaCodigo(inpCod);
+                        }
+                    } else {
+                        // Mantiene el código aunque el producto ya no exista.
+                        if (inpDesc) {
+                            inpDesc.value =
+                                'PRODUCTO NO ENCONTRADO';
+                        }
+
+                        if (inpPre) {
+                            inpPre.value = 1;
+                        }
+
+                        if (inpCosto) {
+                            inpCosto.value = '0.00';
                         }
                     }
+                });
 
-                    // 4. Asignar las cantidades guardadas a la matriz en memoria
-                    detalles.forEach(item => {
-                        if (typeof asegurarEstructuraTienda === 'function') {
-                            asegurarEstructuraTienda(item.sede);
-                        } else if (!matrizTiendas[item.sede]) {
-                            matrizTiendas[item.sede] = {};
-                        }
+                // Restaura cantidades por sede.
+                detalles.forEach(item => {
+                    const sede = String(
+                        item.sede || ''
+                    ).trim().toUpperCase();
 
-                        if (!matrizTiendas[item.sede][item.codigo]) {
-                            matrizTiendas[item.sede][item.codigo] = {};
-                        }
+                    const codigo = normalizarCodigoAnalisis(
+                        item.codigo
+                    );
 
-                        matrizTiendas[item.sede][item.codigo].invEmp = item.sugerido || 0; // Restaura empaques de inventario
-                        matrizTiendas[item.sede][item.codigo].emp = item.pedido_final || 0; // Restaura empaques de pedido
-                    });
+                    // Ignora registros incompletos.
+                    if (!sede || !codigo) return;
 
-                    // 5. Renderizar los datos en la pantalla para la tienda activa
-                    if (typeof cargarEstadoTablaDesdeMemoria === 'function') {
-                        cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
+                    // Garantiza la estructura de memoria.
+                    asegurarEstructuraTienda(sede);
+
+                    // Inicializa el producto.
+                    if (!matrizTiendas[sede][codigo]) {
+                        matrizTiendas[sede][codigo] = {};
                     }
 
-                    alert('✅ Pedido cargado exitosamente.');
-                } else {
-                    alert('El registro de pedido está vacío o no contiene detalle de productos.');
+                    // Restaura inventario/empaque.
+                    matrizTiendas[sede][codigo].invEmp =
+                        parseFloat(item.sugerido) || 0;
+
+                    // Restaura pedido final.
+                    matrizTiendas[sede][codigo].emp =
+                        parseFloat(item.pedido_final) || 0;
+                });
+
+                // Carga clasificación si existe proveedor.
+                if (
+                    analisis.proveedor_id
+                    && typeof cargarClasificacionProveedor
+                    === 'function'
+                ) {
+                    await cargarClasificacionProveedor(
+                        analisis.proveedor_id
+                    );
                 }
+
+                // Carga únicamente ventas de los productos restaurados.
+                await cargarVentasStellarEnMemoria(
+                    codigosUnicos
+                );
+
+                // Refresca la tienda activa.
+                if (
+                    typeof cargarEstadoTablaDesdeMemoria
+                    === 'function'
+                ) {
+                    cargarEstadoTablaDesdeMemoria(
+                        tiendaActivaPestana
+                    );
+                }
+
+                // Recalcula sugeridos usando solo memoria.
+                ejecutarCalculoSugeridosSync();
+
+                // Confirma restauración.
+                alert(
+                    '✅ Pedido cargado exitosamente.'
+                );
+
             } catch (err) {
-                console.error('Error al cargar pedido:', err);
-                alert('❌ Error de Supabase al cargar: ' + (err.message || JSON.stringify(err)));
+                // Registra el error completo.
+                console.error(
+                    'Error al cargar pedido:',
+                    err
+                );
+
+                // Muestra un mensaje amigable.
+                alert(
+                    '❌ Error al cargar: '
+                    + (err.message || 'Error desconocido.')
+                );
             }
         }
 
@@ -2692,8 +2840,13 @@ ${nodosProductosXML.join('\n')}
 
                 alert(`Ventas actualizadas exitosamente (${result.procesados} registros).`);
 
-                // Recargar matriz en memoria llamando al backend
-                await cargarVentasStellarEnMemoria();
+                // Invalida la caché de ventas porque el CSV cambió los datos.
+                ventasStellarCodigosCargados.clear();
+
+                // Vuelve a consultar únicamente los códigos visibles.
+                await cargarVentasStellarEnMemoria(
+                    obtenerCodigosTablaAnalisis()
+                );
 
             } catch (error) {
                 console.error('Error en la petición:', error);
@@ -2704,39 +2857,181 @@ ${nodosProductosXML.join('\n')}
         }
 
 
-        async function cargarVentasStellarEnMemoria() {
+        // Guarda qué códigos ya fueron consultados en Supabase.
+        let ventasStellarCodigosCargados = new Set();
+
+
+        // Obtiene los códigos visibles actualmente en la tabla.
+        function obtenerCodigosTablaAnalisis() {
+            return [
+                ...new Set(
+                    Array.from(
+                        document.querySelectorAll(
+                            '#filas-tabla-analisis .inp-codigo'
+                        )
+                    )
+                        .map(input =>
+                            normalizarCodigoAnalisis(
+                                input.value
+                            )
+                        )
+                        .filter(Boolean)
+                )
+            ];
+        }
+
+
+        // Consulta ventas únicamente para códigos todavía no cargados.
+        async function cargarVentasStellarEnMemoria(
+            codigos = []
+        ) {
+            // Normaliza y elimina códigos repetidos.
+            const codigosNormalizados = [
+                ...new Set(
+                    codigos
+                        .map(codigo =>
+                            normalizarCodigoAnalisis(
+                                codigo
+                            )
+                        )
+                        .filter(Boolean)
+                )
+            ];
+
+            // Solo envía códigos que aún no tenemos en memoria.
+            const codigosPendientes =
+                codigosNormalizados.filter(
+                    codigo =>
+                        !ventasStellarCodigosCargados.has(
+                            codigo
+                        )
+                );
+
+            // Si todos ya están en memoria, no toca la red.
+            if (codigosPendientes.length === 0) {
+                return;
+            }
+
             try {
-                const response = await fetch('/analisis/obtener-ventas-stellar');
+                // Consulta exclusivamente los códigos pendientes.
+                const response = await fetch(
+                    '/analisis/obtener-ventas-stellar',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            codigos: codigosPendientes
+                        })
+                    }
+                );
+
+                // Convierte la respuesta.
                 const result = await response.json();
 
-                // Extrae el array sin importar si FastAPI responde con lista pura o dict con clave 'data'
-                const registros = Array.isArray(result) ? result : (Array.isArray(result?.data) ? result.data : []);
+                // Valida HTTP.
+                if (!response.ok) {
+                    throw new Error(
+                        result.detail
+                        || 'No se pudieron cargar las ventas.'
+                    );
+                }
 
-                if (registros.length === 0) return;
+                // Extrae los registros.
+                const registros = Array.isArray(
+                    result?.data
+                )
+                    ? result.data
+                    : [];
 
+                // Actualiza la matriz con las ventas recibidas.
                 registros.forEach(item => {
-                    if (!item || !item.sede) return;
-
-                    // Normaliza el nombre de la sede y elimina espacios extras
-                    const sedeLimpia = String(item.sede).trim().toUpperCase();
-                    const sedeNormalizada = (sedeLimpia === 'ALIANZA' || sedeLimpia === 'C. ALIANZA') ? 'CIUDAD ALIANZA' : sedeLimpia;
-
-                    // Mantiene el código de texto de 6 dígitos exactamente como viene en BD/CSV
-                    const codigo = normalizarCodigoAnalisis(item.codigo);
-                    if (!codigo) return;
-
-                    // Garantiza que la estructura exista en la matriz para la sede y producto
-                    asegurarEstructuraTienda(sedeNormalizada);
-                    if (!matrizTiendas[sedeNormalizada][codigo]) {
-                        matrizTiendas[sedeNormalizada][codigo] = { invEmp: 0, emp: 0, demandaDiaria: 0 };
+                    // Ignora filas incompletas.
+                    if (!item || !item.sede) {
+                        return;
                     }
 
-                    // Convierte la demanda diaria a un número válido
-                    const demanda = parseFloat(String(item.demanda_diaria || 0).replace(',', '.')) || 0;
-                    matrizTiendas[sedeNormalizada][codigo].demandaDiaria = demanda;
+                    // Normaliza la sede.
+                    const sedeLimpia = String(
+                        item.sede
+                    )
+                        .trim()
+                        .toUpperCase();
+
+                    // Unifica nombres históricos.
+                    const sedeNormalizada =
+                        (
+                            sedeLimpia === 'ALIANZA'
+                            || sedeLimpia === 'C. ALIANZA'
+                        )
+                            ? 'CIUDAD ALIANZA'
+                            : sedeLimpia;
+
+                    // Normaliza código.
+                    const codigo =
+                        normalizarCodigoAnalisis(
+                            item.codigo
+                        );
+
+                    // Ignora códigos inválidos.
+                    if (!codigo) {
+                        return;
+                    }
+
+                    // Crea la estructura de tienda.
+                    asegurarEstructuraTienda(
+                        sedeNormalizada
+                    );
+
+                    // Crea el producto si aún no existe.
+                    if (
+                        !matrizTiendas[
+                        sedeNormalizada
+                        ][codigo]
+                    ) {
+                        matrizTiendas[
+                            sedeNormalizada
+                        ][codigo] = {
+                            invEmp: 0,
+                            emp: 0,
+                            demandaDiaria: 0
+                        };
+                    }
+
+                    // Convierte la demanda recibida.
+                    const demanda =
+                        parseFloat(
+                            String(
+                                item.demanda_diaria
+                                || 0
+                            ).replace(',', '.')
+                        ) || 0;
+
+                    // Guarda la demanda en memoria.
+                    matrizTiendas[
+                        sedeNormalizada
+                    ][codigo].demandaDiaria =
+                        demanda;
                 });
+
+                // Marca también como cargados los códigos sin ventas.
+                codigosPendientes.forEach(
+                    codigo =>
+                        ventasStellarCodigosCargados.add(
+                            codigo
+                        )
+                );
+
             } catch (error) {
-                console.error('Error al cargar ventas en memoria:', error);
+                // Registra el fallo.
+                console.error(
+                    'Error al cargar ventas en memoria:',
+                    error
+                );
+
+                // Propaga el error para que el botón lo maneje.
+                throw error;
             }
         }
 
@@ -2789,22 +3084,62 @@ ${nodosProductosXML.join('\n')}
             cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
         }
 
-        // Ejecuta el cálculo mostrando un Spinner y deshabilitando el botón mientras procesa
         async function calcularSugeridoSedeActual() {
-            const btn = document.getElementById('btn-calcular-sugerido'); // Selecciona el botón de calcular
-            const icono = document.getElementById('icono-btn-calcular'); // Selecciona el icono interno del botón
+            const btn = document.getElementById(
+                'btn-calcular-sugerido'
+            );
 
-            if (btn) btn.disabled = true; // Inhabilita el botón inmediatamente al presionar
-            if (icono) icono.className = 'fa-solid fa-spinner fa-spin'; // Cambia el icono por un Spinner giratorio
+            const icono = document.getElementById(
+                'icono-btn-calcular'
+            );
+
+            // Deshabilita el botón mientras se procesa.
+            if (btn) {
+                btn.disabled = true;
+            }
+
+            // Cambia el icono por spinner.
+            if (icono) {
+                icono.className =
+                    'fa-solid fa-spinner fa-spin';
+            }
 
             try {
-                await cargarVentasStellarEnMemoria(); // Consulta la base de datos de ventas de forma asíncrona
-                ejecutarCalculoSugeridosSync(); // Recalcula las cantidades de inmediato para la tienda actual
+                // Busca códigos visibles que todavía no tengan ventas cargadas.
+                const codigos =
+                    obtenerCodigosTablaAnalisis();
+
+                // Solo consulta Supabase si hay códigos nuevos.
+                await cargarVentasStellarEnMemoria(
+                    codigos
+                );
+
+                // El cálculo se realiza completamente en RAM.
+                ejecutarCalculoSugeridosSync();
+
             } catch (error) {
-                console.error('Error al calcular sugeridos:', error); // Muestra error en consola si falla algo
+                // Registra cualquier fallo.
+                console.error(
+                    'Error al calcular sugeridos:',
+                    error
+                );
+
+                // Informa al usuario.
+                alert(
+                    'No se pudieron cargar las ventas para calcular.'
+                );
+
             } finally {
-                if (btn) btn.disabled = false; // Reasigna la capacidad de presionar el botón
-                if (icono) icono.className = 'fa-solid fa-bolt'; // Restaura el icono original del rayo
+                // Reactiva el botón.
+                if (btn) {
+                    btn.disabled = false;
+                }
+
+                // Restaura el icono.
+                if (icono) {
+                    icono.className =
+                        'fa-solid fa-bolt';
+                }
             }
         }
 
@@ -2814,7 +3149,7 @@ ${nodosProductosXML.join('\n')}
         }
 
         document.addEventListener('DOMContentLoaded', () => {
-            cargarVentasStellarEnMemoria();
+            // Solo prepara la vista inicial.
             cambiarTiendaPestana('CENTRO');
         });
 

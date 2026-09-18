@@ -2,13 +2,14 @@ import io  # Manejo de IO en memoria
 import re  # Expresiones regulares
 import urllib.parse  # Formateo de URL
 import asyncio  # Manejo de concurrencia y reintentos asíncronos
-from typing import Optional  # Tipado
+from typing import List, Optional  # Tipado
 import xml.etree.ElementTree as ET  # Parseador XML
 import pandas as pd  # Lectura de archivos Excel y CSV
 from fastapi import APIRouter, Request, Form, UploadFile, File, Cookie  # FastAPI
 from fastapi.responses import RedirectResponse, JSONResponse  # Respuestas HTTP
 import config
 from config import templates, obtener_usuario_actual, script_alerta_modal  # Dependencias globales
+from models import CodigosProductosRequest  # Modelo para búsquedas masivas
 
 router = APIRouter()
 
@@ -413,6 +414,74 @@ async def buscar_productos_por_descripcion(
         for p in (res.data or [])
     ]
 
+@router.post("/api/productos/buscar-lote")
+async def buscar_productos_por_codigo_lote(
+    payload: CodigosProductosRequest,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    # Verifica la sesión.
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    # Bloquea usuarios no autenticados.
+    if not user:
+        raise JSONResponse(
+            status_code=401,
+            content={"error": "No autorizado"}
+        )
+
+    # Normaliza y deduplica códigos.
+    codigos = list(dict.fromkeys(
+        str(codigo).strip()
+        for codigo in payload.codigos
+        if str(codigo).strip()
+    ))
+
+    # Evita una consulta vacía.
+    if not codigos:
+        return []
+
+    try:
+        # Busca todos los códigos en una sola operación.
+        res = await (
+            config.supabase_async
+            .table("productos")
+            .select(
+                "codigo_st, descripcion, precio, unidad_manejo"
+            )
+            .in_("codigo_st", codigos)
+            .execute()
+        )
+
+        # Devuelve solamente las columnas usadas por Análisis.
+        return [
+            {
+                "codigo_st": producto.get("codigo_st") or "",
+                "descripcion": producto.get("descripcion") or "",
+                "precio": float(
+                    producto.get("precio") or 0.0
+                ),
+                "unidad_manejo": producto.get(
+                    "unidad_manejo"
+                ) or "1"
+            }
+            for producto in (res.data or [])
+        ]
+
+    except Exception as e:
+        # Registra el fallo.
+        print(
+            f"ERROR EN /api/productos/buscar-lote: {str(e)}"
+        )
+
+        raise JSONResponse(
+            status_code=500,
+            content={"error": "Error al consultar productos"}
+        )
+
 @router.get("/api/productos/buscar-codigo/{codigo}")
 async def buscar_producto_por_codigo(
     codigo: str, 
@@ -424,7 +493,13 @@ async def buscar_producto_por_codigo(
         return JSONResponse(status_code=401, content={"encontrado": False})
 
     codigo_limpio = codigo.strip()
-    res = await config.supabase_async.table("productos").select("*").eq("codigo_st", codigo_limpio).execute()
+    res = await (
+    config.supabase_async
+    .table("productos")
+    .select("codigo_st, descripcion, precio, unidad_manejo")
+    .eq("codigo_st", codigo_limpio)
+    .execute()
+)
     
     if res.data and len(res.data) > 0:
         prod = res.data[0]
@@ -437,22 +512,3 @@ async def buscar_producto_por_codigo(
         }
     
     return {"encontrado": False}
-
-    # Endpoint asíncrono para obtener departamento, grupo, subgrupo y marca según el proveedor
-@router.get("/api/clasificacion")
-async def obtener_clasificacion_proveedor(
-    proveedor_id: int, # Recibe el ID del proveedor enviado desde el frontend
-    access_token: str = Cookie(None), # Galleta de autenticación de acceso
-    refresh_token: str = Cookie(None) # Galleta de autenticación de refresco
-):
-    user = await obtener_usuario_actual(access_token, refresh_token) # Verifica el usuario logueado
-    if not user: # Si la sesión expiró o no existe
-        return [] # Devuelve una lista vacía
-
-    # Consulta en Supabase filtrando por proveedor y extrayendo departamento, grupo, subgrupo y marca
-    res = await config.supabase_async.table("productos") \
-        .select("departamento, grupo, subgrupo, marca") \
-        .eq("proveedor_id", proveedor_id) \
-        .execute()
-
-    return res.data or [] # Retorna la lista de clasificaciones
