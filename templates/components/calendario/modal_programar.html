@@ -19,7 +19,7 @@
                 <div class="relative">
                     <input type="text" id="buscar_proveedor_modal" placeholder="Escriba para buscar proveedor..."
                         autocomplete="off" spellcheck="false" oninput="filtrarProveedoresCalendario()"
-                        onfocus="mostrarOpcionesProvCalendario()" onkeydown="navegarProveedoresCalendario(event)"
+                        onclick="mostrarOpcionesProvCalendario()" onkeydown="navegarProveedoresCalendario(event)"
                         class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs font-semibold focus:ring-2 focus:ring-blue-500 focus:outline-none pr-7">
                     <button type="button" onclick="limpiarProveedorCalendario()" id="btn-limpiar-prov-modal"
                         class="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
@@ -29,16 +29,19 @@
 
                 <div id="opciones_proveedor_modal"
                     class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-50">
-                    <div onclick="seleccionarProveedorCalendario('', '-- Seleccionar Proveedor --')"
-                        class="px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">
+
+                    <!-- Opción para limpiar la selección -->
+                    <button type="button" data-id="" data-nombre=""
+                        class="opcion-prov-modal w-full text-left px-4 py-2 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100">
                         -- Seleccionar Proveedor --
-                    </div>
+                    </button>
+
                     {% for p in proveedores_db %}
-                    <div onclick="seleccionarProveedorCalendario('{{ p.id }}', '{{ p.nombre }}')" data-id="{{ p.id }}"
-                        data-nombre="{{ p.nombre or '' }}"
-                        class="opcion-prov-modal px-4 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">
+                    <!-- Los datos salen del HTML, nunca se ejecutan como JavaScript -->
+                    <button type="button" data-id="{{ p.id }}" data-nombre="{{ p.nombre|e }}"
+                        class="opcion-prov-modal w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600">
                         {{ p.nombre }}
-                    </div>
+                    </button>
                     {% endfor %}
                 </div>
             </div>

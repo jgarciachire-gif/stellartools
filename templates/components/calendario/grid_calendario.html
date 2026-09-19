@@ -1,5 +1,7 @@
-<!-- Cuadrícula de Calendario (Columna Derecha) -->
+<!-- Cuadrícula de Calendario -->
 <div class="lg:col-span-6 bg-white rounded-2xl shadow-sm border border-slate-600 overflow-hidden flex flex-col">
+
+    <!-- Encabezado de días de la semana -->
     <div
         class="grid grid-cols-7 bg-gradient-to-r from-indigo-950 via-slate-800 to-emerald-800 border-b border-slate-600 text-center text-xs font-bold text-slate-100 tracking-wider py-3">
         <div>Domingo</div>
@@ -11,31 +13,57 @@
         <div>Sábado</div>
     </div>
 
+    <!-- ÚNICO x-for del calendario: aquí se mantiene disponible "dia" -->
     <div class="grid grid-cols-7 auto-rows-fr divide-x divide-y divide-slate-300 bg-slate-200/50 flex-1">
-        <template x-for="(dia, index) in diasMes" :key="index">
+
+        <template x-for="dia in diasMes" :key="dia.fechaStr">
+
             <div @click="seleccionarDia(dia.fechaStr)"
-                class="min-h-[110px] bg-white p-2 flex flex-col justify-between transition-all cursor-pointer select-none"
-                :class="{ 
-                    'bg-slate-100/50 opacity-40': !dia.esMesActual, 
+                class="min-h-[110px] bg-white p-2 flex flex-col transition-all cursor-pointer select-none" :class="{
+                    'bg-slate-100/50 opacity-40': !dia.esMesActual,
                     'ring-1 ring-indigo-800 bg-indigo-50/80 shadow-md z-10': diaSeleccionado === dia.fechaStr,
-                    'bg-emerald-100/40': dia.esHoy && diaSeleccionado !== dia.fechaStr 
+                    'bg-emerald-100/40': dia.esHoy && diaSeleccionado !== dia.fechaStr
                 }">
+
+                <!-- Número del día -->
                 <div class="flex items-center justify-between">
-                    <span class="text-xs font-bold px-2 py-0.5 rounded-full"
-                        :class="diaSeleccionado === dia.fechaStr ? 'bg-indigo-600 text-white' : (dia.esHoy ? 'bg-emerald-600 text-white' : 'text-slate-700')"
-                        x-text="dia.numero"></span>
+
+                    <span class="text-xs font-bold px-2 py-0.5 rounded-full" :class="
+                            diaSeleccionado === dia.fechaStr
+                                ? 'bg-indigo-600 text-white'
+                                : (dia.esHoy
+                                    ? 'bg-emerald-600 text-white'
+                                    : 'text-slate-700')
+                        " x-text="dia.numero">
+                    </span>
+
+                    <!-- Cantidad total de eventos -->
+                    <span x-show="obtenerResumenDia(dia.fechaStr).total > 0" x-cloak
+                        class="text-[9px] font-bold text-indigo-500" x-text="obtenerResumenDia(dia.fechaStr).total">
+                    </span>
+
                 </div>
 
-                <div class="mt-2 flex-1 flex items-center justify-center">
-                    <template x-if="obtenerProveedoresAgendadosDia(dia.fechaStr).length > 0">
-                        <div
-                            class="p-1.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1 shadow-2xs w-full">
-                            <span
-                                x-text="`${obtenerProveedoresAgendadosDia(dia.fechaStr).length} Proveedor(es) en planificación.`"></span>
-                        </div>
-                    </template>
+                <!-- Resumen del día -->
+                <div class="mt-2 flex-1 flex flex-col justify-center gap-1">
+
+                    <!-- Muestra hasta 3 proveedores sin otro x-for -->
+                    <div x-show="obtenerResumenDia(dia.fechaStr).eventos.length > 0" x-cloak
+                        class="text-[10px] font-semibold text-slate-700 leading-tight line-clamp-3"
+                        x-text="obtenerResumenDia(dia.fechaStr).eventos.map(evento => evento.proveedor).join(' · ')">
+                    </div>
+
+                    <!-- Indica que existen más eventos -->
+                    <div x-show="obtenerResumenDia(dia.fechaStr).adicionales > 0" x-cloak
+                        class="text-[9px] font-bold text-indigo-600"
+                        x-text="`+${obtenerResumenDia(dia.fechaStr).adicionales} más`">
+                    </div>
+
                 </div>
+
             </div>
+
         </template>
+
     </div>
 </div>

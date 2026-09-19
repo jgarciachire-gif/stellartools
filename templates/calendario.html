@@ -1,8 +1,7 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div x-data="calendarioReposicion()" x-init="cargarProveedoresAPI(); cargarProgramaciones();"
-    class="max-w-8xl mx-auto space-y-8">
+<div x-data="calendarioReposicion()" x-init="cargarCalendario()" class="max-w-8xl mx-auto space-y-8">
 
     <!-- Componente Encabezado -->
     {% include "components/calendario/encabezado.html" %}

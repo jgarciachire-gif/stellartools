@@ -1,22 +1,44 @@
+// Devuelve YYYY-MM-DD usando la fecha local del navegador.
+// Debe estar fuera de calendarioReposicion() para que Alpine pueda encontrarla.
+function fechaLocalKey(fecha = new Date()) {
+    const año = fecha.getFullYear(); // Obtiene el año local
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0'); // Mes local
+    const dia = String(fecha.getDate()).padStart(2, '0'); // Día local
+
+    return `${año}-${mes}-${dia}`; // Devuelve la fecha sin conversión UTC
+}
 // Variable global para almacenar el nombre del usuario desde la sesión
 const USUARIO_NOMBRE_SESION = document.getElementById('usuario-sesion-data')?.dataset.nombre || 'Usuario Sistema';
 
 // Componente principal de Alpine JS para el control del calendario
 function calendarioReposicion() {
     return {
-        fechaActual: new Date(),
-        diaSeleccionado: new Date().toISOString().split('T')[0],
-        modalAbierto: false,
-        programaciones: [],
-        listaProveedoresBD: JSON.parse(document.getElementById('proveedores-data')?.textContent || '[]'),
-        proveedorSeleccionadoId: '',
-        proveedoresAbiertos: {},
+        fechaActual: new Date(), // Mantiene el mes actualmente visualizado
+        diaSeleccionado: fechaLocalKey(), // Usa la fecha local real
+        modalAbierto: false, // Controla el modal de programación
+        eventosCalendario: [], // Guarda las ocurrencias devueltas por FastAPI
+        eventosPorFecha: {}, // Índice rápido fecha -> eventos
+        cargandoCalendario: false, // Indica que se está consultando el servidor
+        solicitudCalendario: 0, // Evita que una respuesta antigua sobrescriba una nueva
+        listaProveedoresBD: JSON.parse(
+            document.getElementById('proveedores-data')?.textContent || '[]'
+        ), // Proveedores precargados en HTML
+        proveedorSeleccionadoId: '', // Conserva el proveedor seleccionado
+        proveedoresAbiertos: {}, // Estado visual de los grupos del panel
+
+
+        esProveedorAbierto(nombreProv) {
+            return !!this.proveedoresAbiertos[nombreProv];
+        },
 
         toggleProveedor(nombreProv) {
-            this.proveedoresAbiertos[nombreProv] = !this.proveedoresAbiertos[nombreProv];
+            // Cambia entre abierto y cerrado para el proveedor seleccionado
+            this.proveedoresAbiertos[nombreProv] =
+                !this.proveedoresAbiertos[nombreProv];
         },
 
         esProveedorAbierto(nombreProv) {
+            // Devuelve el estado actual del proveedor
             return !!this.proveedoresAbiertos[nombreProv];
         },
 
@@ -26,26 +48,31 @@ function calendarioReposicion() {
         },
 
         get diasMes() {
-            const año = this.fechaActual.getFullYear();
-            const mes = this.fechaActual.getMonth();
-            const primerDia = new Date(año, mes, 1);
-            const ultimoDia = new Date(año, mes + 1, 0);
-            const dias = [];
-            const hoyStr = new Date().toISOString().split('T')[0];
+            const año = this.fechaActual.getFullYear(); // Año del mes visible
+            const mes = this.fechaActual.getMonth(); // Mes visible
+            const primerDia = new Date(año, mes, 1); // Primer día del mes
+            const ultimoDia = new Date(año, mes + 1, 0); // Último día del mes
+            const dias = []; // Celdas finales del calendario
+            const hoyStr = fechaLocalKey(); // Fecha actual en horario local
 
+            // Completa los días anteriores del mes
             const diaSemanaInicio = primerDia.getDay();
+
             for (let i = diaSemanaInicio - 1; i >= 0; i--) {
                 const d = new Date(año, mes, -i);
+
                 dias.push({
                     numero: d.getDate(),
-                    fechaStr: d.toISOString().split('T')[0],
+                    fechaStr: fechaLocalKey(d),
                     esMesActual: false,
-                    esHoy: d.toISOString().split('T')[0] === hoyStr
+                    esHoy: fechaLocalKey(d) === hoyStr
                 });
             }
 
+            // Agrega todos los días del mes visible
             for (let i = 1; i <= ultimoDia.getDate(); i++) {
                 const fStr = `${año}-${String(mes + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+
                 dias.push({
                     numero: i,
                     fechaStr: fStr,
@@ -54,18 +81,29 @@ function calendarioReposicion() {
                 });
             }
 
+            // Completa las celdas posteriores necesarias para cerrar la semana
             const celdasRestantes = (7 - (dias.length % 7)) % 7;
+
             for (let i = 1; i <= celdasRestantes; i++) {
                 const d = new Date(año, mes + 1, i);
+
                 dias.push({
                     numero: d.getDate(),
-                    fechaStr: d.toISOString().split('T')[0],
+                    fechaStr: fechaLocalKey(d),
                     esMesActual: false,
-                    esHoy: d.toISOString().split('T')[0] === hoyStr
+                    esHoy: fechaLocalKey(d) === hoyStr
                 });
             }
 
             return dias;
+        },
+
+        get rangoCalendario() {
+            const dias = this.diasMes; // Obtiene las celdas visibles
+            return {
+                inicio: dias[0]?.fechaStr, // Primera fecha visible
+                fin: dias[dias.length - 1]?.fechaStr // Última fecha visible
+            };
         },
 
         seleccionarDia(fechaStr) {
@@ -89,24 +127,55 @@ function calendarioReposicion() {
             }
         },
 
-        async cargarProgramaciones() {
+        async cargarCalendario() {
+            const rango = this.rangoCalendario; // Calcula exactamente lo que el usuario está viendo
+
+            if (!rango.inicio || !rango.fin) return; // Evita peticiones inválidas
+
+            const solicitudActual = ++this.solicitudCalendario; // Identificador de esta consulta
+            this.cargandoCalendario = true; // Activa indicador visual
+
             try {
-                const res = await fetch('/api/programaciones');
-                if (res.ok) {
-                    const datos = await res.json();
-                    this.programaciones = datos.map(item => ({
-                        id: item.id,
-                        proveedor: item.proveedor,
-                        departamento: item.departamento || 'Sin Depto.',
-                        grupo: item.grupo || 'TODOS LOS GRUPOS',
-                        usuarioNombre: item.nombre_comprador || item.usuario_nombre || 'Usuario Desconocido',
-                        usuarioId: item.usuario_id || null,
-                        fechaInicio: item.fecha_inicio,
-                        frecuencia: parseInt(item.frecuencia)
-                    }));
+                const params = new URLSearchParams({
+                    inicio: rango.inicio,
+                    fin: rango.fin
+                });
+
+                const res = await fetch(`/api/calendario?${params.toString()}`, {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!res.ok) {
+                    const errorData = await res.json().catch(() => ({}));
+                    throw new Error(errorData.error || errorData.detail || 'No se pudo cargar el calendario');
                 }
+
+                const eventos = await res.json();
+
+                // Ignora respuestas antiguas cuando el usuario cambia rápidamente de mes
+                if (solicitudActual !== this.solicitudCalendario) return;
+
+                this.eventosCalendario = eventos; // Guarda las ocurrencias recibidas
+
+                // Construye un índice para acceder en O(1) a los eventos de cada fecha
+                this.eventosPorFecha = eventos.reduce((mapa, evento) => {
+                    if (!mapa[evento.fecha]) {
+                        mapa[evento.fecha] = [];
+                    }
+
+                    mapa[evento.fecha].push(evento);
+                    return mapa;
+                }, {});
             } catch (e) {
-                console.error("Error al cargar programaciones:", e);
+                console.error("Error al cargar calendario:", e);
+                this.eventosCalendario = [];
+                this.eventosPorFecha = {};
+            } finally {
+                if (solicitudActual === this.solicitudCalendario) {
+                    this.cargandoCalendario = false; // Finaliza carga solo de la petición vigente
+                }
             }
         },
 
@@ -118,29 +187,56 @@ function calendarioReposicion() {
                 const inputFrecuencia = document.getElementById('frecuencia_pedidos');
                 if (inputFrecuencia) inputFrecuencia.value = '';
                 const inputFecha = document.getElementById('fecha_inicio_modal');
-                if (inputFecha) inputFecha.value = this.diaSeleccionado || new Date().toISOString().split('T')[0];
+                if (inputFecha) inputFecha.value = this.diaSeleccionado || fechaLocalKey();
+
             });
         },
 
         mesAnterior() {
-            this.fechaActual = new Date(this.fechaActual.getFullYear(), this.fechaActual.getMonth() - 1, 1);
+            this.fechaActual = new Date(
+                this.fechaActual.getFullYear(),
+                this.fechaActual.getMonth() - 1,
+                1
+            );
+
+            this.cargarCalendario(); // Recarga únicamente el nuevo rango visible
         },
 
         mesSiguiente() {
-            this.fechaActual = new Date(this.fechaActual.getFullYear(), this.fechaActual.getMonth() + 1, 1);
+            this.fechaActual = new Date(
+                this.fechaActual.getFullYear(),
+                this.fechaActual.getMonth() + 1,
+                1
+            );
+
+            this.cargarCalendario(); // Recarga únicamente el nuevo rango visible
+        },
+
+        irHoy() {
+            const hoy = new Date(); // Obtiene la fecha local actual
+
+            this.fechaActual = new Date(
+                hoy.getFullYear(),
+                hoy.getMonth(),
+                1
+            );
+
+            this.diaSeleccionado = fechaLocalKey(hoy); // Selecciona hoy
+            this.cargarCalendario(); // Vuelve a cargar el rango visible
         },
 
         obtenerProgramacionDia(fechaStr) {
-            const fechaEvaluada = new Date(fechaStr + 'T00:00:00');
-            return this.programaciones.filter(prog => {
-                const fechaInicio = new Date(prog.fechaInicio + 'T00:00:00');
-                if (fechaEvaluada < fechaInicio) return false;
+            return this.eventosPorFecha[fechaStr] || []; // Acceso directo sin recalcular recurrencias
+        },
 
-                const diferenciaTiempo = fechaEvaluada.getTime() - fechaInicio.getTime();
-                const diferenciaDias = Math.round(diferenciaTiempo / (1000 * 3600 * 24));
+        obtenerResumenDia(fechaStr) {
+            const eventos = this.obtenerProgramacionDia(fechaStr); // Recupera eventos del día
 
-                return diferenciaDias % prog.frecuencia === 0;
-            });
+            return {
+                eventos: eventos.slice(0, 3), // Conserva los primeros 3
+                total: eventos.length, // Cantidad total
+                adicionales: Math.max(0, eventos.length - 3) // Cantidad restante
+            };
         },
 
         obtenerProveedoresAgendadosDia(fechaStr) {
@@ -164,6 +260,7 @@ function calendarioReposicion() {
                 if (!mapaGrupos[item.proveedor].usuariosMap[item.usuarioNombre]) {
                     mapaGrupos[item.proveedor].usuariosMap[item.usuarioNombre] = {
                         usuarioNombre: item.usuarioNombre,
+                        esCreador: item.esCreador === true, // Conserva la propiedad real del evento
                         detalles: []
                     };
                 }
@@ -184,69 +281,102 @@ function calendarioReposicion() {
         },
 
         esCreador(usr) {
-            return usr.usuarioNombre === USUARIO_NOMBRE_SESION;
+            return usr.esCreador === true; // El servidor determina quién es realmente propietario
         },
 
         async guardarProgramacion() {
-            const proveedor = document.getElementById('buscar_proveedor_modal')?.value;
-            const departamento = document.getElementById('depto_modal')?.value || '';
-            const grupo = document.getElementById('grupo_modal')?.value || '';
-            const fechaInicio = document.getElementById('fecha_inicio_modal')?.value;
-            const frecuencia = parseInt(document.getElementById('frecuencia_pedidos')?.value) || 0;
+            // El ID oculto es la fuente real del proveedor seleccionado.
+            const proveedorId = document.getElementById('proveedor_id_modal')?.value?.trim() || '';
+            const proveedor = document.getElementById('buscar_proveedor_modal')?.value?.trim() || '';
+            const departamento = document.getElementById('depto_modal')?.value?.trim() || '';
+            const grupo = document.getElementById('grupo_modal')?.value?.trim() || '';
+            const fechaInicio = document.getElementById('fecha_inicio_modal')?.value || '';
+            const frecuencia = parseInt(
+                document.getElementById('frecuencia_pedidos')?.value,
+                10
+            ) || 0;
 
-            if (!proveedor || !fechaInicio || !frecuencia) return;
+            // Valida el ID, no solamente el texto visible.
+            if (!proveedorId) {
+                alert('⚠️ Debe seleccionar un proveedor de la lista.');
+                return;
+            }
+
+            if (!fechaInicio) {
+                alert('⚠️ Debe seleccionar una fecha de inicio.');
+                return;
+            }
+
+            if (!frecuencia || frecuencia < 1) {
+                alert('⚠️ La frecuencia debe ser mayor a 0.');
+                return;
+            }
 
             try {
                 const res = await fetch('/api/programaciones', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({
-                        proveedor,
-                        departamento,
-                        grupo,
-                        nombre_comprador: USUARIO_NOMBRE_SESION,
-                        fechaInicio,
-                        frecuencia
+                        // Envía el ID real del proveedor.
+                        proveedor_id: proveedorId,
+
+                        // Se conserva también el nombre por compatibilidad.
+                        proveedor: proveedor,
+
+                        departamento: departamento,
+                        grupo: grupo,
+                        fechaInicio: fechaInicio,
+                        frecuencia: frecuencia
                     })
                 });
 
-                if (res.ok) {
-                    const creado = await res.json();
-                    const nuevoItem = {
-                        id: creado.id,
-                        proveedor: creado.proveedor,
-                        departamento: creado.departamento || departamento || 'Sin Depto.',
-                        grupo: creado.grupo || grupo || 'Sin Grupo',
-                        usuarioNombre: creado.nombre_comprador || USUARIO_NOMBRE_SESION,
-                        usuarioId: creado.usuario_id || null,
-                        fechaInicio: creado.fecha_inicio,
-                        frecuencia: parseInt(creado.frecuencia)
-                    };
+                const resultado = await res.json().catch(() => ({}));
 
-                    const idx = this.programaciones.findIndex(p => p.id === creado.id);
-                    if (idx !== -1) {
-                        this.programaciones[idx] = nuevoItem;
-                    } else {
-                        this.programaciones.push(nuevoItem);
-                    }
-
-                    this.modalAbierto = false;
+                if (!res.ok) {
+                    throw new Error(
+                        resultado.error ||
+                        resultado.detail ||
+                        'No se pudo guardar la programación.'
+                    );
                 }
+
+                // El servidor queda como fuente de verdad.
+                await this.cargarCalendario();
+
+                this.modalAbierto = false;
+
             } catch (e) {
-                console.error("Error al guardar programación:", e);
+                console.error('Error al guardar programación:', e);
+                alert(`❌ ${e.message}`);
             }
         },
 
         async eliminarProgramacion(id) {
             try {
-                const res = await fetch(`/api/programaciones/${id}`, { method: 'DELETE' });
-                if (res.ok) {
-                    this.programaciones = this.programaciones.filter(p => p.id !== id);
+                const res = await fetch(`/api/programaciones/${id}`, {
+                    method: 'DELETE',
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const resultado = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                    throw new Error(
+                        resultado.error ||
+                        'No se pudo eliminar la programación.'
+                    );
                 }
+
+                await this.cargarCalendario(); // Refresca el calendario desde la fuente real
             } catch (e) {
                 console.error("Error al eliminar programación:", e);
+                alert(e.message || 'No se pudo eliminar la programación.');
             }
-        }
+        },
     };
 }
 
@@ -314,10 +444,15 @@ async function seleccionarProveedorCalendario(id, nombre) {
     const inputId = document.getElementById('proveedor_id_modal');
     const inputFrecuencia = document.getElementById('frecuencia_pedidos');
 
-    if (inputId) inputId.value = id;
+    // Guarda el ID real seleccionado.
+    if (inputId) {
+        inputId.value = String(id || '');
+    }
+
     if (inputBuscar) {
         inputBuscar.value = id ? nombre : '';
         inputBuscar.readOnly = !!id;
+
         if (id) {
             inputBuscar.classList.add('bg-slate-100', 'cursor-default');
         } else {
@@ -326,7 +461,10 @@ async function seleccionarProveedorCalendario(id, nombre) {
     }
 
     const dropdown = document.getElementById('opciones_proveedor_modal');
-    if (dropdown) dropdown.classList.add('hidden');
+
+    if (dropdown) {
+        dropdown.classList.add('hidden');
+    }
 
     if (!id) {
         if (inputFrecuencia) inputFrecuencia.value = '';
@@ -348,17 +486,68 @@ async function seleccionarProveedorCalendario(id, nombre) {
 
 function limpiarProveedorCalendario() {
     seleccionarProveedorCalendario('', '');
+
     const inputBuscar = document.getElementById('buscar_proveedor_modal');
+
     if (inputBuscar) {
         inputBuscar.value = '';
-        inputBuscar.focus();
+
+        // No hacemos focus aquí para evitar abrir el desplegable al abrir el modal.
+        inputBuscar.blur();
+    }
+
+    const dropdown = document.getElementById('opciones_proveedor_modal');
+
+    if (dropdown) {
+        dropdown.classList.add('hidden');
     }
 }
 
 document.addEventListener('click', function (e) {
+    const elemento = e.target instanceof Element
+        ? e.target
+        : null; // Evita errores si el target no es un elemento HTML
+
+    // Procesa selección segura de proveedor
+    const opcionProveedor = elemento?.closest('.opcion-prov-modal');
+    // Procesa selección segura de departamento
+    const opcionDepto = elemento?.closest('.opcion-depto-modal');
+
+    if (opcionDepto) {
+        seleccionarDeptoModal(
+            opcionDepto.dataset.valor || '',
+            opcionDepto.dataset.label || ''
+        );
+
+        return;
+    }
+
+    // Procesa selección segura de grupo
+    const opcionGrupo = elemento?.closest('.opcion-grupo-modal');
+
+    if (opcionGrupo) {
+        seleccionarGrupoModal(
+            opcionGrupo.dataset.valor || '',
+            opcionGrupo.dataset.label || ''
+        );
+
+        return;
+    }
+
+    if (opcionProveedor) {
+        seleccionarProveedorCalendario(
+            opcionProveedor.dataset.id || '',
+            opcionProveedor.dataset.nombre || ''
+        );
+
+        return;
+    }
+
+    // Mantiene el cierre automático del dropdown
     const combo = document.getElementById('combo-proveedor-modal');
     const dropdown = document.getElementById('opciones_proveedor_modal');
-    if (combo && dropdown && !combo.contains(e.target)) {
+
+    if (combo && dropdown && !combo.contains(elemento)) {
         dropdown.classList.add('hidden');
     }
 });
@@ -383,20 +572,50 @@ async function cargarClasificacionProveedorModal(proveedorId) {
 function poblarDepartamentosModal() {
     const container = document.getElementById('opciones_depto_modal');
     const inpDepto = document.getElementById('buscar_depto_modal');
+
     if (!container || !inpDepto) return;
 
-    const deptos = [...new Set(datosClasificacionModal.map(item => item.departamento))].filter(Boolean);
+    container.innerHTML = ''; // Limpia las opciones anteriores
 
-    if (deptos.length > 0) {
-        inpDepto.disabled = false;
-        let html = `<div onclick="seleccionarDeptoModal('', 'Todos los departamentos')" class="px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 cursor-pointer border-b border-slate-100">Todos los departamentos</div>`;
-        deptos.forEach(d => {
-            html += `<div onclick="seleccionarDeptoModal('${d}', '${d}')" data-nombre="${d.toLowerCase()}" class="opcion-depto-modal px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${d}</div>`;
-        });
-        container.innerHTML = html;
-    } else {
+    const deptos = [...new Set(
+        datosClasificacionModal
+            .map(item => String(item.departamento || '').trim())
+            .filter(Boolean)
+    )];
+
+    if (deptos.length === 0) {
         inpDepto.disabled = true;
+        return;
     }
+
+    inpDepto.disabled = false;
+
+    // Opción general
+    const todos = document.createElement('button');
+    todos.type = 'button';
+    todos.className =
+        'opcion-depto-modal w-full text-left px-3 py-1.5 text-xs text-slate-400 hover:bg-slate-50 border-b border-slate-100';
+    todos.dataset.nombre = 'todos los departamentos';
+    todos.dataset.valor = '';
+    todos.dataset.label = 'Todos los departamentos';
+    todos.textContent = 'Todos los departamentos';
+    container.appendChild(todos);
+
+    // Crea cada departamento sin innerHTML ejecutable
+    deptos.forEach(depto => {
+        const opcion = document.createElement('button');
+
+        opcion.type = 'button';
+        opcion.className =
+            'opcion-depto-modal w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600';
+
+        opcion.dataset.nombre = depto.toLowerCase();
+        opcion.dataset.valor = depto;
+        opcion.dataset.label = depto;
+        opcion.textContent = depto;
+
+        container.appendChild(opcion);
+    });
 }
 
 function seleccionarDeptoModal(val, label) {
@@ -417,17 +636,46 @@ function seleccionarDeptoModal(val, label) {
 
 function poblarGruposModal(deptoSel) {
     const container = document.getElementById('opciones_grupo_modal');
+
     if (!container) return;
 
-    const grupos = [...new Set(datosClasificacionModal.filter(item => item.departamento === deptoSel).map(item => item.grupo))].filter(Boolean);
+    container.innerHTML = ''; // Limpia las opciones anteriores
 
-    let html = `<div onclick="seleccionarGrupoModal('Todos los Grupos', 'Todos los Grupos')" data-nombre="todos los grupos" class="opcion-grupo-modal px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-blue-50 cursor-pointer border-b border-slate-100">TODOS LOS GRUPOS</div>`;
-    grupos.forEach(g => {
-        if (g !== 'TODOS LOS GRUPOS') {
-            html += `<div onclick="seleccionarGrupoModal('${g}', '${g}')" data-nombre="${g.toLowerCase()}" class="opcion-grupo-modal px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer">${g}</div>`;
-        }
+    const grupos = [...new Set(
+        datosClasificacionModal
+            .filter(item => item.departamento === deptoSel)
+            .map(item => String(item.grupo || '').trim())
+            .filter(Boolean)
+    )];
+
+    // Opción general
+    const todos = document.createElement('button');
+    todos.type = 'button';
+    todos.className =
+        'opcion-grupo-modal w-full text-left px-3 py-1.5 text-xs font-semibold text-indigo-600 hover:bg-blue-50 border-b border-slate-100';
+    todos.dataset.nombre = 'todos los grupos';
+    todos.dataset.valor = 'TODOS LOS GRUPOS';
+    todos.dataset.label = 'TODOS LOS GRUPOS';
+    todos.textContent = 'TODOS LOS GRUPOS';
+    container.appendChild(todos);
+
+    // Agrega grupos reales
+    grupos.forEach(grupo => {
+        if (grupo === 'TODOS LOS GRUPOS') return;
+
+        const opcion = document.createElement('button');
+
+        opcion.type = 'button';
+        opcion.className =
+            'opcion-grupo-modal w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-600';
+
+        opcion.dataset.nombre = grupo.toLowerCase();
+        opcion.dataset.valor = grupo;
+        opcion.dataset.label = grupo;
+        opcion.textContent = grupo;
+
+        container.appendChild(opcion);
     });
-    container.innerHTML = html;
 }
 
 function seleccionarGrupoModal(val, label) {

@@ -10,13 +10,30 @@
     </h1>
 
     <!-- Controles para navegar entre meses -->
-    <div class="flex items-center gap-3">
-        <button @click="mesAnterior()" class="p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
+    <div class="flex items-center gap-2">
+        <!-- Vuelve inmediatamente al mes actual -->
+        <button type="button" @click="irHoy()"
+            class="px-3 py-2 rounded-xl text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors">
+            Hoy
+        </button>
+
+        <!-- Retrocede un mes -->
+        <button type="button" @click="mesAnterior()" class="p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
             <i class="fa-solid fa-chevron-left text-slate-600"></i>
         </button>
-        <span class="text-lg font-bold text-slate-700 min-w-[160px] text-center" x-text="nombreMesAno"></span>
-        <button @click="mesSiguiente()" class="p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
+
+        <!-- Mes actualmente visualizado -->
+        <span class="text-lg font-bold text-slate-700 min-w-[160px] text-center" x-text="nombreMesAno">
+        </span>
+
+        <!-- Avanza un mes -->
+        <button type="button" @click="mesSiguiente()" class="p-2.5 rounded-xl hover:bg-slate-50 transition-colors">
             <i class="fa-solid fa-chevron-right text-slate-600"></i>
         </button>
+
+        <!-- Indicador pequeño de carga -->
+        <span x-show="cargandoCalendario" x-cloak class="text-xs text-slate-400" title="Actualizando calendario">
+            <i class="fa-solid fa-spinner fa-spin"></i>
+        </span>
     </div>
 </div>
