@@ -31,12 +31,17 @@ async def dashboard(
     if not user:
         return RedirectResponse(url="/login", status_code=303)  
 
-    # Consulta ASÍNCRONA sin bloquear el Event Loop de FastAPI
-    res_oc = await config.supabase_async.table("ordenes_compra") \
-        .select("*, proveedores(nombre)") \
-        .eq("usuario_id", user.id) \
-        .order("id", desc=False) \
+    res_oc = await (
+        config.supabase_async
+        .table("ordenes_compra")
+        .select(
+            "id, proveedor, tienda_destino, numero_orden, "
+            "fecha_recepcion, dias_inventario, proveedores(nombre)"
+        )
+        .eq("usuario_id", user.id)
+        .order("id", desc=False)
         .execute()
+    )
     
     proveedores_desglose = {}
     hoy = datetime.now().date()  

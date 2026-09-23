@@ -296,29 +296,21 @@ async def cargar_lista_productos(
     if not filas_procesadas:
         return RedirectResponse(url="/productos", status_code=303)
 
-    # 4. Consultas asíncronas por lotes (100 productos por viaje HTTP)
-    prod_existentes_map = {}
-    tamanio_lote = 100
+    # ============================================================
+    # 4. PREPARAR DATOS PARA IMPORTACIÓN MASIVA
+    # ============================================================
 
-    for i in range(0, len(codigos_entrada), tamanio_lote):
-        lote_codigos = codigos_entrada[i:i + tamanio_lote]
-        res_lote = await config.supabase_async.table("productos").select("*").in_("codigo_st", lote_codigos).execute()
-        if res_lote.data:
-            for p in res_lote.data:
-                prod_existentes_map[p["codigo_st"]] = p
+    productos_importacion = []
 
-    nuevos_productos = []
-    actualizaciones_productos = []
-
-    # 5. Evaluación de cambios o creaciones
     for item in filas_procesadas:
-        cod = item["codigo_st"]
-        
         costo_raw = item["costo_raw"]
+
         precio_nuevo = 0.0
+
         if pd.notna(costo_raw) and costo_raw != "":
             if isinstance(costo_raw, str):
                 c_limpio = costo_raw.replace(".", "").replace(",", ".")
+
                 try:
                     precio_nuevo = float(c_limpio)
                 except ValueError:
@@ -326,62 +318,68 @@ async def cargar_lista_productos(
             else:
                 try:
                     precio_nuevo = float(costo_raw)
-                except ValueError:
+                except (ValueError, TypeError):
                     precio_nuevo = 0.0
 
-        if cod in prod_existentes_map:
-            existente = prod_existentes_map[cod]
-            cambios = {}
+        productos_importacion.append({
+            "codigo_st": item["codigo_st"],
+            "descripcion": item["descripcion"],
+            "marca": item["marca"],
+            "departamento": item["departamento"],
+            "grupo": item["grupo"],
+            "subgrupo": item["subgrupo"],
+            "proveedor_id": item["proveedor_id"],
+            "precio_nuevo": precio_nuevo
+        })
 
-            campos_evaluar = ["descripcion", "marca", "departamento", "grupo", "subgrupo", "proveedor_id"]
-            for campo in campos_evaluar:
-                valor_bd = existente.get(campo)
-                valor_nuevo = item.get(campo)
-                if (valor_bd is None or str(valor_bd).strip() == "") and (valor_nuevo is not None and str(valor_nuevo).strip() != ""):
-                    cambios[campo] = valor_nuevo
 
-            precio_bd = float(existente.get("precio") or 0.0)
-            if precio_nuevo > 0 and precio_nuevo != precio_bd:
-                cambios["precio"] = precio_nuevo
+    # ============================================================
+    # 5. UNA SOLA OPERACIÓN EN SUPABASE
+    # ============================================================
 
-            if cambios:
-                registro_actualizado = {**existente, **cambios}
-                actualizaciones_productos.append(registro_actualizado)
-        else:
-            nuevos_productos.append({
-                "codigo_st": cod,
-                "descripcion": item["descripcion"],
-                "marca": item["marca"],
-                "unidad_manejo": "UND",
-                "departamento": item["departamento"],
-                "grupo": item["grupo"],
-                "subgrupo": item["subgrupo"],
-                "precio": precio_nuevo,
-                "proveedor_id": item["proveedor_id"]
-            })
+    if productos_importacion:
+        res_importacion = await config.supabase_async.rpc(
+            "importar_productos_masivo",
+            {
+                "p_productos": productos_importacion
+            }
+        ).execute()
 
-    # 6. Insertar productos nuevos en lotes mostrando progreso en consola
-    total_nuevos = len(nuevos_productos) # Total de nuevos a insertar
-    if nuevos_productos:
-        for i in range(0, total_nuevos, tamanio_lote):
-            lote = nuevos_productos[i:i + tamanio_lote] # Sublista de 100 productos
-            await config.supabase_async.table("productos").insert(lote).execute() # Insertar en BD asíncronamente usando la instancia global
-            print(f"--> [NUEVOS] Procesados {min(i + tamanio_lote, total_nuevos)} de {total_nuevos}") # Ver progreso en terminal de VS Code
+        resultado = res_importacion.data or {}
 
-    # 7. Actualizar productos existentes en lotes mostrando progreso en consola
-    total_actualizados = len(actualizaciones_productos) # Total a actualizar
-    if actualizaciones_productos:
-        for i in range(0, total_actualizados, tamanio_lote):
-            lote = actualizaciones_productos[i:i + tamanio_lote] # Sublista de 100 productos
-            await config.supabase_async.table("productos").upsert(lote, on_conflict="id").execute() # Actualizar en BD asíncronamente
-            print(f"--> [ACTUALIZADOS] Procesados {min(i + tamanio_lote, total_actualizados)} de {total_actualizados}") # Ver progreso en terminal
+        total_nuevos = int(resultado.get("creados", 0))
+        total_actualizados = int(resultado.get("actualizados", 0))
 
-    print(f"SUCCESS: Carga finalizada con éxito. ({total_nuevos} creados, {total_actualizados} actualizados)") # Log final en consola
+    else:
+        total_nuevos = 0
+        total_actualizados = 0
 
-    # Redireccionar mostrando mensaje flotante de confirmación en el navegador
-    from config import script_alerta_modal # Helper de mensajes del sistema
-    msj = f"Proceso finalizado: {total_nuevos} productos creados y {total_actualizados} actualizados."
-    return script_alerta_modal("exito", "Carga Completada", msj, "/productos")
+
+    print(
+        "SUCCESS: Carga finalizada con éxito. "
+        f"({total_nuevos} creados, "
+        f"{total_actualizados} actualizados)"
+    )
+
+
+    # ============================================================
+    # 6. MENSAJE DE CONFIRMACIÓN
+    # ============================================================
+
+    from config import script_alerta_modal
+
+    msj = (
+        f"Proceso finalizado: "
+        f"{total_nuevos} productos creados y "
+        f"{total_actualizados} actualizados."
+    )
+
+    return script_alerta_modal(
+        "exito",
+        "Carga Completada",
+        msj,
+        "/productos"
+    )
 
 # Endpoint asíncrono para buscar productos por coincidencia parcial en la descripción
 @router.get("/api/productos/buscar")

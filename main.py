@@ -34,7 +34,11 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
     access_token = request.cookies.get("access_token")  # Verifica si existe la cookie del token de acceso
     
     # Evalúa si la URL consultada es pública o corresponde a recursos estáticos
-    es_publica = any(path.startswith(r) for r in rutas_publicas) or path.startswith("/static") or path.startswith("/.well-known")
+    es_publica = (
+        path in rutas_publicas
+        or path.startswith("/static/")
+        or path.startswith("/.well-known/")
+    )
     
     # Si intenta entrar escribiendo la URL a una vista privada sin credenciales, redirige al login
     if not es_publica and not user and not access_token:
@@ -43,14 +47,23 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
     request.state.user = user  # Asigna el usuario al estado de la petición actual
     request.state.perfil = request.session.get("perfil")  # Asigna el perfil al estado de la petición
 
-    response = await call_next(request)  # Procesa la vista correspondiente
+    response = await call_next(request)
 
-    # Fuerza al navegador a no guardar copia de la página en memoria para anular el botón "Atrás"
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0, private"  # Prohíbe el almacenamiento local
-    response.headers["Pragma"] = "no-cache"  # Compatibilidad con navegadores HTTP/1.0
-    response.headers["Expires"] = "0"  # Expira el contenido inmediatamente
+    # Los recursos estáticos pueden ser reutilizados por el navegador.
+    if path.startswith("/static/"):
+        response.headers["Cache-Control"] = (
+            "public, max-age=86400"
+        )
+        return response
 
-    return response  # Devuelve la respuesta final
+    # Las páginas privadas siguen sin almacenarse en caché.
+    response.headers["Cache-Control"] = (
+        "no-store, no-cache, must-revalidate, max-age=0, private"
+    )
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+
+    return response
 
 # 2. DESPUÉS agregamos SessionMiddleware (se ejecutará primero en cada petición)
 SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta_para_sesiones_local")

@@ -19,11 +19,21 @@ async def listar_ordenes(
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res = await config.supabase_async.table("ordenes_compra") \
-        .select("*, proveedores(nombre, dias_credito), detalles_productos(*)") \
-        .eq("usuario_id", user.id) \
-        .order("fecha_envio", desc=True) \
+    res = await (
+        config.supabase_async
+        .table("ordenes_compra")
+        .select(
+            "id, numero_orden, proveedor, tienda_destino, "
+            "fecha_envio, fecha_recepcion, monto_total, "
+            "estatus, pagada, proveedor_id, "
+            "proveedores(nombre, dias_credito), "
+            "detalles_productos(codigo, descripcion, cantidad, "
+            "precio_unitario, pre, emp)"
+        )
+        .eq("usuario_id", user.id)
+        .order("fecha_envio", desc=True)
         .execute()
+    )
     
     hoy = datetime.now().date()
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
@@ -249,80 +259,116 @@ async def crear_orden(
     refresh_token: str = Cookie(None)
 ):
     user = await obtener_usuario_actual(access_token, refresh_token)
+
     if not user:
-        return JSONResponse(status_code=401, content={"status": "error", "mensaje": "No autorizado"})
+        return JSONResponse(
+            status_code=401,
+            content={
+                "status": "error",
+                "mensaje": "No autorizado"
+            }
+        )
 
     try:
+        # ========================================================
+        # 1. NORMALIZAR DATOS
+        # ========================================================
         monto_total_val = sanitizar_numero(monto_total)
-        dias_inv_val = int(sanitizar_numero(dias_inventario)) if dias_inventario else 15
 
-        f_emision = fecha_emision.strip() if fecha_emision and fecha_emision.strip() else datetime.now().strftime("%Y-%m-%d")
-        f_envio = fecha_envio.strip() if fecha_envio and fecha_envio.strip() else f_emision
-        
+        dias_inv_val = (
+            int(sanitizar_numero(dias_inventario))
+            if dias_inventario
+            else 15
+        )
+
+        f_emision = (
+            fecha_emision.strip()
+            if fecha_emision and fecha_emision.strip()
+            else datetime.now().strftime("%Y-%m-%d")
+        )
+
+        f_envio = (
+            fecha_envio.strip()
+            if fecha_envio and fecha_envio.strip()
+            else f_emision
+        )
+
         num_oc = numero_orden.strip()
-        if num_oc:
-            res_existente = await config.supabase_async.table("ordenes_compra") \
-                .select("id") \
-                .eq("numero_orden", num_oc) \
-                .eq("usuario_id", user.id) \
-                .execute()
-            if res_existente.data:
-                return JSONResponse(status_code=400, content={"status": "error", "mensaje": f"La Orden de Compra N° {num_oc} ya se encuentra registrada."})
-
         prov_nombre = proveedor.strip()
-        res_prov = await config.supabase_async.table("proveedores") \
-            .select("id") \
-            .eq("nombre", prov_nombre) \
-            .execute()
-            
-        if res_prov.data:
-            proveedor_id = res_prov.data[0]["id"]
-        else:
-            res_ins = await config.supabase_async.table("proveedores") \
-                .insert({"nombre": prov_nombre}) \
-                .execute()
-            if not res_ins.data:
-                return JSONResponse(status_code=500, content={"status": "error", "mensaje": "Error al registrar el proveedor en la base de datos."})
-            proveedor_id = res_ins.data[0]["id"]
+        tienda = tienda_destino.strip()
 
-        res_oc = await config.supabase_async.table("ordenes_compra").insert({
-            "usuario_id": user.id,
-            "numero_orden": numero_orden.strip(),
-            "proveedor_id": proveedor_id,
-            "tienda_destino": tienda_destino.strip(),
-            "monto_total": monto_total_val,
-            "fecha_emision": f_emision,
-            "fecha_envio": f_envio,
-            "dias_inventario": dias_inv_val,
-            "estatus": "Enviada"
-        }).execute()
-
-        if not res_oc.data:
-            return JSONResponse(status_code=500, content={"status": "error", "mensaje": "No se pudo guardar la orden de compra."})
-
-        orden_id = res_oc.data[0]["id"]
-
+        # ========================================================
+        # 2. PARSEAR PRODUCTOS
+        # ========================================================
         try:
-            productos = json.loads(productos_json) if isinstance(productos_json, str) else productos_json
+            productos = (
+                json.loads(productos_json)
+                if isinstance(productos_json, str)
+                else productos_json
+            )
         except Exception:
             productos = []
 
-        detalles_a_insertar = []
+        productos_rpc = []
 
-        for prod in productos:
-            codigo_raw = prod.get("codigo") or prod.get("codigo_producto") or prod.get("codigo_st")
-            descripcion = prod.get("descripcion") or prod.get("nombre_producto") or "Sin descripción"
+        for prod in productos or []:
+            codigo_raw = (
+                prod.get("codigo")
+                or prod.get("codigo_producto")
+                or prod.get("codigo_st")
+            )
 
-            emp_val = int(float(sanitizar_numero(prod.get("empaques") or prod.get("emp") or 0)))
-            pre_val = int(float(sanitizar_numero(prod.get("unidad_manejo") or prod.get("pre") or 1)))
+            descripcion = (
+                prod.get("descripcion")
+                or prod.get("nombre_producto")
+                or "Sin descripción"
+            )
 
-            cant_raw = float(sanitizar_numero(prod.get("cantidad") or 0))
-            cant_val = int(emp_val * pre_val) if (emp_val > 0 and pre_val > 0 and cant_raw != (emp_val * pre_val)) else int(round(cant_raw))
+            emp_val = int(
+                float(
+                    sanitizar_numero(
+                        prod.get("empaques")
+                        or prod.get("emp")
+                        or 0
+                    )
+                )
+            )
 
-            precio_final = float(sanitizar_numero(prod.get("precio_unitario") or prod.get("precio") or 0))
+            pre_val = int(
+                float(
+                    sanitizar_numero(
+                        prod.get("unidad_manejo")
+                        or prod.get("pre")
+                        or 1
+                    )
+                )
+            )
 
-            detalles_a_insertar.append({
-                "orden_id": orden_id,
+            cant_raw = float(
+                sanitizar_numero(
+                    prod.get("cantidad") or 0
+                )
+            )
+
+            cant_val = (
+                int(emp_val * pre_val)
+                if (
+                    emp_val > 0
+                    and pre_val > 0
+                    and cant_raw != (emp_val * pre_val)
+                )
+                else int(round(cant_raw))
+            )
+
+            precio_final = float(
+                sanitizar_numero(
+                    prod.get("precio_unitario")
+                    or prod.get("precio")
+                    or 0
+                )
+            )
+
+            productos_rpc.append({
                 "codigo": str(codigo_raw) if codigo_raw else "",
                 "descripcion": descripcion,
                 "cantidad": cant_val,
@@ -331,14 +377,65 @@ async def crear_orden(
                 "emp": emp_val
             })
 
-        if detalles_a_insertar:
-            await config.supabase_async.table("detalles_productos").insert(detalles_a_insertar).execute()
+        # ========================================================
+        # 3. UNA SOLA LLAMADA A SUPABASE
+        # ========================================================
+        res = await config.supabase_async.rpc(
+            "crear_orden_completa",
+            {
+                "p_usuario_id": user.id,
+                "p_numero_orden": num_oc,
+                "p_proveedor": prov_nombre,
+                "p_tienda_destino": tienda,
+                "p_monto_total": monto_total_val,
+                "p_fecha_emision": f_emision,
+                "p_fecha_envio": f_envio,
+                "p_dias_inventario": dias_inv_val,
+                "p_productos": productos_rpc
+            }
+        ).execute()
 
-        return JSONResponse(content={"status": "ok", "mensaje": "Orden guardada con éxito."})
+        if not res.data:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "status": "error",
+                    "mensaje": "No se pudo guardar la orden de compra."
+                }
+            )
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "mensaje": "Orden guardada con éxito."
+            }
+        )
 
     except Exception as e:
-        print(f"[DEBUG CREAR ORDEN ERROR]:\n{traceback.format_exc()}")
-        return JSONResponse(status_code=500, content={"status": "error", "mensaje": str(e)})
+        mensaje = str(e)
+
+        # Mantener el mensaje de duplicado entendible para el usuario.
+        if "ya se encuentra registrada" in mensaje:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "status": "error",
+                    "mensaje": mensaje
+                }
+            )
+
+        print(
+            f"[DEBUG CREAR ORDEN ERROR]:\n"
+            f"{traceback.format_exc()}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "mensaje": mensaje
+            }
+        )
 
 @router.get("/ordenes/obtener_detalle/{numero_orden}")
 async def obtener_detalle_oc(
@@ -350,11 +447,18 @@ async def obtener_detalle_oc(
     if not user:
         return {"status": "error", "mensaje": "No autorizado", "productos": []}
 
-    res = await config.supabase_async.table("ordenes_compra") \
-        .select("*, detalles_productos(*)") \
-        .eq("numero_orden", numero_orden) \
-        .eq("usuario_id", user.id) \
+    res = await (
+        config.supabase_async
+        .table("ordenes_compra")
+        .select(
+            "id, numero_orden, "
+            "detalles_productos(codigo, descripcion, "
+            "cantidad, precio_unitario, pre, emp, unidad_manejo, empaques)"
+        )
+        .eq("numero_orden", numero_orden)
+        .eq("usuario_id", user.id)
         .execute()
+    )
     
     if not res.data:
         return {"status": "error", "mensaje": "Orden no encontrada", "productos": []}

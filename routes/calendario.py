@@ -2,7 +2,7 @@ from datetime import date, timedelta  # Maneja fechas sin depender de la zona ho
 from fastapi import APIRouter, Request, Cookie, Query, HTTPException  # Agrega parámetros y validaciones HTTP
 from fastapi.responses import HTMLResponse, JSONResponse  # Importa respuestas HTML y JSON
 import config
-from config import supabase, templates, obtener_usuario_actual  # Funciones globales de configuración
+from config import templates, obtener_usuario_actual
 
 router = APIRouter()
 
@@ -10,7 +10,15 @@ router = APIRouter()
 async def ver_calendario(request: Request):
     proveedores = []
     try:
-        res = supabase.table("proveedores").select("id, nombre, dias_despacho").order("nombre").execute()
+        client = await config.obtener_supabase_async()
+
+        res = await (
+            client
+            .table("proveedores")
+            .select("id, nombre, dias_despacho")
+            .order("nombre")
+            .execute()
+        )
         proveedores = res.data if res.data else []
     except Exception:
         proveedores = []
@@ -39,9 +47,12 @@ async def listar_eventos_calendario(
     if (fin - inicio).days > 62:
         raise HTTPException(status_code=400, detail="El rango máximo permitido es de 62 días")
 
-    # Recupera solo programaciones que pueden producir eventos dentro del rango visible
-    res = (
-        supabase.table("programacion_reposicion")
+    client = await config.obtener_supabase_async()
+
+    # Solo recuperamos las columnas necesarias para generar eventos.
+    res = await (
+        client
+        .table("programacion_reposicion")
         .select(
             "id, proveedor, departamento, grupo, "
             "nombre_comprador, usuario_id, fecha_inicio, frecuencia"
@@ -174,9 +185,12 @@ async def crear_programacion_api(
             content={"error": "El proveedor seleccionado no es válido"}
         )
 
-    # Consulta el proveedor real en Supabase
-    proveedor_res = (
-        supabase.table("proveedores")
+    client = await config.obtener_supabase_async()
+
+    # Solo recuperamos las columnas necesarias para generar eventos.
+    res = await (
+        client
+        .table("proveedores")
         .select("id, nombre")
         .eq("id", proveedor_id)
         .maybe_single()
@@ -226,9 +240,12 @@ async def crear_programacion_api(
             content={"error": "La frecuencia debe estar entre 1 y 365 días"}
         )
 
-    # Busca una programación existente del mismo usuario y proveedor
-    existente = (
-        supabase.table("programacion_reposicion")
+    client = await config.obtener_supabase_async()
+
+    # Solo recuperamos las columnas necesarias para generar eventos.
+    res = await (
+        client
+        .table("programacion_reposicion")
         .select(
             "id, proveedor, departamento, grupo, "
             "nombre_comprador, usuario_id, fecha_inicio, frecuencia"

@@ -57,7 +57,14 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
         user = auth_res.user
         
         # Consulta de perfil asíncrona
-        res_perfil = await client_async.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+        res_perfil = await (
+            client_async
+            .table("perfiles")
+            .select("usuario_id, nombre_comprador, cargo")
+            .eq("usuario_id", user.id)
+            .maybe_single()
+            .execute()
+        )
         perfil_data = res_perfil.data if res_perfil and res_perfil.data else None
 
         # Almacenamiento en sesión cifrada

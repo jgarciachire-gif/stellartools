@@ -1,8 +1,6 @@
 import os  # Para interactuar con el sistema de archivos y variables de entorno
 import sys  # Para configurar rutas de inclusión del sistema
-import socket  # Para configurar timeouts de red
 import urllib.parse  # Para codificar parámetros en URLs
-import httpx  # Cliente HTTP con soporte de timeout
 from fastapi.templating import Jinja2Templates  # Motor de plantillas Jinja2
 from fastapi.responses import HTMLResponse, RedirectResponse  # Respuestas HTTP personalizadas
 from fastapi import Cookie  # Para inyección de cookies en dependencias
@@ -13,29 +11,25 @@ from supabase import create_async_client  # Cliente asíncrono de Supabase
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-# Parche global para httpx: deshabilita HTTP/2 (causante del cuelgue en Windows) y eleva el timeout de lectura a 60s
-_original_async_init = httpx.AsyncClient.__init__
+# ============================================================
+# TIMEOUTS DE SUPABASE
+# ============================================================
 
-def _patched_async_init(self, *args, **kwargs):
-    kwargs["http2"] = False  # Fuerza el uso de HTTP/1.1 para evitar el ReadTimeout en http2.py
-    kwargs["timeout"] = httpx.Timeout(60.0, connect=30.0)  # Extiende el tiempo de espera de lectura
-    _original_async_init(self, *args, **kwargs)
-
-httpx.AsyncClient.__init__ = _patched_async_init
-# Configuración de timeouts globales de red
-socket.setdefaulttimeout(30.0)
-httpx._config.DEFAULT_TIMEOUT_CONFIG = httpx.Timeout(timeout=60.0, connect=30.0)
+SUPABASE_TIMEOUT = float(os.getenv("SUPABASE_TIMEOUT", "20"))
+SUPABASE_CONNECT_TIMEOUT = float(
+    os.getenv("SUPABASE_CONNECT_TIMEOUT", "5")
+)
 
 # Credenciales y cliente de Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wrcbuseidkupjndpovdd.supabase.co")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA")
 
 supabase: Client = create_client(
-    SUPABASE_URL, 
+    SUPABASE_URL,
     SUPABASE_KEY,
     options=ClientOptions(
-        postgrest_client_timeout=60,
-        storage_client_timeout=60
+        postgrest_client_timeout=SUPABASE_TIMEOUT,
+        storage_client_timeout=SUPABASE_TIMEOUT,
     )
 )
 # Adaptador de almacenamiento en memoria 100% asíncrono para el cliente de Supabase Auth
@@ -63,14 +57,22 @@ async def obtener_supabase_async():
             SUPABASE_KEY,
             options=ClientOptions(
                 storage=AsyncMemoryStorage(),
-                postgrest_client_timeout=60,
-                storage_client_timeout=60
+
+                # Evita mantener solicitudes lentas abiertas indefinidamente.
+                postgrest_client_timeout=SUPABASE_TIMEOUT,
+
+                # Mantiene el mismo límite para Storage.
+                storage_client_timeout=SUPABASE_TIMEOUT,
             )
         )
     return supabase_async
 
-async def obtener_usuario_actual(access_token: str = Cookie(None), refresh_token: str = Cookie(None)):
-    if not access_token and not refresh_token:
+async def obtener_usuario_actual(
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None),
+):
+    # No hay ninguna sesión que validar.
+    if not access_token:
         return None
     try:
         # Obtiene el cliente asíncrono inicializado para validar la cookie de sesión
