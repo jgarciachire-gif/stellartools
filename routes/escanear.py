@@ -305,7 +305,8 @@ async def procesar_pdf(
             precio_unitario = float(p.get("precio_unitario") or 0.0)
 
             # Cruce veloz en memoria local
-            if cod_st in mapa_productos:
+            producto_encontrado = cod_st in mapa_productos
+            if producto_encontrado:
                 prod_db = mapa_productos[cod_st]
                 desc = prod_db.get("descripcion") or desc
                 if precio_unitario == 0.0:
@@ -324,7 +325,10 @@ async def procesar_pdf(
                 "empaques": emp,
                 "cantidad": cant,
                 "precio_unitario": precio_unitario,
-                "subtotal": subtotal
+                "subtotal": subtotal,
+                "encontrado_en_bd": producto_encontrado,
+                "estado_producto": "encontrado" if producto_encontrado else "no_encontrado",
+                "mensaje_catalogo": "" if producto_encontrado else "Producto no encontrado en catálogo"
             })
 
         datos_extraidos["productos"] = prods_procesados

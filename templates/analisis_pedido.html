@@ -1087,53 +1087,141 @@
 
         // --- IMPORTACIÓN MASIVA DE PRODUCTOS A LA TABLA ---
         async function importarProductosAnalisis() {
-            // Obtiene el ID del proveedor seleccionado
-            const proveedorId = document.getElementById('proveedor_id_analisis').value;
+            const proveedorId = document.getElementById(
+                'proveedor_id_analisis'
+            ).value;
+
             if (!proveedorId) return;
 
-            // Lee los parámetros de filtrado seleccionados por el usuario
-            const depto = document.getElementById('depto_analisis').value;
-            const grupo = document.getElementById('grupo_analisis').value;
-            const subgrupo = document.getElementById('subgrupo_analisis').value;
-            const marca = document.getElementById('marca_analisis').value; // Captura la marca seleccionada
+            const depto = document.getElementById(
+                'depto_analisis'
+            ).value;
+
+            const grupo = document.getElementById(
+                'grupo_analisis'
+            ).value;
+
+            const subgrupo = document.getElementById(
+                'subgrupo_analisis'
+            ).value;
+
+            const marca = document.getElementById(
+                'marca_analisis'
+            ).value;
 
             const params = new URLSearchParams({
                 proveedor_id: proveedorId,
                 departamento: depto,
                 grupo: grupo,
                 subgrupo: subgrupo,
-                marca: marca // Envía el filtro de marca a la consulta de importación
+                marca: marca
             });
 
             try {
-                // Petición a la API para obtener el listado de productos
-                const res = await fetch(`/api/productos/importar-analisis?${params.toString()}`);
+                const res = await fetch(
+                    `/api/productos/importar-analisis?${params.toString()}`
+                );
+
+                if (!res.ok) {
+                    throw new Error(
+                        'No se pudo obtener la lista de productos.'
+                    );
+                }
+
                 const productos = await res.json();
 
-                if (!Array.isArray(productos) || productos.length === 0) {
-                    alert('No se encontraron productos para los filtros seleccionados.');
+                if (
+                    !Array.isArray(productos)
+                    || productos.length === 0
+                ) {
+                    alert(
+                        'No se encontraron productos para los filtros seleccionados.'
+                    );
                     return;
                 }
 
-                const tbody = document.getElementById('filas-tabla-analisis');
-                // Obtiene todas las filas presentes actualmente en la tabla
-                const filasExistentes = Array.from(tbody.querySelectorAll('tr'));
+                const tbody = document.getElementById(
+                    'filas-tabla-analisis'
+                );
 
-                // Filtra únicamente aquellas filas cuyo campo de código esté completamente vacío
-                const filasVacias = filasExistentes.filter(tr => {
+                // ========================================================
+                // 1. OBTENER CÓDIGOS YA PRESENTES EN LA TABLA
+                // ========================================================
+
+                const codigosExistentes = new Set(
+                    Array.from(
+                        tbody.querySelectorAll('.inp-codigo')
+                    )
+                        .map(input =>
+                            normalizarCodigoAnalisis(input.value)
+                        )
+                        .filter(Boolean)
+                );
+
+                // ========================================================
+                // 2. ELIMINAR DUPLICADOS DEL RESULTADO DEL FILTRO
+                //    Y OMITIR LOS QUE YA ESTÁN EN LA TABLA
+                // ========================================================
+
+                const productosNuevos = [];
+                const codigosImportados = new Set();
+
+                for (const prod of productos) {
+                    const codigo = normalizarCodigoAnalisis(
+                        prod.codigo
+                    );
+
+                    if (!codigo) continue;
+
+                    // Ya existe en la tabla.
+                    if (codigosExistentes.has(codigo)) {
+                        continue;
+                    }
+
+                    // Evita duplicados dentro de la misma respuesta.
+                    if (codigosImportados.has(codigo)) {
+                        continue;
+                    }
+
+                    codigosImportados.add(codigo);
+
+                    productosNuevos.push({
+                        ...prod,
+                        codigo
+                    });
+                }
+
+                // El filtro puede devolver productos que ya están cargados.
+                // En ese caso no se crea ni modifica ninguna fila.
+                if (productosNuevos.length === 0) {
+                    return;
+                }
+
+                // ========================================================
+                // 3. REUTILIZAR FILAS VACÍAS ANTES DE CREAR NUEVAS
+                // ========================================================
+
+                const filasVacias = Array.from(
+                    tbody.querySelectorAll('tr')
+                ).filter(tr => {
                     const inpCod = tr.querySelector('.inp-codigo');
-                    return inpCod && inpCod.value.trim() === '';
+
+                    return (
+                        inpCod
+                        && !normalizarCodigoAnalisis(
+                            inpCod.value
+                        )
+                    );
                 });
 
-                // Recorre los productos importados e inserta la información slot por slot
-                productos.forEach((prod, index) => {
-                    let tr;
+                // ========================================================
+                // 4. INSERTAR SOLAMENTE LOS PRODUCTOS QUE FALTAN
+                // ========================================================
 
-                    // Si aún quedan filas vacías disponibles arriba, las aprovecha y rellena
-                    if (index < filasVacias.length) {
-                        tr = filasVacias[index];
-                    } else {
-                        // Si los productos superan las filas vacías disponibles, crea filas nuevas
+                productosNuevos.forEach((prod, index) => {
+                    let tr = filasVacias[index];
+
+                    if (!tr) {
                         tr = agregarFilaAnalisis();
                     }
 
@@ -1143,31 +1231,36 @@
                     const inpCosto = tr.querySelector('.inp-costo');
                     const inpEmp = tr.querySelector('.inp-emp');
 
-                    // Asigna los datos obtenidos a la fila elegida
-                    inpCod.value = prod.codigo || '';
+                    inpCod.value = prod.codigo;
                     inpDesc.value = prod.descripcion || '';
                     inpPre.value = prod.unidad_manejo || 1;
-                    inpCosto.value = (prod.precio || 0).toFixed(2);
+                    inpCosto.value = Number(
+                        prod.precio || 0
+                    ).toFixed(2);
 
-                    // Asigna los valores en dataset para controlar cambios futuros
-                    inpPre.dataset.original = prod.unidad_manejo || 1;
-                    inpCosto.dataset.original = (prod.precio || 0).toFixed(2);
+                    inpPre.dataset.original =
+                        inpPre.value;
+
+                    inpCosto.dataset.original =
+                        inpCosto.value;
 
                     inpEmp.value = 0;
 
-                    // Bloquea visualmente la celda de código cargada de la API
                     bloquearCeldaCodigo(inpCod);
-
-                    // Recalcula subtotal y totales generales
-                    calcularFila(inpCod);
                 });
 
-                // Actualiza los totales de la tabla.
+                // Una sola recalculación al finalizar la importación.
                 totalizarAnalisis();
 
             } catch (e) {
-                console.error('Error al importar productos:', e);
-                alert('Ocurrió un error al importar los productos.');
+                console.error(
+                    'Error al importar productos:',
+                    e
+                );
+
+                alert(
+                    'Ocurrió un error al importar los productos.'
+                );
             }
         }
         // Lógica de selección rectangular estilo Excel
@@ -1441,40 +1534,198 @@
             tbody.appendChild(tr);
             return tr;
         }
-        // Maneja el pegado masivo de códigos desde Excel de forma asíncrona y ordenada
         async function manejarPegadoCodigo(e, inputActual) {
-            // Obtiene el texto pegado desde el portapapeles
-            const clipboardData = e.clipboardData || window.clipboardData;
-            const pastedData = clipboardData.getData('Text');
+            const clipboardData =
+                e.clipboardData || window.clipboardData;
 
-            // Separa el texto pegado por saltos de línea y elimina filas vacías
-            const lineas = pastedData.split(/\r\n|\n|\r/).map(l => l.trim()).filter(l => l.length > 0);
+            const pastedData =
+                clipboardData.getData('Text');
 
-            // Si es solo un código, permite el pegado normal por defecto
-            if (lineas.length <= 1) return;
+            const lineas = pastedData
+                .split(/\r\n|\n|\r/)
+                .map(linea => linea.trim())
+                .filter(Boolean);
 
-            // Detiene el pegado por defecto en un solo campo cuando son múltiples filas
+            // Un solo código: mantiene el comportamiento normal.
+            if (lineas.length <= 1) {
+                return;
+            }
+
             e.preventDefault();
+
+            // ========================================================
+            // 1. NORMALIZAR Y DEDUPLICAR CÓDIGOS PEGADOS
+            // ========================================================
+
+            const codigosPegados = [
+                ...new Set(
+                    lineas
+                        .map(codigo =>
+                            normalizarCodigoAnalisis(codigo)
+                        )
+                        .filter(Boolean)
+                )
+            ];
+
+            if (codigosPegados.length === 0) {
+                return;
+            }
+
+            // ========================================================
+            // 2. OMITIR CÓDIGOS QUE YA EXISTEN EN LA TABLA
+            // ========================================================
+
+            const codigosExistentes = new Set(
+                Array.from(
+                    document.querySelectorAll(
+                        '#filas-tabla-analisis .inp-codigo'
+                    )
+                )
+                    .map(input =>
+                        normalizarCodigoAnalisis(input.value)
+                    )
+                    .filter(Boolean)
+            );
+
+            const codigosPendientes =
+                codigosPegados.filter(
+                    codigo => !codigosExistentes.has(codigo)
+                );
+
+            if (codigosPendientes.length === 0) {
+                return;
+            }
+
+            // ========================================================
+            // 3. UNA SOLA CONSULTA HTTP PARA TODOS LOS CÓDIGOS
+            // ========================================================
+
+            let productos = [];
+
+            try {
+                const response = await fetch(
+                    '/api/productos/buscar-lote',
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            codigos: codigosPendientes
+                        })
+                    }
+                );
+
+                const resultado = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        resultado?.error
+                        || 'No se pudieron consultar los productos.'
+                    );
+                }
+
+                productos = Array.isArray(resultado)
+                    ? resultado
+                    : [];
+
+            } catch (error) {
+                console.error(
+                    'Error en búsqueda masiva de productos:',
+                    error
+                );
+
+                alert(
+                    'No se pudieron cargar los códigos pegados.'
+                );
+
+                return;
+            }
+
+            // ========================================================
+            // 4. MAPEAR RESULTADOS PARA ACCESO INMEDIATO
+            // ========================================================
+
+            const productosMap = new Map(
+                productos.map(producto => [
+                    normalizarCodigoAnalisis(
+                        producto.codigo_st
+                    ),
+                    producto
+                ])
+            );
+
+            // ========================================================
+            // 5. LOCALIZAR LA FILA DESDE LA QUE SE PEGÓ
+            // ========================================================
+
+            const tbody = document.getElementById(
+                'filas-tabla-analisis'
+            );
 
             let trActual = inputActual.closest('tr');
 
-            // Recorre cada código esperando la respuesta de la API antes de consultar el siguiente
-            for (const codigo of lineas) {
-                // Si no existen más filas creadas en la tabla, genera una nueva automáticamente
+            // ========================================================
+            // 6. RELLENAR LA TABLA SIN HACER MÁS PETICIONES
+            // ========================================================
+
+            codigosPendientes.forEach(codigo => {
                 if (!trActual) {
                     trActual = agregarFilaAnalisis();
                 }
 
-                const inpCodigo = trActual.querySelector('.inp-codigo');
-                if (inpCodigo) {
-                    inpCodigo.value = codigo;
-                    // Espera la resolución de la consulta HTTP sin saturar la red
-                    await consultarProductoCodigo(inpCodigo);
+                const inpCodigo =
+                    trActual.querySelector('.inp-codigo');
+
+                const inpDesc =
+                    trActual.querySelector('.inp-desc');
+
+                const inpPre =
+                    trActual.querySelector('.inp-pre');
+
+                const inpCosto =
+                    trActual.querySelector('.inp-costo');
+
+                const producto =
+                    productosMap.get(codigo);
+
+                inpCodigo.value = codigo;
+
+                if (producto) {
+                    inpDesc.value =
+                        producto.descripcion || '';
+
+                    inpPre.value =
+                        producto.unidad_manejo || 1;
+
+                    inpCosto.value =
+                        Number(
+                            producto.precio || 0
+                        ).toFixed(2);
+
+                    inpPre.dataset.original =
+                        inpPre.value;
+
+                    inpCosto.dataset.original =
+                        inpCosto.value;
+
+                    bloquearCeldaCodigo(
+                        inpCodigo
+                    );
+                } else {
+                    inpDesc.value =
+                        'PRODUCTO NO ENCONTRADO';
+
+                    inpPre.value = '1';
+                    inpCosto.value = '0.00';
                 }
 
-                // Se desplaza a la siguiente fila de la tabla
-                trActual = trActual.nextElementSibling;
-            }
+                trActual =
+                    trActual.nextElementSibling;
+            });
+
+            // Una sola actualización de totales.
+            totalizarAnalisis();
         }
         // Maneja el pegado masivo de datos numéricos por columna desde Excel
         function manejarPegadoColumna(e, inputActual, tipo) {
@@ -1778,18 +2029,34 @@
                         enfocarYSombrearCelda(siguienteInput);
                     });
                     return;
-                } else if (campoActual === 'pre') {
-                    siguienteInput = tr.querySelector('.inp-emp');
                 } else if (campoActual === 'inv-emp') {
-                    let sigTr = tr.nextElementSibling || agregarFilaAnalisis(); // Obtiene o crea la fila de abajo
-                    siguienteInput = sigTr.querySelector('.inp-inv-emp'); // Enfoca la celda de abajo en la misma columna INV.
+                    const sigTr = tr.nextElementSibling;
+
+                    if (!sigTr) {
+                        return;
+                    }
+
+                    siguienteInput = sigTr.querySelector('.inp-inv-emp');
+
                 } else if (campoActual === 'emp') {
-                    let sigTr = tr.nextElementSibling || agregarFilaAnalisis(); // Obtiene la fila inferior
-                    siguienteInput = sigTr.querySelector('.inp-emp'); // Enfoca la misma columna Emp.
+                    const sigTr = tr.nextElementSibling;
+
+                    if (!sigTr) {
+                        return;
+                    }
+
+                    siguienteInput = sigTr.querySelector('.inp-emp');
+
                 } else if (campoActual === 'uni') {
                     siguienteInput = tr.querySelector('.inp-costo');
+
                 } else if (campoActual === 'costo') {
-                    let sigTr = tr.nextElementSibling || agregarFilaAnalisis();
+                    const sigTr = tr.nextElementSibling;
+
+                    if (!sigTr) {
+                        return;
+                    }
+
                     siguienteInput = sigTr.querySelector('.inp-codigo');
                 }
 
@@ -1814,11 +2081,12 @@
 
                 if (e.key === 'ArrowUp') rIdx = Math.max(0, rIdx - 1);
                 if (e.key === 'ArrowDown') {
-                    rIdx++;
-                    if (rIdx >= filas.length) {
-                        agregarFilaAnalisis();
-                        rIdx = tbody.children.length - 1;
+
+                    if (rIdx >= filas.length - 1) {
+                        return;
                     }
+
+                    rIdx++;
                 }
                 if (e.key === 'ArrowLeft') cIdx = Math.max(0, cIdx - 1);
                 if (e.key === 'ArrowRight') cIdx = Math.min(colIndices.length - 1, cIdx + 1);
