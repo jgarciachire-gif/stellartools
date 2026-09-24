@@ -122,11 +122,33 @@ async def actualizar_orden(
     f_env = fecha_envio if fecha_envio else None
     estatus = "Despacho Recibido" if f_rec else "Enviada"
 
-    await config.supabase_async.table("ordenes_compra").update({
-        "estatus": estatus,
-        "fecha_envio": f_env,
-        "fecha_recepcion": f_rec
-    }).eq("id", orden_id).eq("usuario_id", user.id).execute()
+    # Actualizar la OC actual.
+    await (
+        config.supabase_async
+        .table("ordenes_compra")
+        .update({
+            "estatus": estatus,
+            "fecha_envio": f_env,
+            "fecha_recepcion": f_rec
+        })
+        .eq("id", orden_id)
+        .eq("usuario_id", user.id)
+        .execute()
+    )
+
+    ordenes_marcadas_pagadas = 0
+
+    if f_rec:
+        resultado_pago = await config.supabase_async.rpc(
+            "marcar_ordenes_vencidas_pagadas",
+            {
+                "p_orden_id": orden_id
+            }
+        ).execute()
+
+        ordenes_marcadas_pagadas = int(
+            resultado_pago.data or 0
+        )
     
     if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
         vencimiento_str = ""
@@ -439,46 +461,103 @@ async def crear_orden(
 
 @router.get("/ordenes/obtener_detalle/{numero_orden}")
 async def obtener_detalle_oc(
-    numero_orden: str, 
+    numero_orden: str,
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
-    if not user:
-        return {"status": "error", "mensaje": "No autorizado", "productos": []}
-
-    res = await (
-        config.supabase_async
-        .table("ordenes_compra")
-        .select(
-            "id, numero_orden, "
-            "detalles_productos(codigo, descripcion, "
-            "cantidad, precio_unitario, pre, emp, unidad_manejo, empaques)"
-        )
-        .eq("numero_orden", numero_orden)
-        .eq("usuario_id", user.id)
-        .execute()
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
     )
-    
-    if not res.data:
-        return {"status": "error", "mensaje": "Orden no encontrada", "productos": []}
-    
-    orden = res.data[0]
-    detalles = orden.get("detalles_productos") or []
-    
-    productos_list = []
-    for dp in detalles:
-        productos_list.append({
-            "codigo": dp.get("codigo") or dp.get("codigo_producto") or "-",
-            "descripcion": dp.get("descripcion") or dp.get("nombre_producto") or "Sin descripción",
-            "pre": dp.get("pre") if dp.get("pre") is not None else dp.get("unidad_manejo", 1),
-            "emp": dp.get("emp") if dp.get("emp") is not None else dp.get("empaques", 0),
-            "cantidad": dp.get("cantidad", 0),
-            "precio_unitario": float(dp.get("precio_unitario") or 0.0)
-        })
-            
-    return {
-        "status": "ok",
-        "numero_orden": orden.get("numero_orden"),
-        "productos": productos_list
-    }
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "status": "error",
+                "mensaje": "No autorizado",
+                "productos": []
+            }
+        )
+
+    try:
+        # El número de OC se conserva como texto para mantener ceros iniciales.
+        numero_orden = numero_orden.strip()
+
+        res = await (
+            config.supabase_async
+            .table("ordenes_compra")
+            .select(
+                "id, numero_orden, "
+                "detalles_productos("
+                "codigo, descripcion, cantidad, "
+                "precio_unitario, pre, emp"
+                ")"
+            )
+            .eq("numero_orden", numero_orden)
+            .eq("usuario_id", user.id)
+            .limit(1)
+            .execute()
+        )
+
+        if not res.data:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "status": "error",
+                    "mensaje": "Orden no encontrada",
+                    "productos": []
+                }
+            )
+
+        orden = res.data[0]
+
+        detalles = orden.get("detalles_productos") or []
+
+        productos_list = []
+
+        for dp in detalles:
+            productos_list.append({
+                "codigo": dp.get("codigo") or "-",
+                "descripcion": (
+                    dp.get("descripcion")
+                    or "Sin descripción"
+                ),
+                "pre": (
+                    dp.get("pre")
+                    if dp.get("pre") is not None
+                    else 1
+                ),
+                "emp": (
+                    dp.get("emp")
+                    if dp.get("emp") is not None
+                    else 0
+                ),
+                "cantidad": dp.get("cantidad") or 0,
+                "precio_unitario": float(
+                    dp.get("precio_unitario") or 0
+                )
+            })
+
+        return JSONResponse(
+            content={
+                "status": "ok",
+                "numero_orden": orden.get("numero_orden"),
+                "productos": productos_list
+            }
+        )
+
+    except Exception as e:
+        print(
+            "[DEBUG DETALLE OC ERROR]:\n"
+            f"{traceback.format_exc()}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "status": "error",
+                "mensaje": "Error interno al consultar el detalle de la orden.",
+                "productos": []
+            }
+        )

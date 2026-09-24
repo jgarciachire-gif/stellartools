@@ -420,16 +420,19 @@
         });
     }
 
-    // Función principal de filtrado con rango ampliado de búsqueda
     function filtrarOrdenes() {
         const buscadorOrdenes = document.getElementById('buscador-ordenes');
         const filtroFecha = document.getElementById('filtro-fecha');
         const btnLimpiarFecha = document.getElementById('btn-limpiar-fecha');
         const btnActivarFecha = document.getElementById('btn-activar-fecha');
 
-        const textoInput = buscadorOrdenes ? buscadorOrdenes.value.toLowerCase().trim() : '';
+        const textoInput = buscadorOrdenes
+            ? buscadorOrdenes.value.toLowerCase().trim()
+            : '';
+
         const fecha = filtroFecha ? filtroFecha.value : '';
 
+        // Estado visual del filtro de fecha.
         if (btnLimpiarFecha && btnActivarFecha) {
             if (fecha) {
                 btnLimpiarFecha.classList.remove('hidden');
@@ -446,43 +449,85 @@
 
         detailsElements.forEach(details => {
             let mostrarMes = false;
+
             const rows = details.querySelectorAll('.row-orden');
 
             rows.forEach(row => {
-                // Extrae todo el texto visible de la fila completa para búsqueda global
                 const contenidoCompletoFila = row.textContent.toLowerCase();
 
                 const celdas = row.querySelectorAll('td');
-                if (celdas.length < 9) return;
 
-                const inputEnvio = celdas[4].querySelector('input[type="date"]');
-                const inputRecepcion = celdas[5].querySelector('input[type="date"]');
+                if (celdas.length < 9) {
+                    return;
+                }
 
-                const fechaEnvio = inputEnvio ? inputEnvio.value : '';
-                const fechaRecepcion = inputRecepcion ? inputRecepcion.value : '';
+                const inputEnvio = celdas[4].querySelector(
+                    'input[type="date"]'
+                );
 
-                // 1. Búsqueda por texto libre en cualquier celda o columna
-                const coincideTexto = textoInput === '' || contenidoCompletoFila.includes(textoInput);
+                const inputRecepcion = celdas[5].querySelector(
+                    'input[type="date"]'
+                );
 
-                // 2. Coincidencia estricta con las etiquetas Odoo aplicadas
+                const fechaEnvio = inputEnvio
+                    ? inputEnvio.value
+                    : '';
+
+                const fechaRecepcion = inputRecepcion
+                    ? inputRecepcion.value
+                    : '';
+
+                // 1. Texto libre.
+                const coincideTexto =
+                    textoInput === '' ||
+                    contenidoCompletoFila.includes(textoInput);
+
+                // 2. Etiquetas/filtros activos.
                 const coincideEtiquetas = etiquetasFiltro.every(f => {
                     const val = f.valor.toLowerCase();
+
                     return contenidoCompletoFila.includes(val);
                 });
 
-                // 3. Coincidencia con el selector de fecha
-                const coincideFecha = fecha === "" || fechaEnvio === fecha || fechaRecepcion === fecha;
+                // 3. Fecha.
+                const coincideFecha =
+                    fecha === '' ||
+                    fechaEnvio === fecha ||
+                    fechaRecepcion === fecha;
 
-                if (coincideTexto && coincideEtiquetas && coincideFecha) {
+                const coincideFiltro =
+                    coincideTexto &&
+                    coincideEtiquetas &&
+                    coincideFecha;
+
+                if (coincideFiltro) {
                     row.style.display = '';
                     mostrarMes = true;
                 } else {
                     row.style.display = 'none';
+
+                    // ====================================================
+                    // IMPORTANTE:
+                    // Una fila que sale del filtro ya no puede permanecer
+                    // seleccionada.
+                    // ====================================================
+                    const checkbox = row.querySelector('.select-row');
+
+                    if (checkbox) {
+                        checkbox.checked = false;
+                        row.classList.remove('bg-blue-50/50');
+                    }
                 }
             });
 
             details.style.display = mostrarMes ? '' : 'none';
         });
+
+        // Mantiene selección, contador y botón sincronizados
+        // después de aplicar cualquier filtro.
+        if (typeof actualizarEstadoSeleccion === 'function') {
+            actualizarEstadoSeleccion();
+        }
     }
 
 
@@ -656,150 +701,388 @@
         });
     });
 
-    // Control de Selección Múltiple
+    // ============================================================
+    // CONTROL DE SELECCIÓN MÚLTIPLE
+    // ============================================================
+
     document.addEventListener('DOMContentLoaded', () => {
-        const btnMenuOpciones = document.getElementById('btn-menu-opciones');
-        const dropdownOpciones = document.getElementById('dropdown-opciones');
-        const btnActivarSeleccion = document.getElementById('btn-activar-seleccion');
 
-        const barraSeleccion = document.getElementById('barra-seleccion');
-        const btnCancelarSeleccion = document.getElementById('btn-cancelar-seleccion');
-        const btnSeleccionarTodo = document.getElementById('btn-seleccionar-todo');
-        const btnEliminarSeleccion = document.getElementById('btn-eliminar-seleccion');
-        const contadorSeleccion = document.getElementById('contador-seleccion');
+        const btnMenuOpciones =
+            document.getElementById('btn-menu-opciones');
 
-        const colsSeleccion = document.querySelectorAll('.col-seleccion');
-        const checkboxes = document.querySelectorAll('.chk-orden');
-        const rows = document.querySelectorAll('.row-orden');
+        const dropdownOpciones =
+            document.getElementById('dropdown-opciones');
+
+        const btnActivarSeleccion =
+            document.getElementById('btn-activar-seleccion');
+
+        const barraSeleccion =
+            document.getElementById('barra-seleccion');
+
+        const btnCancelarSeleccion =
+            document.getElementById('btn-cancelar-seleccion');
+
+        const btnSeleccionarTodo =
+            document.getElementById('btn-seleccionar-todo');
+
+        const contadorSeleccion =
+            document.getElementById('contador-seleccion');
+
+        const colsSeleccion =
+            document.querySelectorAll('.col-seleccion');
+
+        const checkboxes =
+            document.querySelectorAll('.select-row');
+
+        const rows =
+            document.querySelectorAll('.row-orden');
+
+
+        // ========================================================
+        // MENÚ DE OPCIONES
+        // ========================================================
 
         if (btnMenuOpciones) {
             btnMenuOpciones.addEventListener('click', (e) => {
                 e.stopPropagation();
-                dropdownOpciones.classList.toggle('hidden');
+
+                if (dropdownOpciones) {
+                    dropdownOpciones.classList.toggle('hidden');
+                }
             });
         }
 
-        document.addEventListener('click', () => {
-            if (dropdownOpciones) dropdownOpciones.classList.add('hidden');
-        });
 
-        function actualizarContador() {
-            // Unifica el selector a .select-row
-            const checkboxesSeleccionados = document.querySelectorAll('.select-row:checked');
-            const seleccionados = checkboxesSeleccionados.length;
+        // ========================================================
+        // ACTUALIZAR ESTADO DE SELECCIÓN
+        // ========================================================
+
+        window.actualizarEstadoSeleccion = function () {
+
+            const filasVisibles = Array.from(
+                document.querySelectorAll('.row-orden')
+            ).filter(row => row.style.display !== 'none');
+
+
+            const checkboxesVisibles =
+                filasVisibles
+                    .map(row => row.querySelector('.select-row'))
+                    .filter(Boolean);
+
+
+            const seleccionadosVisibles =
+                checkboxesVisibles.filter(chk => chk.checked);
+
+
+            const cantidadSeleccionados =
+                seleccionadosVisibles.length;
+
+
+            // ----------------------------------------------------
+            // Contador
+            // ----------------------------------------------------
 
             if (contadorSeleccion) {
-                contadorSeleccion.textContent = `${seleccionados} seleccionado${seleccionados !== 1 ? 's' : ''}`;
+                contadorSeleccion.textContent =
+                    `${cantidadSeleccionados} seleccionado` +
+                    `${cantidadSeleccionados !== 1 ? 's' : ''}`;
             }
 
-            // Sincroniza los IDs globales
-            ordenesAEliminarIds = Array.from(checkboxesSeleccionados)
-                .map(cb => parseInt(cb.getAttribute('data-id') || cb.value))
-                .filter(id => !isNaN(id));
 
-            console.log("[CLIENTE] IDs listos para eliminar:", ordenesAEliminarIds);
+            // ----------------------------------------------------
+            // Sincronizar IDs
+            //
+            // SOLO toma filas actualmente visibles.
+            // ----------------------------------------------------
 
-            // Controla la habilitación del botón
-            const btnEliminar = document.getElementById('btnEliminarMasivo');
+            ordenesAEliminarIds =
+                seleccionadosVisibles
+                    .map(chk => parseInt(
+                        chk.dataset.id || chk.value,
+                        10
+                    ))
+                    .filter(id => !Number.isNaN(id));
+
+
+            // ----------------------------------------------------
+            // Estado del botón eliminar
+            // ----------------------------------------------------
+
+            const btnEliminar =
+                document.getElementById('btnEliminarMasivo');
+
             if (btnEliminar) {
-                if (seleccionados > 0) {
-                    btnEliminar.disabled = false;
-                    btnEliminar.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-                } else {
-                    btnEliminar.disabled = true;
-                    btnEliminar.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-                }
+
+                const haySeleccion =
+                    cantidadSeleccionados > 0;
+
+                btnEliminar.disabled = !haySeleccion;
+
+                btnEliminar.classList.toggle(
+                    'opacity-50',
+                    !haySeleccion
+                );
+
+                btnEliminar.classList.toggle(
+                    'cursor-not-allowed',
+                    !haySeleccion
+                );
+
+                btnEliminar.classList.toggle(
+                    'pointer-events-none',
+                    !haySeleccion
+                );
             }
-        }
+
+
+            // ----------------------------------------------------
+            // Estado de "Seleccionar Todo"
+            //
+            // Se calcula SOLO sobre las filas filtradas.
+            // ----------------------------------------------------
+
+            if (btnSeleccionarTodo) {
+
+                const hayFilasVisibles =
+                    checkboxesVisibles.length > 0;
+
+                const todasSeleccionadas =
+                    hayFilasVisibles &&
+                    seleccionadosVisibles.length ===
+                    checkboxesVisibles.length;
+
+
+                btnSeleccionarTodo.textContent =
+                    todasSeleccionadas
+                        ? 'Desmarcar Todo'
+                        : 'Seleccionar Todo';
+
+
+                btnSeleccionarTodo.disabled =
+                    !hayFilasVisibles;
+
+
+                btnSeleccionarTodo.classList.toggle(
+                    'opacity-50',
+                    !hayFilasVisibles
+                );
+            }
+        };
+
+
+        // Alias de compatibilidad con el HTML existente.
+        window.actualizarContador =
+            window.actualizarEstadoSeleccion;
+
+
+        // ========================================================
+        // ACTIVAR / DESACTIVAR MODO SELECCIÓN
+        // ========================================================
 
         function toggleModoSeleccion(activo) {
-            if (activo) {
-                barraSeleccion.classList.remove('hidden');
-                colsSeleccion.forEach(col => col.classList.remove('hidden'));
-                btnMenuOpciones.classList.add('hidden');
-                dropdownOpciones.classList.add('hidden');
-            } else {
-                barraSeleccion.classList.add('hidden');
-                colsSeleccion.forEach(col => col.classList.add('hidden'));
-                btnMenuOpciones.classList.remove('hidden');
 
-                checkboxes.forEach(chk => chk.checked = false);
-                rows.forEach(row => row.classList.remove('bg-blue-50/50'));
-                actualizarContador();
+            if (activo) {
+
+                barraSeleccion.classList.remove('hidden');
+
+                colsSeleccion.forEach(col => {
+                    col.classList.remove('hidden');
+                });
+
+                if (btnMenuOpciones) {
+                    btnMenuOpciones.classList.add('hidden');
+                }
+
+                if (dropdownOpciones) {
+                    dropdownOpciones.classList.add('hidden');
+                }
+
+                actualizarEstadoSeleccion();
+
+            } else {
+
+                barraSeleccion.classList.add('hidden');
+
+                colsSeleccion.forEach(col => {
+                    col.classList.add('hidden');
+                });
+
+                if (btnMenuOpciones) {
+                    btnMenuOpciones.classList.remove('hidden');
+                }
+
+                // Al salir del modo selección se limpia todo.
+                checkboxes.forEach(chk => {
+                    chk.checked = false;
+                });
+
+                rows.forEach(row => {
+                    row.classList.remove('bg-blue-50/50');
+                });
+
+                ordenesAEliminarIds = [];
+
+                actualizarEstadoSeleccion();
             }
         }
 
-        if (btnActivarSeleccion) btnActivarSeleccion.addEventListener('click', () => toggleModoSeleccion(true));
-        if (btnCancelarSeleccion) btnCancelarSeleccion.addEventListener('click', () => toggleModoSeleccion(false));
 
-        let todoSeleccionado = false;
+        if (btnActivarSeleccion) {
+            btnActivarSeleccion.addEventListener(
+                'click',
+                () => toggleModoSeleccion(true)
+            );
+        }
+
+
+        if (btnCancelarSeleccion) {
+            btnCancelarSeleccion.addEventListener(
+                'click',
+                () => toggleModoSeleccion(false)
+            );
+        }
+
+
+        // ========================================================
+        // SELECCIONAR TODO
+        // ========================================================
+
         if (btnSeleccionarTodo) {
+
             btnSeleccionarTodo.addEventListener('click', () => {
-                todoSeleccionado = !todoSeleccionado;
-                checkboxes.forEach(chk => {
-                    const tr = chk.closest('tr');
-                    if (tr.style.display !== 'none') {
-                        chk.checked = todoSeleccionado;
-                        if (todoSeleccionado) {
-                            tr.classList.add('bg-blue-50/50');
-                        } else {
-                            tr.classList.remove('bg-blue-50/50');
-                        }
+
+                const filasVisibles =
+                    Array.from(
+                        document.querySelectorAll('.row-orden')
+                    ).filter(row =>
+                        row.style.display !== 'none'
+                    );
+
+
+                const checkboxesVisibles =
+                    filasVisibles
+                        .map(row =>
+                            row.querySelector('.select-row')
+                        )
+                        .filter(Boolean);
+
+
+                if (checkboxesVisibles.length === 0) {
+                    return;
+                }
+
+
+                const todasSeleccionadas =
+                    checkboxesVisibles.every(
+                        chk => chk.checked
+                    );
+
+
+                // ------------------------------------------------
+                // Si todas están seleccionadas:
+                // desmarcamos SOLO las filtradas.
+                //
+                // Si no:
+                // seleccionamos SOLO las filtradas.
+                // ------------------------------------------------
+
+                const nuevoEstado =
+                    !todasSeleccionadas;
+
+
+                checkboxesVisibles.forEach(chk => {
+
+                    chk.checked = nuevoEstado;
+
+                    const row = chk.closest('.row-orden');
+
+                    if (row) {
+                        row.classList.toggle(
+                            'bg-blue-50/50',
+                            nuevoEstado
+                        );
                     }
                 });
-                btnSeleccionarTodo.textContent = todoSeleccionado ? "Desmarcar Todo" : "Seleccionar Todo";
-                actualizarContador();
+
+
+                actualizarEstadoSeleccion();
             });
         }
 
-        rows.forEach(row => {
-            row.addEventListener('click', (e) => {
-                if (!barraSeleccion.classList.contains('hidden')) {
-                    if (e.target.tagName !== 'INPUT' && e.target.tagName !== 'BUTTON' && !e.target.closest('button')) {
-                        const chk = row.querySelector('.chk-orden');
-                        if (chk) {
-                            chk.checked = !chk.checked;
-                            if (chk.checked) row.classList.add('bg-blue-50/50');
-                            else row.classList.remove('bg-blue-50/50');
-                            actualizarContador();
-                        }
-                    }
-                }
-            });
-        });
+
+        // ========================================================
+        // SELECCIÓN INDIVIDUAL
+        // ========================================================
 
         checkboxes.forEach(chk => {
+
             chk.addEventListener('change', () => {
-                const tr = chk.closest('tr');
-                if (chk.checked) tr.classList.add('bg-blue-50/50');
-                else tr.classList.remove('bg-blue-50/50');
-                actualizarContador();
+
+                const row =
+                    chk.closest('.row-orden');
+
+                if (row) {
+                    row.classList.toggle(
+                        'bg-blue-50/50',
+                        chk.checked
+                    );
+                }
+
+                actualizarEstadoSeleccion();
             });
         });
 
-        if (btnEliminarSeleccion) {
-            btnEliminarSeleccion.addEventListener('click', async () => {
-                const seleccionados = Array.from(document.querySelectorAll('.chk-orden:checked')).map(chk => parseInt(chk.value));
 
-                if (seleccionados.length === 0) return;
+        // ========================================================
+        // CLIC EN LA FILA
+        // ========================================================
 
-                // Variable global fuera de la función para guardar la lista de elementos seleccionados
-                let seleccionadosAEliminar = [];
+        rows.forEach(row => {
 
-                // En el evento click de tu botón principal de "Eliminar Selección":
-                if (seleccionados.length === 0) return; // Si no hay nada seleccionado, no hace nada
+            row.addEventListener('click', (e) => {
 
-                // Guardamos los seleccionados en la variable global
-                seleccionadosAEliminar = seleccionados;
+                if (
+                    barraSeleccion.classList.contains('hidden')
+                ) {
+                    return;
+                }
 
-                // Actualizamos el texto en el modal con la cantidad exacta
-                document.getElementById('textoConfirmacionEliminar').textContent =
-                    `¿Estás seguro de que deseas eliminar ${seleccionados.length} orden(es) de forma permanente?`;
 
-                // Mostramos el modal quitando la clase 'hidden'
-                document.getElementById('modalEliminarOrdenes').classList.remove('hidden');
+                // No interferir con botones, inputs o controles.
+                if (
+                    e.target.closest('button') ||
+                    e.target.closest('input') ||
+                    e.target.closest('label')
+                ) {
+                    return;
+                }
+
+
+                const chk =
+                    row.querySelector('.select-row');
+
+                if (!chk) {
+                    return;
+                }
+
+
+                chk.checked = !chk.checked;
+
+                row.classList.toggle(
+                    'bg-blue-50/50',
+                    chk.checked
+                );
+
+                actualizarEstadoSeleccion();
             });
-        }
+        });
+
+
+        // ========================================================
+        // ESTADO INICIAL
+        // ========================================================
+
+        actualizarEstadoSeleccion();
     });
 
     // Garantiza la apertura del modal con limpieza de clases oscuras
@@ -1423,39 +1706,7 @@
         // Vuelve a inyectar las filas en el orden correcto
         filas.forEach(fila => tbody.appendChild(fila));
     }
-    // Revisa las casillas marcadas y activa/desactiva el botón de eliminación
-    function actualizarEstadoBotonEliminar() {
-        const checkboxes = document.querySelectorAll('.select-row:checked');
 
-        // Captura directamente los IDs marcados
-        ordenesAEliminarIds = Array.from(checkboxes).map(cb => parseInt(cb.getAttribute('data-id') || cb.value)).filter(id => !isNaN(id));
-
-        console.log("[CLIENTE] IDs seleccionados en tiempo real:", ordenesAEliminarIds);
-
-        // Busca el botón de eliminar por ID o por atributo
-        const btnEliminar = document.getElementById('btnEliminarMasivo') || document.querySelector('[data-btn-eliminar]');
-
-        if (btnEliminar) {
-            if (ordenesAEliminarIds.length > 0) {
-                btnEliminar.disabled = false;
-                btnEliminar.classList.remove('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-            } else {
-                btnEliminar.disabled = true;
-                btnEliminar.classList.add('opacity-50', 'cursor-not-allowed', 'pointer-events-none');
-            }
-        }
-    }
-
-    // Event listener global para capturar clics en checkbox creados dinámicamente
-    document.addEventListener('change', function (e) {
-        if (e.target && (e.target.classList.contains('select-row') || e.target.id === 'selectAll')) {
-            if (e.target.id === 'selectAll') {
-                const filas = document.querySelectorAll('.select-row');
-                filas.forEach(cb => cb.checked = e.target.checked);
-            }
-            actualizarEstadoBotonEliminar();
-        }
-    });
     // Control de estado de ordenamiento por columna para las tablas de ordenes
     const estadoOrdenTablaPrincipal = {};
 
