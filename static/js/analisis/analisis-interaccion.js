@@ -1389,28 +1389,6 @@
                 e.shiftKey
             );
 
-            /*
-             * El foco debe quedar en la NUEVA celda,
-             * nunca en la anterior.
-             */
-            if (celdaActiva) {
-                const nuevoInput =
-                    obtenerInputCelda(celdaActiva);
-
-                if (
-                    nuevoInput &&
-                    !nuevoInput.readOnly
-                ) {
-                    nuevoInput.focus();
-
-                    /*
-                     * No entramos automáticamente en edición.
-                     * La celda queda seleccionada, como Excel.
-                     */
-                    seleccionarContenidoInput(nuevoInput);
-                }
-            }
-
             return;
         }
 
