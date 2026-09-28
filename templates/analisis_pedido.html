@@ -442,6 +442,38 @@
             color: #ffffff;
             /* Texto blanco */
         }
+
+        /* Ocultar flechas de incremento/decremento
+   en los campos numéricos del análisis */
+        #tabla-analisis .inp-pre::-webkit-inner-spin-button,
+        #tabla-analisis .inp-pre::-webkit-outer-spin-button,
+        #tabla-analisis .inp-inv-emp::-webkit-inner-spin-button,
+        #tabla-analisis .inp-inv-emp::-webkit-outer-spin-button,
+        #tabla-analisis .inp-emp::-webkit-inner-spin-button,
+        #tabla-analisis .inp-emp::-webkit-outer-spin-button,
+        #tabla-analisis .inp-uni::-webkit-inner-spin-button,
+        #tabla-analisis .inp-uni::-webkit-outer-spin-button,
+        #tabla-analisis .inp-costo::-webkit-inner-spin-button,
+        #tabla-analisis .inp-costo::-webkit-outer-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        /* Firefox */
+        #tabla-analisis .inp-pre,
+        #tabla-analisis .inp-inv-emp,
+        #tabla-analisis .inp-emp,
+        #tabla-analisis .inp-uni,
+        #tabla-analisis .inp-costo {
+            appearance: textfield;
+            -moz-appearance: textfield;
+        }
+
+        #tabla-analisis tbody td.excel-celda-copiada {
+            box-shadow:
+                inset 0 0 0 2px rgba(37, 99, 235, 0.85);
+            background-color: rgba(59, 130, 246, 0.16) !important;
+        }
     </style>
 
     <!-- Modal principal con fondo semi-transparente y efecto borroso (backdrop-blur) -->
@@ -624,7 +656,14 @@
 
     <script src="/static/js/componentes/modal.js"></script>
     <script src="/static/js/analisis/analisis-productos.js"></script>
+    <script src="/static/js/analisis/analisis-interaccion.js"></script>
     <script src="/static/js/analisis/analisis-cambios.js"></script>
+    <script>
+        window.matrizTiendas = window.matrizTiendas || {};
+        window.tiendaActivaPestana =
+            window.tiendaActivaPestana || 'CENTRO';
+    </script>
+
 
     <script>
 
@@ -1370,388 +1409,6 @@
                 });
             }
         }
-        // Lógica de selección rectangular estilo Excel
-        let celdasSeleccionadasAnalisis = [];
-        let celdaInicio = null;
-        let isArrastrando = false;
-
-        // Eventos de ratón para selección estilo Excel
-        document.addEventListener('mouseup', () => {
-            isArrastrando = false;
-        });
-
-        function iniciarArrastre(input) {
-            isArrastrando = true;
-            celdaInicio = input;
-            actualizarSeleccionRango(input);
-        }
-
-        function arrastrarSobreCelda(input) {
-            if (isArrastrando && celdaInicio) {
-                window.getSelection()?.removeAllRanges();
-                actualizarSeleccionRango(input);
-            }
-        }
-
-        // Calcula el rango rectangular (Matriz de celdas) desde celdaInicio hasta celdaActual
-        function actualizarSeleccionRango(celdaActual) {
-            desseleccionarCeldas();
-            window.getSelection()?.removeAllRanges();
-
-            const tbody = document.getElementById('filas-tabla-analisis');
-            const filas = Array.from(tbody.children);
-
-            const trInicio = celdaInicio.closest('tr');
-            const trFin = celdaActual.closest('tr');
-
-            const rowIndexInicio = filas.indexOf(trInicio);
-            const rowIndexFin = filas.indexOf(trFin);
-
-            const rMin = Math.min(rowIndexInicio, rowIndexFin);
-            const rMax = Math.max(rowIndexInicio, rowIndexFin);
-
-            const tdInicio = celdaInicio.closest('td');
-            const tdFin = celdaActual.closest('td');
-
-            const colIndexInicio = Array.from(trInicio.children).indexOf(tdInicio);
-            const colIndexFin = Array.from(trFin.children).indexOf(tdFin);
-
-            const cMin = Math.min(colIndexInicio, colIndexFin);
-            const cMax = Math.max(colIndexInicio, colIndexFin);
-
-            // Recorrer la matriz seleccionada
-            for (let r = rMin; r <= rMax; r++) {
-                const tr = filas[r];
-                for (let c = cMin; c <= cMax; c++) {
-                    const td = tr.children[c];
-                    const input = td?.querySelector('input');
-                    if (input) {
-                        celdasSeleccionadasAnalisis.push(input);
-
-                        // Estilo de fondo interior unificado
-                        td.classList.add('bg-blue-100/70');
-
-                        // Bordes exteriores del cuadro unificado estilo Excel
-                        if (r === rMin) td.classList.add('border-t-2', 'border-t-slate-600');
-                        if (r === rMax) td.classList.add('border-b-2', 'border-b-slate-600');
-                        if (c === cMin) td.classList.add('border-l-2', 'border-l-slate-600');
-                        if (c === cMax) td.classList.add('border-r-2', 'border-r-slate-600');
-                    }
-                }
-            }
-        }
-
-        // Limpia las clases de resaltado del rango
-        function desseleccionarCeldas() {
-            celdasSeleccionadasAnalisis.forEach(input => {
-                const td = input.closest('td');
-                if (td) {
-                    td.classList.remove(
-                        'bg-blue-100/70',
-                        'border-t-2', 'border-t-slate-600',
-                        'border-b-2', 'border-b-slate-600',
-                        'border-l-2', 'border-l-slate-600',
-                        'border-r-2', 'border-r-slate-600'
-                    );
-                }
-            });
-            celdasSeleccionadasAnalisis = [];
-        }
-
-        // Listener global de teclado (CTRL + C, Delete, Escape)
-        document.addEventListener('keydown', function (e) {
-            // Tecla ESC: Cancela modo edición y deselecciona celdas
-            if (e.key === 'Escape') {
-                if (document.activeElement && document.activeElement.tagName === 'INPUT') {
-                    document.activeElement.blur();
-                }
-                desseleccionarCeldas();
-                return;
-            }
-
-            // Copiar rango seleccionado (CTRL + C o CMD + C) incluyendo celdas bloqueadas
-            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'c' && celdasSeleccionadasAnalisis.length > 0) {
-                e.preventDefault();
-
-                const matrizValores = {};
-
-                celdasSeleccionadasAnalisis.forEach(input => {
-                    const tr = input.closest('tr');
-                    const tbody = tr.parentElement;
-                    const rowIndex = Array.from(tbody.children).indexOf(tr);
-                    const colIndex = Array.from(tr.children).indexOf(input.closest('td'));
-
-                    if (!matrizValores[rowIndex]) matrizValores[rowIndex] = {};
-                    // Obtener el valor del campo sin importar si está bloqueado (readOnly)
-                    matrizValores[rowIndex][colIndex] = input.value || '';
-                });
-
-                // Formato tabulado compatible con Excel / hojas de cálculo
-                const textoCopiar = Object.keys(matrizValores)
-                    .sort((a, b) => a - b)
-                    .map(r => {
-                        return Object.keys(matrizValores[r])
-                            .sort((a, b) => a - b)
-                            .map(c => matrizValores[r][c])
-                            .join('\t');
-                    })
-                    .join('\n');
-
-                navigator.clipboard.writeText(textoCopiar);
-                return;
-            }
-
-            // Borrar datos en rango seleccionado (Delete / Supr) afectando únicamente las celdas seleccionadas
-            if ((e.key === 'Delete' || e.key === 'Del') && celdasSeleccionadasAnalisis.length > 0) {
-                e.preventDefault();
-
-                celdasSeleccionadasAnalisis.forEach(input => {
-                    const tr = input.closest('tr');
-
-                    // Si se borra la columna de código, solo se limpia el código y su descripción
-                    if (input.classList.contains('inp-codigo')) {
-                        input.readOnly = false; // Desbloquea la celda
-                        input.value = ''; // Limpia el código
-                        input.classList.remove('bg-slate-100', 'cursor-default', 'select-none');
-                        input.classList.add('focus:bg-white');
-
-                        const inpDesc = tr.querySelector('.inp-desc');
-                        if (inpDesc) inpDesc.value = ''; // Limpia solo la descripción
-                    }
-                    // Si se borra la columna de inventario (INV.)
-                    else if (input.classList.contains('inp-inv-emp')) {
-                        input.value = '0'; // Reinicia a 0
-                        recancularFilaConInventario(input); // Recalcula el sugerido
-                    }
-                    // Si se borra empaques o unidades
-                    else if (input.classList.contains('inp-emp') || input.classList.contains('inp-uni')) {
-                        input.value = '0'; // Reinicia a 0
-                        calcularFila(input); // Recalcula subtotales
-                    }
-                    // Si se borra el costo unitario
-                    else if (input.classList.contains('inp-costo')) {
-                        input.value = '0.00'; // Reinicia el costo
-                        calcularFila(input); // Recalcula subtotales
-                    }
-                    // Si se borra la presentación (PRE.)
-                    else if (input.classList.contains('inp-pre')) {
-                        input.value = '1'; // Restablece presentación por defecto
-                        recancularFilaConInventario(input); // Recalcula dependientes
-                    }
-                });
-
-                desseleccionarCeldas(); // Quita el sombreado azul
-                totalizarAnalisis(); // Actualiza la barra de totales globales
-            }
-        });
-
-        // Desseleccionar celdas al hacer clic fuera de la tabla
-        document.addEventListener('click', function (e) {
-            if (!e.target.closest('#tabla-analisis')) {
-                desseleccionarCeldas();
-            }
-        });
-
-        window.matrizTiendas =
-            window.matrizTiendas || {};
-        window.tiendaActivaPestana =
-            window.tiendaActivaPestana || 'CENTRO';
-
-
-        // Helper para enfocar y seleccionar todo el texto de la celda activa
-        function enfocarYSombrearCelda(input) {
-            if (!input) return;
-
-            // Si el campo es readonly (ej: código bloqueado), salta al foco sin intentar editar
-            if (input.readOnly) {
-                input.focus();
-                return;
-            }
-
-            input.focus();
-            // Forzar micro-tarea para asegurar que select() resalte todo el valor en pantalla
-            setTimeout(() => {
-                input.select();
-            }, 0);
-
-            celdaInicio = input;
-            actualizarSeleccionRango(input);
-        }
-        // --- NAVEGACIÓN COMPLETA Y EDICIÓN TECLADO ---
-        function manejarKeyNav(e, elem, campoActual) {
-            // Captura la tecla F2 únicamente en la columna de código para abrir el buscador
-            if (e.key === 'F2' && campoActual === 'codigo') {
-                e.preventDefault(); // Evita el comportamiento predeterminado de la tecla F2 en el navegador
-                abrirModalBuscadorProductos(elem); // Despliega el modal de búsqueda asignando la celda actual
-                return; // Corta la ejecución del resto de eventos de teclado
-            }
-            const tr = elem.closest('tr');
-            const tbody = tr.parentElement;
-            const filas = Array.from(tbody.children);
-            // Columnas navegables en orden estricto
-            const colIndices = ['codigo', 'pre', 'inv-emp', 'emp', 'uni', 'costo'];
-
-            // 1. EDICIÓN AL PRESIONAR NÚMEROS (0-9 o Numpad 0-9) ESTANDO EN MODO VISTA / FOCO
-            if ((/^[0-9]$/.test(e.key) || /^Numpad[0-9]$/.test(e.code)) && !e.ctrlKey && !e.altKey && !e.metaKey) {
-                // Si todo el texto está resaltado o la celda recién recibe foco, vaciar para sobreescribir
-                const textoSeleccionado = window.getSelection().toString();
-                const esSeleccionCompleta = (elem.selectionStart === 0 && elem.selectionEnd === elem.value.length);
-
-                if (esSeleccionCompleta || textoSeleccionado !== '') {
-                    elem.value = ''; // Limpia el valor anterior inmediatamente para escribir el digito presionado
-                }
-            }
-
-            // 2. MANEJO DE TECLA TAB Y SHIFT + TAB (Recorrido entre celdas)
-            if (e.key === 'Tab') {
-                e.preventDefault(); // Detiene el salto nativo del navegador
-
-                let rIdx = filas.indexOf(tr);
-                let cIdx = colIndices.indexOf(campoActual);
-
-                if (e.shiftKey) {
-                    // Recorrido Inverso (Shift + Tab)
-                    cIdx--;
-                    if (cIdx < 0) {
-                        cIdx = colIndices.length - 1;
-                        rIdx--; // Salta a la última celda de la fila anterior
-                    }
-                } else {
-                    // Recorrido Adelante (Tab)
-                    cIdx++;
-                    if (cIdx >= colIndices.length) {
-                        cIdx = 0;
-                        rIdx++; // Salta a la primera celda de la siguiente fila
-                    }
-                }
-
-                // Si se pasa de la última fila hacia adelante, crea una nueva fila automáticamente
-                if (rIdx >= filas.length) {
-                    agregarFilaAnalisis();
-                }
-
-                // Asegura no salirse del límite superior de filas
-                rIdx = Math.max(0, rIdx);
-
-                const trDestino = tbody.children[rIdx];
-                const campoDestino = colIndices[cIdx];
-                const inputDestino = trDestino?.querySelector(`.inp-${campoDestino}`);
-
-                if (inputDestino) {
-                    if (inputDestino.readOnly) {
-                        // Si la celda está bloqueada (ej. código ya cargado), re-ejecuta el paso
-                        manejarKeyNav(e, inputDestino, campoDestino);
-                    } else {
-                        enfocarYSombrearCelda(inputDestino);
-                    }
-                }
-                return;
-            }
-
-            // 3. MANEJO DE TECLA ESCAPE: Descarta cambios y limpia la selección
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                if (elem.dataset.valorOriginal !== undefined) {
-                    elem.value = elem.dataset.valorOriginal; // Restaura el valor antes de editar
-                    if (campoActual === 'uni') ajustarPorUnidades(elem);
-                    else if (['pre', 'emp', 'costo'].includes(campoActual)) calcularFila(elem);
-                }
-                elem.blur();
-                desseleccionarCeldas();
-                e.stopPropagation();
-                return;
-            }
-
-            // 4. MANEJO DE TECLA ENTER: Fija el valor y salta a la siguiente columna/fila
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                elem.blur();
-
-                let siguienteInput = null;
-
-                if (campoActual === 'codigo') {
-                    consultarProductoCodigo(elem).then(() => {
-                        siguienteInput = tr.querySelector('.inp-emp');
-                        enfocarYSombrearCelda(siguienteInput);
-                    });
-                    return;
-                } else if (campoActual === 'inv-emp') {
-                    const sigTr = tr.nextElementSibling;
-
-                    if (!sigTr) {
-                        return;
-                    }
-
-                    siguienteInput = sigTr.querySelector('.inp-inv-emp');
-
-                } else if (campoActual === 'emp') {
-                    const sigTr = tr.nextElementSibling;
-
-                    if (!sigTr) {
-                        return;
-                    }
-
-                    siguienteInput = sigTr.querySelector('.inp-emp');
-
-                } else if (campoActual === 'uni') {
-                    siguienteInput = tr.querySelector('.inp-costo');
-
-                } else if (campoActual === 'costo') {
-                    const sigTr = tr.nextElementSibling;
-
-                    if (!sigTr) {
-                        return;
-                    }
-
-                    siguienteInput = sigTr.querySelector('.inp-codigo');
-                }
-
-                if (siguienteInput) {
-                    enfocarYSombrearCelda(siguienteInput);
-                }
-                return;
-            }
-
-            // 5. NAVEGACIÓN CON FLECHAS Y SELECCIÓN CON SHIFT
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
-                // Cancelar de inmediato el scroll nativo de la ventana/página
-                e.preventDefault();
-
-                // Permitir edición interna si el cursor está en medio del texto y no se presionó Shift
-                if (!e.shiftKey && elem.selectionStart !== elem.selectionEnd && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
-                    return;
-                }
-
-                let rIdx = filas.indexOf(tr);
-                let cIdx = colIndices.indexOf(campoActual);
-
-                if (e.key === 'ArrowUp') rIdx = Math.max(0, rIdx - 1);
-                if (e.key === 'ArrowDown') {
-
-                    if (rIdx >= filas.length - 1) {
-                        return;
-                    }
-
-                    rIdx++;
-                }
-                if (e.key === 'ArrowLeft') cIdx = Math.max(0, cIdx - 1);
-                if (e.key === 'ArrowRight') cIdx = Math.min(colIndices.length - 1, cIdx + 1);
-
-                const trDestino = tbody.children[rIdx];
-                const campoDestino = colIndices[cIdx];
-                const inputDestino = trDestino?.querySelector(`.inp-${campoDestino}`);
-
-                if (inputDestino) {
-                    if (e.shiftKey) {
-                        if (!celdaInicio) celdaInicio = elem;
-                        inputDestino.focus();
-                        actualizarSeleccionRango(inputDestino);
-                    } else {
-                        enfocarYSombrearCelda(inputDestino);
-                    }
-                }
-            }
-        }
 
         // Cierra desplegables al hacer clic fuera
         document.addEventListener('click', (e) => {
@@ -2119,11 +1776,6 @@ ${nodosProductosXML.join('\n')}
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-        }
-        // Guarda el valor original y selecciona el texto para sobreescribir al teclear
-        function iniciarEdicion(elem) {
-            elem.dataset.valorOriginal = elem.value;
-            elem.select();
         }
 
         // Asegura la existencia de la variable en el objeto global de la ventana
@@ -2579,21 +2231,48 @@ ${nodosProductosXML.join('\n')}
 
         // Función para cambiar de tienda activa en la barra de pestañas manteniendo los datos
         function cambiarTiendaPestana(nuevaTienda) {
-            if (nuevaTienda === tiendaActivaPestana) return; // Si es la misma tienda no realiza cambios
 
-            guardarEstadoTablaEnMemoria(tiendaActivaPestana); // Sincroniza datos de la tienda actual en memoria
-            tiendaActivaPestana = nuevaTienda; // Asigna la nueva tienda como activa
+            // Normaliza la nueva tienda.
+            const tiendaNueva = String(nuevaTienda || '')
+                .trim()
+                .toUpperCase();
 
-            // Actualiza las clases visuales del botón de pestaña activa e inactivas
-            document.querySelectorAll('.btn-pestana-tienda').forEach(btn => {
-                const esActiva = btn.dataset.tienda === nuevaTienda;
-                btn.className = `btn-pestana-tienda px-4 py-2 rounded-xl text-xs transition ${esActiva
-                    ? 'font-bold border border-slate-900 bg-slate-900 text-white shadow-xs'
-                    : 'font-semibold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
-                    }`;
-            });
+            if (!tiendaNueva) {
+                return;
+            }
 
-            cargarEstadoTablaDesdeMemoria(nuevaTienda); // Reconstruye la vista de la tabla con los datos de la nueva tienda
+            // Si ya estamos en esa tienda, no hacemos nada.
+            if (tiendaNueva === window.tiendaActivaPestana) {
+                return;
+            }
+
+            // Guarda los datos de la tienda actualmente visible.
+            guardarEstadoTablaEnMemoria(
+                window.tiendaActivaPestana
+            );
+
+            // Cambia la tienda activa.
+            window.tiendaActivaPestana = tiendaNueva;
+
+            // Actualiza visualmente las pestañas.
+            document
+                .querySelectorAll('.btn-pestana-tienda')
+                .forEach(btn => {
+
+                    const esActiva =
+                        String(btn.dataset.tienda || '')
+                            .trim()
+                            .toUpperCase() === tiendaNueva;
+
+                    btn.className =
+                        `btn-pestana-tienda px-4 py-2 rounded-xl text-xs transition ${esActiva
+                            ? 'font-bold border border-slate-900 bg-slate-900 text-white shadow-xs'
+                            : 'font-semibold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                        }`;
+                });
+
+            // Carga los datos correspondientes a la nueva tienda.
+            cargarEstadoTablaDesdeMemoria(tiendaNueva);
         }
 
         function cargarEstadoTablaDesdeMemoria(tienda) {

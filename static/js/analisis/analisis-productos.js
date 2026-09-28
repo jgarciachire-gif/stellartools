@@ -136,8 +136,6 @@
                     autocomplete="off"
                     spellcheck="false"
                     class="inp-codigo w-full px-2 py-1.5 border-0 text-xs font-normal uppercase focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                     ondblclick="desbloquearCeldaCodigo(this)"
                     onkeydown="manejarKeyNav(event, this, 'codigo')"
                     onchange="consultarProductoCodigo(this)"
@@ -151,8 +149,6 @@
                     readonly
                     tabindex="-1"
                     class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                 >
             </td>
 
@@ -163,12 +159,9 @@
                     min="1"
                     value="1"
                     class="inp-pre text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'pre')"
                     oninput="if(this.value < 1 && this.value !== '') this.value = 1; recancularFilaConInventario(this)"
                     onpaste="manejarPegadoColumna(event, this, 'pre')"
-                    onfocus="iniciarEdicion(this)"
                 >
             </td>
 
@@ -179,12 +172,9 @@
                     min="0"
                     value="0"
                     class="inp-inv-emp text-center w-full px-2 py-1.5 border-0 text-xs font-semibold text-amber-800 focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'inv-emp')"
                     oninput="if(this.value < 0) this.value = 0; recancularFilaConInventario(this)"
                     onpaste="manejarPegadoColumna(event, this, 'inv-emp')"
-                    onfocus="iniciarEdicion(this)"
                 >
             </td>
 
@@ -195,12 +185,9 @@
                     min="0"
                     value="0"
                     class="inp-emp text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'emp')"
                     oninput="if(this.value < 0) this.value = 0; calcularFila(this)"
                     onpaste="manejarPegadoColumna(event, this, 'emp')"
-                    onfocus="iniciarEdicion(this)"
                 >
             </td>
 
@@ -211,12 +198,9 @@
                     min="0"
                     value="0"
                     class="inp-uni text-center w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'uni')"
                     oninput="if(this.value < 0) this.value = 0; ajustarPorUnidades(this)"
                     onpaste="manejarPegadoColumna(event, this, 'uni')"
-                    onfocus="iniciarEdicion(this)"
                 >
             </td>
 
@@ -227,8 +211,6 @@
                     min="0"
                     value="0.00"
                     class="inp-costo text-right w-full px-2 py-1.5 border-0 text-xs font-normal focus:bg-white focus:outline-none bg-transparent"
-                    onmousedown="iniciarArrastre(this)"
-                    onmouseenter="arrastrarSobreCelda(this)"
                     onkeydown="manejarKeyNav(event, this, 'costo')"
                     oninput="if(this.value < 0) this.value = 0; calcularFila(this)"
                     onpaste="manejarPegadoColumna(event, this, 'costo')"
@@ -497,9 +479,6 @@
                     ajustarPorUnidades(inputDestino);
 
                 } else if (tipo === 'inv-emp') {
-                    recancularFilaConInventario(
-                        inputDestino
-                    );
 
                 } else {
                     calcularFila(inputDestino);
