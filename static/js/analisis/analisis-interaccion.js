@@ -1,55 +1,54 @@
-/**
- * ============================================================
- * INTERACCIÓN TIPO EXCEL — TABLA DE ANÁLISIS
- * ============================================================
- *
- * Responsabilidades:
- * - Selección de celdas.
- * - Selección rectangular.
- * - Shift + clic / Shift + flechas.
- * - Navegación con flechas.
- * - Enter / Tab / Shift + Tab.
- * - Edición tipo Excel.
- * - Copiar / pegar.
- * - Delete / Supr.
- * - F2 / doble clic.
- *
- * IMPORTANTE:
- * La selección trabaja con <td>, no con <input>.
- * Esto permite seleccionar también SUBTOTAL.
- * ============================================================
- */
-
 (function () {
     'use strict';
 
-    const SELECTOR_TABLA = '#tabla-analisis';
-    const SELECTOR_TBODY = '#filas-tabla-analisis';
+    const CONFIG_TABLAS = {
+        analisis: {
+            tabla: '#tabla-analisis',
+            tbody: '#filas-tabla-analisis',
 
-    /*
-     * Columnas que forman parte de la cuadrícula Excel.
-     *
-     * 0 Código
-     * 1 Descripción
-     * 2 PRE.
-     * 3 INV. EMP.
-     * 4 EMP.
-     * 5 UNI.
-     * 6 Costo Uni.
-     * 7 Subtotal
-     *
-     * La columna 8 (eliminar) NO pertenece a la cuadrícula.
-     */
-    const COLUMNAS_GRID = [
-        'codigo',
-        'desc',
-        'pre',
-        'inv-emp',
-        'emp',
-        'uni',
-        'costo',
-        'subtotal'
-    ];
+            columnas: [
+                'codigo',
+                'desc',
+                'pre',
+                'inv-emp',
+                'emp',
+                'uni',
+                'costo',
+                'subtotal'
+            ]
+        },
+
+        inventario: {
+            tabla: '#tabla-inventario',
+            tbody: '#filas-tabla-inventario',
+
+            columnas: [
+                'codigo',
+                'desc',
+                'cantidad'
+            ]
+        }
+    };
+
+
+    function obtenerConfiguracionTabla() {
+
+        if (
+            document.querySelector(
+                CONFIG_TABLAS.inventario.tabla
+            )
+        ) {
+            return CONFIG_TABLAS.inventario;
+        }
+
+        return CONFIG_TABLAS.analisis;
+    }
+
+    function obtenerSelectorTbodyActual() {
+
+        return obtenerConfiguracionTabla().tbody;
+
+    }
 
     const CLASE_SELECCION = 'excel-celda-seleccionada';
     const CLASE_ACTIVA = 'excel-celda-activa';
@@ -71,7 +70,10 @@
          */
         #tabla-analisis tbody td,
         #tabla-analisis tbody td input,
-        #tabla-analisis tbody td .txt-subtotal {
+        #tabla-analisis tbody td .txt-subtotal,
+
+        #tabla-inventario tbody td,
+        #tabla-inventario tbody td input {
             cursor: default !important;
         }
 
@@ -84,7 +86,8 @@
         * RANGO SELECCIONADO
         * ============================================================ */
 
-        #tabla-analisis tbody td.excel-celda-seleccionada {
+        #tabla-analisis tbody td.excel-celda-seleccionada,
+        #tabla-inventario tbody td.excel-celda-seleccionada {
             background-color: rgba(59, 130, 246, 0.07) !important;
 
             box-shadow:
@@ -97,7 +100,8 @@
         * - Código
         * - Descripción
         */
-        #tabla-analisis tbody td.excel-celda-seleccionada input {
+        #tabla-analisis tbody td.excel-celda-seleccionada input,
+        #tabla-inventario tbody td.excel-celda-seleccionada input {
             background-color: transparent !important;
         }
 
@@ -106,7 +110,8 @@
         * CELDA ACTIVA
         * ============================================================ */
 
-        #tabla-analisis tbody td.excel-celda-activa {
+        #tabla-analisis tbody td.excel-celda-activa,
+        #tabla-inventario tbody td.excel-celda-activa {
             background-color: rgba(59, 130, 246, 0.13) !important;
 
             box-shadow:
@@ -117,7 +122,8 @@
         * La celda activa también debe transmitir su fondo
         * al input interno.
         */
-        #tabla-analisis tbody td.excel-celda-activa input {
+        #tabla-analisis tbody td.excel-celda-activa input,
+        #tabla-inventario tbody td.excel-celda-activa input {
             background-color: transparent !important;
         }
 
@@ -125,7 +131,8 @@
          * Mientras realmente se edita:
          * el cursor vuelve a ser de texto.
          */
-        #tabla-analisis tbody td.excel-celda-en-edicion input {
+        #tabla-analisis tbody td.excel-celda-en-edicion input,
+        #tabla-inventario tbody td.excel-celda-en-edicion input {
             cursor: text !important;
         }
 
@@ -156,7 +163,13 @@
     // ============================================================
 
     function obtenerTbody() {
-        return document.querySelector(SELECTOR_TBODY);
+
+        const config =
+            obtenerConfiguracionTabla();
+
+        return document.querySelector(
+            config.tbody
+        );
     }
 
     function obtenerFilas() {
@@ -199,7 +212,11 @@
          * La última columna es el botón de eliminar.
          * Nunca forma parte de la cuadrícula.
          */
-        return indice >= 0 && indice < COLUMNAS_GRID.length
+        const config =
+            obtenerConfiguracionTabla();
+
+        return indice >= 0 &&
+            indice < config.columnas.length
             ? indice
             : -1;
     }
@@ -278,6 +295,10 @@
             return 'desc';
         }
 
+        if (input.classList.contains('inp-cantidad')) {
+            return 'cantidad';
+        }
+
         return null;
     }
 
@@ -298,8 +319,11 @@
             'inp-inv-emp',
             'inp-emp',
             'inp-uni',
-            'inp-costo'
-        ].some(clase => input.classList.contains(clase));
+            'inp-costo',
+            'inp-cantidad'
+        ].some(
+            clase => input.classList.contains(clase)
+        );
     }
 
     // ============================================================
@@ -318,25 +342,42 @@
     }
 
     function limpiarSeleccionVisual() {
+
+        const config =
+            obtenerConfiguracionTabla();
+
         document
             .querySelectorAll(
-                `${SELECTOR_TBODY} td.${CLASE_SELECCION},
-             ${SELECTOR_TBODY} td.${CLASE_ACTIVA},
-             ${SELECTOR_TBODY} td.${CLASE_COPIADA}`
+                `${config.tbody} td.${CLASE_SELECCION},
+             ${config.tbody} td.${CLASE_ACTIVA},
+             ${config.tbody} td.${CLASE_COPIADA}`
             )
             .forEach(td => {
+
                 limpiarClasesCelda(td);
-                td.classList.remove(CLASE_COPIADA);
+
+                td.classList.remove(
+                    CLASE_COPIADA
+                );
+
             });
     }
 
     function limpiarResaltadoCopiado() {
+
+        const config =
+            obtenerConfiguracionTabla();
+
         document
             .querySelectorAll(
-                `${SELECTOR_TBODY} td.${CLASE_COPIADA}`
+                `${config.tbody} td.${CLASE_COPIADA}`
             )
             .forEach(td => {
-                td.classList.remove(CLASE_COPIADA);
+
+                td.classList.remove(
+                    CLASE_COPIADA
+                );
+
             });
     }
 
@@ -653,9 +694,15 @@
             Math.min(filas.length - 1, fila)
         );
 
+        const config =
+            obtenerConfiguracionTabla();
+
         columna = Math.max(
             0,
-            Math.min(COLUMNAS_GRID.length - 1, columna)
+            Math.min(
+                config.columnas.length - 1,
+                columna
+            )
         );
 
         const destino = obtenerCelda(fila, columna);
@@ -711,7 +758,7 @@
             fila < 0 ||
             fila >= obtenerFilas().length ||
             columna < 0 ||
-            columna >= COLUMNAS_GRID.length
+            columna >= obtenerConfiguracionTabla().columnas.length
         ) {
             return;
         }
@@ -736,12 +783,18 @@
 
             if (columna < 0) {
                 fila--;
-                columna = COLUMNAS_GRID.length - 1;
+                columna =
+                    obtenerConfiguracionTabla()
+                        .columnas.length - 1;
             }
         } else {
             columna++;
 
-            if (columna >= COLUMNAS_GRID.length) {
+            if (
+                columna >=
+                obtenerConfiguracionTabla()
+                    .columnas.length
+            ) {
                 fila++;
                 columna = 0;
             }
@@ -755,8 +808,30 @@
             !reverse &&
             fila >= obtenerFilas().length
         ) {
-            if (typeof agregarFilaAnalisis === 'function') {
-                agregarFilaAnalisis();
+
+            const config =
+                obtenerConfiguracionTabla();
+
+            if (
+                config === CONFIG_TABLAS.inventario
+            ) {
+
+                if (
+                    typeof agregarFilaInventario ===
+                    'function'
+                ) {
+                    agregarFilaInventario();
+                }
+
+            } else {
+
+                if (
+                    typeof agregarFilaAnalisis ===
+                    'function'
+                ) {
+                    agregarFilaAnalisis();
+                }
+
             }
         }
 
@@ -811,7 +886,7 @@
 
         if (
             elementoActivo instanceof HTMLInputElement &&
-            elementoActivo.closest(SELECTOR_TBODY)
+            elementoActivo.closest(obtenerSelectorTbodyActual())
         ) {
             finalizarEdicion(elementoActivo);
             return;
@@ -879,27 +954,105 @@
              */
             finalizarEdicion(input);
 
+            const config =
+                obtenerConfiguracionTabla();
+
             if (
-                typeof consultarProductoCodigo ===
-                'function'
+                config === CONFIG_TABLAS.inventario
             ) {
-                await consultarProductoCodigo(input);
+
+                if (
+                    typeof consultarProductoInventario ===
+                    'function'
+                ) {
+                    await consultarProductoInventario(
+                        input
+                    );
+                }
+
+            } else {
+
+                if (
+                    typeof consultarProductoCodigo ===
+                    'function'
+                ) {
+                    await consultarProductoCodigo(
+                        input
+                    );
+                }
+
             }
 
-            const emp = td
-                .closest('tr')
-                ?.querySelector('.inp-emp');
+            if (
+                config === CONFIG_TABLAS.inventario
+            ) {
+
+                const cantidad =
+                    td.closest('tr')
+                        ?.querySelector('.inp-cantidad');
+
+                if (cantidad) {
+
+                    const destino =
+                        cantidad.closest('td');
+
+                    celdaInicio = destino;
+                    celdaActiva = destino;
+
+                    actualizarSeleccionRango(
+                        destino
+                    );
+                }
+
+                return;
+            }
+
+
+            const emp =
+                td.closest('tr')
+                    ?.querySelector('.inp-emp');
 
             if (emp) {
-                const destino = emp.closest('td');
+
+                const destino =
+                    emp.closest('td');
 
                 celdaInicio = destino;
                 celdaActiva = destino;
 
-                actualizarSeleccionRango(destino);
+                actualizarSeleccionRango(
+                    destino
+                );
             }
 
             return;
+        }
+
+        if (
+            obtenerConfiguracionTabla() ===
+            CONFIG_TABLAS.inventario
+            && campo === 'cantidad'
+        ) {
+
+            const valor =
+                String(input?.value || '')
+                    .trim()
+                    .replace(',', '.');
+
+            const numero =
+                valor === ''
+                    ? 0
+                    : Number(valor);
+
+            if (
+                !Number.isFinite(numero)
+                || numero < 0
+            ) {
+                input.value = '0';
+            } else {
+                input.value =
+                    String(numero);
+            }
         }
 
         /*
@@ -977,7 +1130,8 @@
             'inv-emp',
             'emp',
             'uni',
-            'costo'
+            'costo',
+            'cantidad'
         ].includes(campo)) {
             return false;
         }
@@ -1011,6 +1165,36 @@
         if (campo === 'uni') {
             if (typeof ajustarPorUnidades === 'function') {
                 ajustarPorUnidades(input);
+            }
+        }
+
+        if (campo === 'cantidad') {
+
+            const valor =
+                String(input.value ?? '')
+                    .trim()
+                    .replace(',', '.');
+
+            /*
+             * Inventario:
+             * - permite 0
+             * - permite decimales
+             * - máximo 3 decimales
+             * - no permite negativos
+             */
+            if (
+                valor === '' ||
+                !/^\d+(?:\.\d{0,3})?$/.test(valor) ||
+                Number(valor) < 0
+            ) {
+                input.value = '0';
+            }
+
+            if (
+                typeof recalcularTotalEmpaques ===
+                'function'
+            ) {
+                recalcularTotalEmpaques();
             }
         }
 
@@ -1053,12 +1237,52 @@
             while (
                 filaDestino >= obtenerFilas().length
             ) {
-                if (
-                    typeof agregarFilaAnalisis === 'function'
-                ) {
-                    agregarFilaAnalisis();
+                const config =
+                    obtenerConfiguracionTabla();
+
+                if (config === CONFIG_TABLAS.inventario) {
+
+                    if (
+                        typeof agregarFilaInventario ===
+                        'function'
+                    ) {
+                        agregarFilaInventario();
+                    } else {
+                        break;
+                    }
+
                 } else {
-                    break;
+
+                    const config =
+                        obtenerConfiguracionTabla();
+
+                    if (
+                        config === CONFIG_TABLAS.inventario
+                    ) {
+
+                        if (
+                            typeof agregarFilaInventario ===
+                            'function'
+                        ) {
+                            agregarFilaInventario();
+
+                        } else {
+                            break;
+                        }
+
+                    } else {
+
+                        if (
+                            typeof agregarFilaAnalisis ===
+                            'function'
+                        ) {
+                            agregarFilaAnalisis();
+
+                        } else {
+                            break;
+                        }
+                    }
+
                 }
             }
 
@@ -1070,8 +1294,11 @@
                 const colDestino =
                     colInicio + colOffset;
 
+                const config =
+                    obtenerConfiguracionTabla();
+
                 if (
-                    colDestino >= COLUMNAS_GRID.length
+                    colDestino >= config.columnas.length
                 ) {
                     break;
                 }
@@ -1096,8 +1323,16 @@
             }
         }
 
-        if (typeof totalizarAnalisis === 'function') {
-            totalizarAnalisis();
+        const configActual = obtenerConfiguracionTabla();
+
+        if (configActual === CONFIG_TABLAS.inventario) {
+            if (typeof recalcularTotalEmpaques === 'function') {
+                recalcularTotalEmpaques();
+            }
+        } else {
+            if (typeof totalizarAnalisis === 'function') {
+                totalizarAnalisis();
+            }
         }
 
         /*
@@ -1115,7 +1350,8 @@
                 Math.max(
                     ...matriz.map(fila => fila.length)
                 ) - 1,
-                COLUMNAS_GRID.length - 1
+                obtenerConfiguracionTabla()
+                    .columnas.length - 1
             );
 
         const destinoFinal =
@@ -1214,18 +1450,27 @@
 
             const campo = obtenerCampo(td);
 
-            // Código es una excepción:
-            // aunque esté bloqueado, Delete debe poder limpiarlo.
+            /*
+             * ========================================================
+             * CÓDIGO
+             * ========================================================
+             *
+             * Al borrar el código sí debemos limpiar la descripción,
+             * porque el producto deja de estar identificado.
+             */
             if (campo === 'codigo') {
-                if (typeof desbloquearCeldaCodigo === 'function') {
+                if (
+                    typeof desbloquearCeldaCodigo ===
+                    'function'
+                ) {
                     desbloquearCeldaCodigo(input);
                 }
 
                 input.value = '';
 
-                const desc = td
-                    .closest('tr')
-                    ?.querySelector('.inp-desc');
+                const desc =
+                    td.closest('tr')
+                        ?.querySelector('.inp-desc');
 
                 if (desc) {
                     desc.value = '';
@@ -1236,25 +1481,24 @@
                 return;
             }
 
-            // El resto de campos bloqueados/no editables no se modifican.
+            /*
+             * ========================================================
+             * CAMPOS NUMÉRICOS
+             * ========================================================
+             *
+             * IMPORTANTE:
+             * Nunca tocar .inp-desc aquí.
+             *
+             * Borrar PRE, INV, EMP, UNI o COSTO solamente
+             * modifica ese campo y recalcula la fila.
+             */
             if (input.readOnly) {
                 return;
             }
 
-            if (typeof desbloquearCeldaCodigo === 'function') {
-                desbloquearCeldaCodigo(input);
-            }
-
-            input.value = '';
-
-            const desc =
-                td.closest('tr')
-                    ?.querySelector('.inp-desc');
-
-            if (desc) {
-                desc.value = '';
-            }
-
+            /*
+             * PRE.
+             */
             if (campo === 'pre') {
                 input.value = '1';
 
@@ -1268,21 +1512,13 @@
                 return;
             }
 
-            if (
-                campo === 'inv-emp' ||
-                campo === 'emp' ||
-                campo === 'uni'
-            ) {
+            /*
+             * INV. EMP.
+             */
+            if (campo === 'inv-emp') {
                 input.value = '0';
 
-                if (campo === 'uni') {
-                    if (
-                        typeof ajustarPorUnidades ===
-                        'function'
-                    ) {
-                        ajustarPorUnidades(input);
-                    }
-                } else if (
+                if (
                     typeof calcularFila ===
                     'function'
                 ) {
@@ -1292,6 +1528,41 @@
                 return;
             }
 
+            /*
+             * EMP.
+             */
+            if (campo === 'emp') {
+                input.value = '0';
+
+                if (
+                    typeof calcularFila ===
+                    'function'
+                ) {
+                    calcularFila(input);
+                }
+
+                return;
+            }
+
+            /*
+             * UNI.
+             */
+            if (campo === 'uni') {
+                input.value = '0';
+
+                if (
+                    typeof ajustarPorUnidades ===
+                    'function'
+                ) {
+                    ajustarPorUnidades(input);
+                }
+
+                return;
+            }
+
+            /*
+             * COSTO UNI.
+             */
             if (campo === 'costo') {
                 input.value = '0.00';
 
@@ -1301,10 +1572,19 @@
                 ) {
                     calcularFila(input);
                 }
+
+                return;
             }
         });
 
-        if (typeof totalizarAnalisis === 'function') {
+        /*
+         * Actualizamos el total una sola vez después
+         * de procesar toda la selección.
+         */
+        if (
+            typeof totalizarAnalisis ===
+            'function'
+        ) {
             totalizarAnalisis();
         }
     }
@@ -1509,9 +1789,12 @@
     document.addEventListener(
         'click',
         e => {
+            const config =
+                obtenerConfiguracionTabla();
+
             const tabla =
                 e.target.closest(
-                    SELECTOR_TABLA
+                    config.tabla
                 );
 
             if (!tabla) {
@@ -1520,7 +1803,7 @@
 
             const td =
                 e.target.closest(
-                    `${SELECTOR_TBODY} td`
+                    `${obtenerSelectorTbodyActual()} td`
                 );
 
             if (!td) {
@@ -1559,7 +1842,7 @@
         e => {
             const td =
                 e.target.closest(
-                    `${SELECTOR_TBODY} td`
+                    `${obtenerSelectorTbodyActual()} td`
                 );
 
             if (!td) {
@@ -1596,7 +1879,7 @@
         e => {
             const td =
                 e.target.closest(
-                    `${SELECTOR_TBODY} td`
+                    `${obtenerSelectorTbodyActual()} td`
                 );
 
             if (!td) {
@@ -1663,7 +1946,7 @@
 
             const td =
                 e.target.closest(
-                    `${SELECTOR_TBODY} td`
+                    `${obtenerSelectorTbodyActual()} td`
                 );
 
             if (!td) {
@@ -1747,7 +2030,7 @@
         }
         if (
             e.target instanceof HTMLInputElement &&
-            e.target.closest(SELECTOR_TBODY) &&
+            e.target.closest(obtenerSelectorTbodyActual()) &&
             e.target !== input
         ) {
             return;
@@ -1759,7 +2042,7 @@
          */
         const elementoTeclado =
             e.target instanceof HTMLInputElement &&
-                e.target.closest(SELECTOR_TBODY)
+                e.target.closest(obtenerSelectorTbodyActual())
                 ? e.target
                 : input;
 
@@ -1889,9 +2172,12 @@
     document.addEventListener(
         'click',
         e => {
+            const config =
+                obtenerConfiguracionTabla();
+
             if (
                 !e.target.closest(
-                    SELECTOR_TABLA
+                    config.tabla
                 )
             ) {
                 desseleccionarCeldas();

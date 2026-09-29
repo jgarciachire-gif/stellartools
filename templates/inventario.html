@@ -1,0 +1,441 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- ENCABEZADO -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+
+        <div>
+            <h1 class="text-2xl font-bold text-slate-800">
+                Inventario de tiendas
+            </h1>
+
+            <p class="text-sm text-slate-500 mt-1">
+                Listas de inventario registradas
+            </p>
+        </div>
+
+        <button type="button" onclick="abrirModalNuevoInventario()" class="inline-flex items-center justify-center gap-2
+                   px-5 py-3 rounded-xl
+                   bg-indigo-600 hover:bg-indigo-700
+                   text-white font-semibold
+                   shadow-sm hover:shadow-md
+                   transition-all">
+
+            <i class="fa-solid fa-plus"></i>
+
+            Nueva lista
+        </button>
+
+    </div>
+
+
+    <!-- LISTADO -->
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+
+        {% if inventarios %}
+
+        <div class="overflow-x-auto">
+
+            <table class="w-full text-sm">
+
+                <thead class="bg-slate-50 border-b border-slate-200">
+
+                    <tr>
+
+                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                            Nombre de la lista
+                        </th>
+
+                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                            Tienda
+                        </th>
+
+                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                            Realizado por
+                        </th>
+
+                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                            Fecha
+                        </th>
+
+                        <th class="px-5 py-4 text-center font-semibold text-slate-600">
+                            Estado
+                        </th>
+
+                        <th class="px-5 py-4 text-center font-semibold text-slate-600">
+                            Acción
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody class="divide-y divide-slate-100">
+
+                    {% for inventario in inventarios %}
+
+                    <tr class="hover:bg-slate-50 transition-colors">
+
+                        <td class="px-5 py-4 font-medium text-slate-800">
+                            {{ inventario.nombre }}
+                        </td>
+
+                        <td class="px-5 py-4 text-slate-600">
+                            {{ inventario.tienda }}
+                        </td>
+
+                        <td class="px-5 py-4 text-slate-600">
+                            {{ inventario.realizado_por }}
+                        </td>
+
+                        <td class="px-5 py-4 text-slate-500 whitespace-nowrap">
+                            {{ inventario.created_at }}
+                        </td>
+
+                        <td class="px-5 py-4 text-center">
+
+                            {% if inventario.estado == 'completado' %}
+
+                            <span class="inline-flex items-center gap-1
+                                       px-3 py-1 rounded-full
+                                       bg-emerald-100 text-emerald-700
+                                       text-xs font-semibold">
+
+                                <i class="fa-solid fa-circle-check"></i>
+                                Completado
+
+                            </span>
+
+                            {% else %}
+
+                            <span class="inline-flex items-center gap-1
+                                       px-3 py-1 rounded-full
+                                       bg-amber-100 text-amber-700
+                                       text-xs font-semibold">
+
+                                <i class="fa-solid fa-pen"></i>
+                                Borrador
+
+                            </span>
+
+                            {% endif %}
+
+                        </td>
+
+                        <td class="px-5 py-4 text-center">
+
+                            <a href="/inventario/{{ inventario.id }}" class="inline-flex items-center justify-center
+                                       w-9 h-9 rounded-lg
+                                       text-slate-500
+                                       hover:text-indigo-600
+                                       hover:bg-indigo-50
+                                       transition-colors" title="Abrir inventario">
+
+                                <i class="fa-solid fa-folder-open"></i>
+
+                            </a>
+
+                        </td>
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+        </div>
+
+        {% else %}
+
+        <!-- ESTADO VACÍO -->
+        <div class="py-16 px-6 text-center">
+
+            <div class="mx-auto w-16 h-16 rounded-2xl
+                       bg-indigo-50
+                       flex items-center justify-center
+                       text-indigo-500 text-2xl">
+
+                <i class="fa-solid fa-clipboard-list"></i>
+
+            </div>
+
+            <h2 class="mt-4 text-lg font-semibold text-slate-800">
+                No hay inventarios registrados
+            </h2>
+
+            <p class="mt-1 text-sm text-slate-500">
+                Crea tu primera lista de inventario.
+            </p>
+
+            <button type="button" onclick="abrirModalNuevoInventario()" class="mt-5 px-5 py-2.5 rounded-xl
+                       bg-indigo-600 hover:bg-indigo-700
+                       text-white font-semibold
+                       transition-colors">
+
+                Nueva lista
+
+            </button>
+
+        </div>
+
+        {% endif %}
+
+    </div>
+
+</div>
+
+
+<!-- ========================================================= -->
+<!-- MODAL NUEVO INVENTARIO -->
+<!-- ========================================================= -->
+
+<div id="modal-nuevo-inventario" class="fixed inset-0 z-50 hidden
+           items-center justify-center
+           bg-slate-900/50 backdrop-blur-sm
+           px-4">
+
+    <div class="w-full max-w-lg
+               bg-white rounded-2xl
+               shadow-2xl
+               overflow-hidden">
+
+        <!-- HEADER -->
+
+        <div class="px-6 py-5 border-b border-slate-200">
+
+            <div class="flex items-center justify-between">
+
+                <div>
+
+                    <h2 class="text-lg font-bold text-slate-800">
+                        Nueva lista de inventario
+                    </h2>
+
+                    <p class="text-sm text-slate-500 mt-1">
+                        Completa los datos iniciales.
+                    </p>
+
+                </div>
+
+                <button type="button" onclick="cerrarModalNuevoInventario()" class="w-9 h-9 rounded-lg
+                           text-slate-400
+                           hover:text-slate-700
+                           hover:bg-slate-100
+                           transition-colors">
+
+                    <i class="fa-solid fa-xmark"></i>
+
+                </button>
+
+            </div>
+
+        </div>
+
+
+        <!-- FORMULARIO -->
+
+        <form method="POST" action="/inventario/crear" class="px-6 py-6 space-y-5">
+
+            <!-- NOMBRE -->
+
+            <div>
+
+                <label for="inventario-nombre" class="block text-sm font-semibold text-slate-700 mb-2">
+
+                    Nombre de la Lista
+
+                </label>
+
+                <input id="inventario-nombre" name="nombre" type="text" maxlength="150" required autocomplete="off"
+                    class="w-full px-4 py-3
+                           rounded-xl border border-slate-300
+                           focus:outline-none
+                           focus:ring-2 focus:ring-indigo-500/30
+                           focus:border-indigo-500" placeholder="Ej. Inventario septiembre">
+
+            </div>
+
+
+            <!-- REALIZADO POR -->
+
+            <div>
+
+                <label for="inventario-realizado-por" class="block text-sm font-semibold text-slate-700 mb-2">
+
+                    Realizado por
+
+                </label>
+
+                <input id="inventario-realizado-por" name="realizado_por" type="text" maxlength="150" required
+                    autocomplete="off" class="w-full px-4 py-3
+                           rounded-xl border border-slate-300
+                           focus:outline-none
+                           focus:ring-2 focus:ring-indigo-500/30
+                           focus:border-indigo-500" placeholder="Nombre de quien realiza el inventario">
+
+            </div>
+
+
+            <!-- TIENDA -->
+
+            <div>
+
+                <label for="inventario-tienda" class="block text-sm font-semibold text-slate-700 mb-2">
+
+                    Tienda
+
+                </label>
+
+                <select id="inventario-tienda" name="tienda" required class="w-full px-4 py-3
+                           rounded-xl border border-slate-300
+                           bg-white
+                           focus:outline-none
+                           focus:ring-2 focus:ring-indigo-500/30
+                           focus:border-indigo-500">
+
+                    <option value="">
+                        Seleccionar tienda...
+                    </option>
+
+                    <option value="CENTRO">
+                        CENTRO
+                    </option>
+
+                    <option value="NAGUANAGUA">
+                        NAGUANAGUA
+                    </option>
+
+                    <option value="ISABELICA">
+                        ISABELICA
+                    </option>
+
+                    <option value="CIUDAD ALIANZA">
+                        CIUDAD ALIANZA
+                    </option>
+
+                    <option value="GARIBALDI">
+                        GARIBALDI
+                    </option>
+
+                    <option value="SAN DIEGO">
+                        SAN DIEGO
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- BOTONES -->
+
+            <div class="flex justify-end gap-3 pt-2">
+
+                <button type="button" onclick="cerrarModalNuevoInventario()" class="px-5 py-2.5 rounded-xl
+                           border border-slate-300
+                           text-slate-700
+                           hover:bg-slate-50
+                           font-semibold
+                           transition-colors">
+
+                    Cancelar
+
+                </button>
+
+                <button type="submit" class="px-5 py-2.5 rounded-xl
+                           bg-indigo-600 hover:bg-indigo-700
+                           text-white
+                           font-semibold
+                           transition-colors">
+
+                    <i class="fa-solid fa-plus mr-1"></i>
+                    Crear
+
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<script>
+
+    function abrirModalNuevoInventario() {
+
+        const modal = document.getElementById(
+            'modal-nuevo-inventario'
+        );
+
+        if (!modal) return;
+
+        modal.classList.remove('hidden');
+        modal.classList.add('flex');
+
+        setTimeout(() => {
+            document.getElementById(
+                'inventario-nombre'
+            )?.focus();
+        }, 50);
+    }
+
+
+    function cerrarModalNuevoInventario() {
+
+        const modal = document.getElementById(
+            'modal-nuevo-inventario'
+        );
+
+        if (!modal) return;
+
+        modal.classList.add('hidden');
+        modal.classList.remove('flex');
+    }
+
+
+    document.addEventListener(
+        'keydown',
+        function (e) {
+
+            if (e.key !== 'Escape') {
+                return;
+            }
+
+            const modal = document.getElementById(
+                'modal-nuevo-inventario'
+            );
+
+            if (
+                modal &&
+                !modal.classList.contains('hidden')
+            ) {
+                cerrarModalNuevoInventario();
+            }
+
+        }
+    );
+
+
+    document.getElementById(
+        'modal-nuevo-inventario'
+    )?.addEventListener(
+        'click',
+        function (e) {
+
+            if (e.target === this) {
+                cerrarModalNuevoInventario();
+            }
+
+        }
+    );
+
+</script>
+
+{% endblock %}

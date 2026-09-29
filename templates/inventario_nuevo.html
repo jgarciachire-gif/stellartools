@@ -1,0 +1,2670 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div id="inventario-app" class="max-w-7xl mx-auto px-4 py-5" data-inventario-id="{{ inventario.id }}"
+    data-tienda="{{ inventario.tienda }}" data-estado="{{ inventario.estado }}">
+
+    <!-- ===================================================== -->
+    <!-- ENCABEZADO -->
+    <!-- ===================================================== -->
+
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm">
+
+        <div class="px-5 py-5">
+
+            <div class="flex flex-col xl:flex-row xl:items-end gap-5">
+
+                <!-- NOMBRE -->
+
+                <div class="flex-1">
+
+                    <label class="block text-xs font-semibold uppercase
+                               tracking-wide text-slate-500 mb-1">
+
+                        Nombre de la Lista
+
+                    </label>
+
+                    <input id="inventario-nombre" type="text" value="{{ inventario.nombre }}" readonly class="w-full bg-slate-50
+                               border border-slate-200
+                               rounded-xl px-4 py-3
+                               text-lg font-semibold
+                               text-slate-800
+                               focus:outline-none
+                               focus:ring-2 focus:ring-indigo-500/30">
+
+                </div>
+
+
+                <!-- REALIZADO POR -->
+
+                <div class="w-full xl:w-64">
+
+                    <label class="block text-xs font-semibold uppercase
+                               tracking-wide text-slate-500 mb-1">
+
+                        Realizado por
+
+                    </label>
+
+                    <input id="inventario-realizado-por" type="text" value="{{ inventario.realizado_por }}" readonly
+                        class="w-full bg-slate-50
+                               border border-slate-200
+                               rounded-xl px-4 py-3
+                               text-slate-700
+                               focus:outline-none
+                               focus:ring-2 focus:ring-indigo-500/30">
+
+                </div>
+
+
+                <!-- TIENDA -->
+
+                <div class="w-full xl:w-56">
+
+                    <label class="block text-xs font-semibold uppercase
+                               tracking-wide text-slate-500 mb-1">
+
+                        Tienda
+
+                    </label>
+
+                    <div class="w-full px-4 py-3
+                               rounded-xl
+                               border border-slate-200
+                               bg-slate-50
+                               font-semibold text-slate-700">
+
+                        {{ inventario.tienda }}
+
+                    </div>
+
+                </div>
+
+
+                <!-- ESTADO -->
+
+                <div class="w-full xl:w-auto">
+
+                    <label class="block text-xs font-semibold uppercase
+                               tracking-wide text-slate-500 mb-1">
+
+                        Estado
+
+                    </label>
+
+                    {% if inventario.estado == 'completado' %}
+
+                    <span class="inline-flex items-center gap-2
+                               px-4 py-3 rounded-xl
+                               bg-emerald-50
+                               border border-emerald-200
+                               text-emerald-700
+                               font-semibold">
+
+                        <i class="fa-solid fa-circle-check"></i>
+                        Completado
+
+                    </span>
+
+                    {% else %}
+
+                    <span class="inline-flex items-center gap-2
+                               px-4 py-3 rounded-xl
+                               bg-amber-50
+                               border border-amber-200
+                               text-amber-700
+                               font-semibold">
+
+                        <i class="fa-solid fa-pen"></i>
+                        Borrador
+
+                    </span>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+
+            <!-- FECHA -->
+
+            <div class="mt-4 text-xs text-slate-400">
+
+                Creado:
+                {{ inventario.created_at }}
+
+                {% if inventario.updated_at != inventario.created_at %}
+
+                · Última modificación:
+                {{ inventario.updated_at }}
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- BARRA DE ACCIONES -->
+    <!-- ===================================================== -->
+
+    <div class="mt-5 bg-white rounded-2xl
+               border border-slate-200 shadow-sm
+               px-4 py-3">
+
+        <div class="flex flex-wrap items-center gap-3">
+
+            <!-- IMPORTAR -->
+
+            {% if inventario.estado == 'borrador' %}
+
+            <button type="button" id="btn-importar-productos" class="inline-flex items-center gap-2
+           px-4 py-2.5 rounded-xl
+           bg-indigo-600 hover:bg-indigo-700
+           text-white font-semibold
+           transition-colors">
+
+                <i class="fa-solid fa-file-import"></i>
+
+                Importar productos
+
+            </button>
+
+            {% endif %}
+
+            <!-- GUARDAR -->
+
+            {% if inventario.estado == 'borrador' %}
+
+            <button type="button" id="btn-guardar-inventario" class="inline-flex items-center gap-2
+           px-4 py-2.5 rounded-xl
+           bg-emerald-600 hover:bg-emerald-700
+           text-white font-semibold
+           transition-colors">
+
+                <i class="fa-solid fa-floppy-disk"></i>
+
+                Guardar
+
+            </button>
+
+            {% else %}
+
+            <button type="button" id="btn-guardar-inventario" disabled class="inline-flex items-center gap-2
+               px-4 py-2.5 rounded-xl
+               bg-slate-300
+               text-slate-500
+               font-semibold
+               cursor-not-allowed">
+
+                <i class="fa-solid fa-lock"></i>
+
+                Guardado
+
+            </button>
+
+            {% endif %}
+
+
+            <!-- GUARDAR BORRADOR -->
+
+            {% if inventario.estado == 'borrador' %}
+
+            <button type="button" id="btn-guardar-borrador" class="inline-flex items-center gap-2
+                       px-4 py-2.5 rounded-xl
+                       border border-slate-300
+                       text-slate-700
+                       hover:bg-slate-50
+                       font-semibold
+                       transition-colors">
+
+                <i class="fa-solid fa-file-pen"></i>
+
+                Guardar borrador
+
+            </button>
+
+            {% endif %}
+            <button type="button" id="btn-eliminar-inventario" class="inline-flex items-center gap-2
+               px-4 py-2.5 rounded-xl
+               bg-rose-600 hover:bg-rose-700
+               text-white font-semibold
+               transition-colors">
+
+                <i class="fa-solid fa-trash-can"></i>
+
+                Eliminar documento
+
+            </button>
+
+            <div class="flex-1"></div>
+
+
+            <!-- VOLVER -->
+
+            <a href="/inventario" id="btn-volver-inventarios" class="inline-flex items-center gap-2
+                       px-4 py-2.5 rounded-xl
+                       border border-slate-300
+                       text-slate-600
+                       hover:bg-slate-50
+                       font-semibold
+                       transition-colors">
+
+                <i class="fa-solid fa-arrow-left"></i>
+
+                Biblioteca
+
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <!-- ===================================================== -->
+    <!-- TABLA DE INVENTARIO -->
+    <!-- ===================================================== -->
+
+    <div id="contenedor-tabla-inventario" class="mt-5 bg-white border border-slate-300
+            rounded-2xl shadow-xs overflow-hidden">
+
+        <div class="overflow-x-auto">
+
+            <!--
+        Cuadrícula de inventario con el mismo lenguaje visual
+        de la tabla de Análisis de Pedido.
+    -->
+            <table id="tabla-inventario" class="w-full text-left border-collapse border border-slate-900">
+
+                <thead>
+
+                    <tr class="bg-slate-900 text-white text-[11px]
+                       font-bold uppercase tracking-wider select-none">
+
+                        <th class="py-2.5 px-3 w-36
+                           border-r border-slate-800">
+                            <div class="flex items-center justify-between">
+                                CÓDIGO
+                            </div>
+                        </th>
+
+                        <th class="py-2.5 px-3
+                           border-r border-slate-800">
+                            <div class="flex items-center justify-between">
+                                DESCRIPCIÓN
+                            </div>
+                        </th>
+
+                        <th class="py-2.5 px-3 w-32
+                           text-right
+                           border-r border-slate-800">
+                            <div class="flex items-center justify-end">
+                                CANTIDAD
+                            </div>
+                        </th>
+
+                        <th class="py-2.5 px-2 w-12 text-center">
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+                <tbody id="filas-tabla-inventario" class="bg-white text-xs">
+
+                    {% for producto in productos %}
+
+                    <tr data-detalle-id="{{ producto.id }}" data-codigo="{{ producto.codigo }}"
+                        class="hover:bg-blue-50/40 transition text-xs">
+
+                        <!-- CÓDIGO -->
+
+                        <td class="border border-slate-200
+                           p-0 celda-interactiva relative">
+
+                            <input type="text" autocomplete="off" spellcheck="false" inputmode="numeric"
+                                value="{{ producto.codigo }}" {% if inventario.estado=='completado' %} readonly
+                                tabindex="-1" {% endif %} class="inp-codigo w-full
+                                        px-2 py-1.5
+                                        border-0
+                                        text-xs font-normal
+                                        uppercase
+                                        focus:bg-white
+                                        focus:outline-none
+                                        bg-transparent
+                                        {% if inventario.estado == 'completado' %}
+                                        cursor-default
+                                        bg-slate-50
+                                        {% endif %}">
+
+                        </td>
+
+
+                        <!-- DESCRIPCIÓN -->
+
+                        <td class="border border-slate-200
+                           p-0 celda-interactiva relative">
+
+                            <input type="text" readonly tabindex="-1" value="{{ producto.descripcion }}" class="inp-desc w-full
+                               px-2 py-1.5
+                               bg-slate-50
+                               text-xs font-normal
+                               text-slate-600
+                               focus:outline-none
+                               cursor-default
+                               border-0">
+
+                        </td>
+
+
+                        <!-- CANTIDAD -->
+
+                        <td class="border border-slate-200
+                           p-0 celda-interactiva relative">
+
+                            <input type="text" inputmode="decimal" autocomplete="off" value="{{ producto.cantidad }}" {%
+                                if inventario.estado=='completado' %} readonly tabindex="-1" {% endif %} class="inp-cantidad
+                                        text-right
+                                        w-full
+                                        px-2 py-1.5
+                                        border-0
+                                        text-xs font-normal
+                                        focus:bg-white
+                                        focus:outline-none
+                                        bg-transparent
+                                        {% if inventario.estado == 'completado' %}
+                                        cursor-default
+                                        bg-slate-50
+                                        {% endif %}">
+
+                        </td>
+
+
+                        <!-- ELIMINAR -->
+
+                        {% if inventario.estado == 'borrador' %}
+
+                        <td class="border border-slate-200
+                                p-0 text-center
+                                bg-slate-50/50">
+
+                            <button type="button" class="btn-eliminar-fila
+                                        w-full h-full
+                                        text-slate-400
+                                        hover:text-rose-600
+                                        transition py-1.5" title="Eliminar producto">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+
+                        </td>
+
+                        {% else %}
+
+                        <td class="border border-slate-200
+                                p-0 text-center
+                                bg-slate-50/50">
+                        </td>
+
+                        {% endif %}
+
+                    </tr>
+
+                    {% endfor %}
+
+                </tbody>
+
+            </table>
+
+            <!-- BOTÓN AGREGAR FILA Y TOTALIZACIÓN -->
+            <div class="p-3 bg-slate-50 border-t border-slate-300
+           flex flex-col md:flex-row
+           justify-between items-center gap-4">
+
+                {% if inventario.estado == 'borrador' %}
+
+                <button type="button" id="btn-agregar-fila-inventario" class="px-3 py-1.5
+                            bg-slate-900
+                            hover:bg-slate-700
+                            text-white
+                            font-normal
+                            rounded-lg
+                            text-xs
+                            transition
+                            shadow-xs
+                            flex items-center gap-2">
+
+                    <i class="fa-solid fa-plus"></i>
+
+                </button>
+
+                {% endif %}
+
+                <!-- TOTAL DE EMPAQUES -->
+                <div class="flex flex-wrap items-center gap-6 text-xs text-slate-600">
+
+                    <div>
+                        <span class="text-slate-400 block font-normal">
+                            TOTAL EMPAQUES
+                        </span>
+
+                        <span id="total-empaques" class="text-sm font-normal text-slate-800">
+                            0
+                        </span>
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ========================================================= -->
+<!-- MODAL IMPORTAR PRODUCTOS -->
+<!-- ========================================================= -->
+
+<div id="modal-importar-inventario" class="hidden fixed inset-0 z-[100]
+           bg-slate-900/50
+           flex items-center justify-center
+           p-4">
+
+    <div class="bg-white w-full max-w-5xl
+               max-h-[90vh]
+               overflow-y-auto
+               rounded-2xl
+               shadow-2xl
+               border border-slate-200">
+
+        <!-- CABECERA -->
+
+        <div class="px-6 py-4
+                   border-b border-slate-200
+                   flex items-center justify-between">
+
+            <div>
+
+                <h2 class="text-lg font-bold text-slate-800">
+                    Importar productos
+                </h2>
+
+                <p class="text-xs text-slate-500 mt-1">
+                    Selecciona el proveedor y utiliza los filtros
+                    para agregar productos al inventario.
+                </p>
+
+            </div>
+
+            <button type="button" id="btn-cerrar-importador-inventario" class="w-9 h-9 rounded-lg
+                       text-slate-400
+                       hover:text-slate-700
+                       hover:bg-slate-100">
+
+                <i class="fa-solid fa-xmark"></i>
+
+            </button>
+
+        </div>
+
+
+        <!-- CONTENIDO -->
+
+        <div class="p-6 space-y-5">
+
+            <!-- PROVEEDOR -->
+
+            <div>
+
+                <label class="block text-xs font-semibold
+                           text-slate-700 mb-1.5">
+
+                    Proveedor
+
+                </label>
+
+                <select id="inventario-proveedor" class="w-full px-4 py-2.5
+                           border border-slate-300
+                           rounded-xl
+                           text-sm
+                           focus:ring-2
+                           focus:ring-indigo-500/30
+                           focus:border-indigo-500
+                           outline-none">
+
+                    <option value="">
+                        Seleccionar proveedor...
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- FILTROS -->
+
+            <div id="inventario-filtros" class="grid grid-cols-1
+                       md:grid-cols-2
+                       lg:grid-cols-4
+                       gap-4">
+
+                <!-- DEPARTAMENTO -->
+
+                <div>
+
+                    <label class="block text-xs font-semibold
+                                  text-slate-700 mb-1.5">
+
+                        Departamento
+
+                    </label>
+
+                    <select id="inventario-departamento" disabled class="w-full px-3 py-2.5
+                               border border-slate-300
+                               rounded-xl
+                               text-sm
+                               bg-slate-100">
+
+                        <option value="">
+                            Todos
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- GRUPO -->
+
+                <div>
+
+                    <label class="block text-xs font-semibold
+                                  text-slate-700 mb-1.5">
+
+                        Grupo
+
+                    </label>
+
+                    <select id="inventario-grupo" disabled class="w-full px-3 py-2.5
+                               border border-slate-300
+                               rounded-xl
+                               text-sm
+                               bg-slate-100">
+
+                        <option value="">
+                            Todos
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- SUBGRUPO -->
+
+                <div>
+
+                    <label class="block text-xs font-semibold
+                                  text-slate-700 mb-1.5">
+
+                        Subgrupo
+
+                    </label>
+
+                    <select id="inventario-subgrupo" disabled class="w-full px-3 py-2.5
+                               border border-slate-300
+                               rounded-xl
+                               text-sm
+                               bg-slate-100">
+
+                        <option value="">
+                            Todos
+                        </option>
+
+                    </select>
+
+                </div>
+
+
+                <!-- MARCA -->
+
+                <div>
+
+                    <label class="block text-xs font-semibold
+                                  text-slate-700 mb-1.5">
+
+                        Marca
+
+                    </label>
+
+                    <select id="inventario-marca" disabled class="w-full px-3 py-2.5
+                               border border-slate-300
+                               rounded-xl
+                               text-sm
+                               bg-slate-100">
+
+                        <option value="">
+                            Todas
+                        </option>
+
+                    </select>
+
+                </div>
+
+            </div>
+
+
+            <!-- RESULTADO -->
+
+            <div id="inventario-importacion-info" class="hidden
+                       rounded-xl
+                       border border-indigo-100
+                       bg-indigo-50
+                       px-4 py-3
+                       text-sm text-indigo-700">
+
+            </div>
+
+        </div>
+
+
+        <!-- FOOTER -->
+
+        <div class="px-6 py-4
+                   border-t border-slate-200
+                   flex justify-end gap-3">
+
+            <button type="button" id="btn-cancelar-importador-inventario" class="px-4 py-2.5
+                       rounded-xl
+                       border border-slate-300
+                       text-slate-700
+                       font-semibold
+                       hover:bg-slate-50">
+
+                Cancelar
+
+            </button>
+
+            <button type="button" id="btn-ejecutar-importacion-inventario" class="px-4 py-2.5
+                       rounded-xl
+                       bg-indigo-600
+                       hover:bg-indigo-700
+                       text-white
+                       font-semibold">
+
+                <i class="fa-solid fa-download mr-1"></i>
+
+                Importar productos
+
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script src="/static/js/componentes/modal.js"></script>
+<script src="/static/js/analisis/analisis-interaccion.js"></script>
+
+<script>
+
+    // =========================================================
+    // ESTADO DEL INVENTARIO
+    // =========================================================
+
+    const inventarioApp =
+        document.getElementById(
+            'inventario-app'
+        );
+
+    const inventarioId =
+        inventarioApp?.dataset.inventarioId;
+
+    const estadoInicial =
+        inventarioApp?.dataset.estado || 'borrador';
+
+
+    // =========================================================
+    // UTILIDADES
+    // =========================================================
+
+    function obtenerFilasInventario() {
+
+        return Array.from(
+            document.querySelectorAll(
+                '#filas-tabla-inventario tr'
+            )
+        );
+
+    }
+
+
+    function normalizarCantidadInventario(valor) {
+
+        if (
+            valor === null ||
+            valor === undefined ||
+            valor === ''
+        ) {
+            return 0;
+        }
+
+        const numero = Number(
+            String(valor)
+                .replace(',', '.')
+        );
+
+        if (
+            !Number.isFinite(numero) ||
+            numero < 0
+        ) {
+            return null;
+        }
+
+        return numero;
+
+    }
+
+
+    // =========================================================
+    // TOTAL
+    // =========================================================
+
+    function recalcularTotalEmpaques() {
+
+        let total = 0;
+
+        document
+            .querySelectorAll(
+                '.inp-cantidad'
+            )
+            .forEach(input => {
+
+                const valor =
+                    normalizarCantidadInventario(
+                        input.value
+                    );
+
+                if (
+                    valor !== null
+                ) {
+                    total += valor;
+                }
+
+            });
+
+        const elemento =
+            document.getElementById(
+                'total-empaques'
+            );
+
+        if (!elemento) {
+            return;
+        }
+
+        elemento.textContent =
+            total.toLocaleString(
+                'es-ES',
+                {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 3
+                }
+            );
+
+    }
+
+
+    // =========================================================
+    // VALIDACIÓN DE CANTIDAD
+    // =========================================================
+
+    function validarCantidadInventario(input) {
+
+        if (!input) {
+            return true;
+        }
+
+        let valor =
+            String(input.value || '')
+                .replace(',', '.')
+                .trim();
+
+        // Permitir campo vacío temporalmente.
+        if (!valor) {
+            input.value = '0';
+            recalcularTotalEmpaques();
+            return true;
+        }
+
+        // Solo números positivos o cero
+        // y hasta 3 decimales.
+        if (!/^\d+(?:\.\d{0,3})?$/.test(valor)) {
+
+            input.value =
+                input.dataset.valorAnterior ||
+                '0';
+
+            mostrarNotificacionInventario(
+                'Cantidad inválida. Usa números con máximo 3 decimales.'
+            );
+
+            recalcularTotalEmpaques();
+
+            return false;
+        }
+
+        const numero =
+            Number(valor);
+
+        if (
+            !Number.isFinite(numero) ||
+            numero < 0
+        ) {
+
+            input.value =
+                input.dataset.valorAnterior ||
+                '0';
+
+            mostrarNotificacionInventario(
+                'La cantidad no puede ser negativa.'
+            );
+
+            recalcularTotalEmpaques();
+
+            return false;
+        }
+
+        input.value = valor;
+        input.dataset.valorAnterior = valor;
+
+        recalcularTotalEmpaques();
+
+        return true;
+
+    }
+
+
+    function mostrarNotificacionInventario(
+        mensaje
+    ) {
+
+        if (
+            typeof mostrarNotificacion ===
+            'function'
+        ) {
+
+            mostrarNotificacion({
+                tipo: 'warning',
+                mensaje
+            });
+
+            return;
+        }
+
+        console.warn(
+            mensaje
+        );
+
+    }
+
+
+    // =========================================================
+    // CONSTRUIR PAYLOAD
+    // =========================================================
+
+    function obtenerProductosInventario() {
+
+        const filas =
+            obtenerFilasInventario();
+
+        const productos = [];
+
+        for (
+            const fila of filas
+        ) {
+
+            const codigo =
+                fila
+                    .querySelector(
+                        '.inp-codigo'
+                    )
+                    ?.value
+                    ?.trim() || '';
+
+            const descripcion =
+                fila
+                    .querySelector(
+                        '.inp-desc'
+                    )
+                    ?.value
+                    ?.trim() || '';
+
+            const inputCantidad =
+                fila.querySelector(
+                    '.inp-cantidad'
+                );
+
+            if (!codigo) {
+                continue;
+            }
+
+            const cantidad =
+                normalizarCantidadInventario(
+                    inputCantidad?.value
+                );
+
+            if (
+                cantidad === null
+            ) {
+                throw new Error(
+                    `Cantidad inválida para ${codigo}.`
+                );
+            }
+
+            productos.push({
+                codigo,
+                descripcion,
+                cantidad
+            });
+
+        }
+
+        return productos;
+
+    }
+
+    // =========================================================
+    // ELIMINAR DOCUMENTO COMPLETO
+    // =========================================================
+
+    async function eliminarInventario() {
+
+        const confirmar =
+            await mostrarConfirmacion({
+                titulo: '¿Eliminar inventario?',
+                mensaje:
+                    'Esta acción eliminará el documento completo y todos sus productos. Esta acción no se puede deshacer.'
+            });
+
+        if (!confirmar) {
+            return;
+        }
+
+        const boton =
+            document.getElementById(
+                'btn-eliminar-inventario'
+            );
+
+        if (boton) {
+
+            boton.disabled = true;
+
+            boton.classList.add(
+                'opacity-60',
+                'cursor-not-allowed'
+            );
+
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    `/api/inventario/${inventarioId}`,
+                    {
+                        method: 'DELETE',
+                        headers: {
+                            'Accept':
+                                'application/json'
+                        }
+                    }
+                );
+
+            const data =
+                await response
+                    .json()
+                    .catch(() => ({}));
+
+            if (
+                !response.ok ||
+                !data.ok
+            ) {
+
+                throw new Error(
+                    data.error ||
+                    'No se pudo eliminar el inventario.'
+                );
+
+            }
+
+            mostrarNotificacionInventario(
+                'Inventario eliminado correctamente.'
+            );
+
+            setTimeout(
+                () => {
+                    window.location.href =
+                        '/inventario';
+                },
+                500
+            );
+
+        } catch (error) {
+
+            console.error(
+                'Error al eliminar inventario:',
+                error
+            );
+
+            mostrarNotificacionInventario(
+                error.message ||
+                'No se pudo eliminar el inventario.'
+            );
+
+            if (boton) {
+
+                boton.disabled = false;
+
+                boton.classList.remove(
+                    'opacity-60',
+                    'cursor-not-allowed'
+                );
+
+            }
+
+        }
+
+    }
+
+
+    // =========================================================
+    // GUARDAR
+    // =========================================================
+
+    async function guardarInventario(
+        estado
+    ) {
+
+        const botonGuardar =
+            estado === 'completado'
+                ? document.getElementById(
+                    'btn-guardar-inventario'
+                )
+                : document.getElementById(
+                    'btn-guardar-borrador'
+                );
+
+        if (botonGuardar) {
+            botonGuardar.disabled = true;
+            botonGuardar.classList.add(
+                'opacity-60',
+                'cursor-not-allowed'
+            );
+        }
+
+        try {
+
+            // Validar todas las cantidades antes
+            // de enviar los datos.
+            document
+                .querySelectorAll(
+                    '.inp-cantidad'
+                )
+                .forEach(input => {
+
+                    validarCantidadInventario(
+                        input
+                    );
+
+                });
+
+            const productos =
+                obtenerProductosInventario();
+
+            const response =
+                await fetch(
+                    `/api/inventario/${inventarioId}/guardar`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type':
+                                'application/json',
+                            'Accept':
+                                'application/json'
+                        },
+                        body: JSON.stringify({
+                            estado,
+                            productos
+                        })
+                    }
+                );
+
+            const data =
+                await response.json()
+                    .catch(() => ({}));
+
+            if (!response.ok || !data.ok) {
+
+                throw new Error(
+                    data.error ||
+                    'No se pudo guardar el inventario.'
+                );
+
+            }
+
+            mostrarNotificacionInventario(
+                estado === 'completado'
+                    ? 'Inventario guardado correctamente.'
+                    : 'Inventario guardado como borrador.'
+            );
+
+            // Recarga para que el servidor
+            // determine nuevamente el estado
+            // y la vista.
+            setTimeout(
+                () => {
+                    window.location.href =
+                        `/inventario/${inventarioId}`;
+                },
+                700
+            );
+
+        } catch (error) {
+
+            console.error(
+                'Error al guardar inventario:',
+                error
+            );
+
+            mostrarNotificacionInventario(
+                error.message ||
+                'No se pudo guardar el inventario.'
+            );
+
+        } finally {
+
+            if (botonGuardar && estado !== 'completado') {
+
+                botonGuardar.disabled = false;
+
+                botonGuardar.classList.remove(
+                    'opacity-60',
+                    'cursor-not-allowed'
+                );
+
+            }
+
+        }
+
+    }
+
+
+    // =========================================================
+    // EVENTOS
+    // =========================================================
+
+    document.addEventListener(
+        'DOMContentLoaded',
+        function () {
+
+            // Cantidades iniciales.
+            document
+                .querySelectorAll(
+                    '.inp-cantidad'
+                )
+                .forEach(input => {
+
+                    const valor =
+                        input.value || '0';
+
+                    input.value =
+                        String(valor)
+                            .replace(',', '.');
+
+                    input.dataset.valorAnterior =
+                        input.value;
+
+                    input.addEventListener(
+                        'input',
+                        function () {
+
+                            // No bloqueamos la escritura.
+                            // La validación definitiva ocurre
+                            // al confirmar el valor.
+                            recalcularTotalEmpaques();
+
+                        }
+                    );
+
+                    input.addEventListener(
+                        'blur',
+                        function () {
+
+                            validarCantidadInventario(
+                                input
+                            );
+
+                        }
+                    );
+
+                });
+
+
+            // Guardar como completado.
+            document
+                .getElementById(
+                    'btn-guardar-inventario'
+                )
+                ?.addEventListener(
+                    'click',
+                    function () {
+
+                        guardarInventario(
+                            'completado'
+                        );
+
+                    }
+                );
+
+
+            // Guardar borrador.
+            document
+                .getElementById(
+                    'btn-guardar-borrador'
+                )
+                ?.addEventListener(
+                    'click',
+                    function () {
+
+                        guardarInventario(
+                            'borrador'
+                        );
+
+                    }
+                );
+
+
+            recalcularTotalEmpaques();
+
+            document
+                .getElementById(
+                    'btn-eliminar-inventario'
+                )
+                ?.addEventListener(
+                    'click',
+                    eliminarInventario
+                );
+
+            document
+                .getElementById(
+                    'btn-agregar-fila-inventario'
+                )
+                ?.addEventListener(
+                    'click',
+                    function () {
+
+                        const fila =
+                            agregarFilaInventario();
+
+                        if (fila) {
+
+                            const codigo =
+                                fila.querySelector(
+                                    '.inp-codigo'
+                                );
+
+                            codigo?.focus();
+
+                        }
+
+                    }
+                );
+
+            document
+                .getElementById(
+                    'btn-importar-productos'
+                )
+                ?.addEventListener(
+                    'click',
+                    function () {
+                        window.abrirImportadorInventario();
+                    }
+                );
+
+
+            document
+                .getElementById(
+                    'btn-cerrar-importador-inventario'
+                )
+                ?.addEventListener(
+                    'click',
+                    function () {
+                        window.cerrarImportadorInventario();
+                    }
+                );
+
+
+            document
+                .getElementById(
+                    'btn-cancelar-importador-inventario'
+                )
+                ?.addEventListener(
+                    'click',
+                    function () {
+                        window.cerrarImportadorInventario();
+                    }
+                );
+
+
+            document
+                .getElementById(
+                    'btn-ejecutar-importacion-inventario'
+                )
+                ?.addEventListener(
+                    'click',
+                    importarProductosInventario
+                );
+
+
+            document
+                .getElementById(
+                    'inventario-proveedor'
+                )
+                ?.addEventListener(
+                    'change',
+                    function () {
+
+                        seleccionarProveedorInventario(
+                            this.value
+                        );
+
+                    }
+                );
+
+
+            document
+                .getElementById(
+                    'inventario-departamento'
+                )
+                ?.addEventListener(
+                    'change',
+                    actualizarGruposInventario
+                );
+
+
+            document
+                .getElementById(
+                    'inventario-grupo'
+                )
+                ?.addEventListener(
+                    'change',
+                    actualizarSubgruposInventario
+                );
+
+
+            document
+                .getElementById(
+                    'inventario-subgrupo'
+                )
+                ?.addEventListener(
+                    'change',
+                    actualizarMarcasInventario
+                );
+
+
+            document.addEventListener(
+                'keydown',
+                function (e) {
+
+                    if (
+                        e.key === 'Escape'
+                    ) {
+
+                        const modal =
+                            document.getElementById(
+                                'modal-importar-inventario'
+                            );
+
+                        if (
+                            modal &&
+                            !modal.classList.contains(
+                                'hidden'
+                            )
+                        ) {
+
+                            cerrarImportadorInventario();
+
+                        }
+
+                    }
+
+                }
+            );
+
+            document
+                .querySelectorAll(
+                    '#filas-tabla-inventario tr'
+                )
+                .forEach(
+                    configurarFilaInventario
+                );
+
+
+            document
+                .getElementById('filas-tabla-inventario')
+                ?.addEventListener(
+                    'click',
+                    function (e) {
+
+                        const boton =
+                            e.target.closest(
+                                '.btn-eliminar-fila'
+                            );
+
+                        if (!boton) {
+                            return;
+                        }
+
+                        const fila =
+                            boton.closest('tr');
+
+                        if (!fila) {
+                            return;
+                        }
+
+                        fila.remove();
+
+                        recalcularTotalEmpaques();
+
+                    }
+                );
+        }
+    );
+
+    function agregarFilaInventario(
+        codigo = '',
+        descripcion = '',
+        cantidad = 0
+    ) {
+
+        const tbody =
+            document.getElementById(
+                'filas-tabla-inventario'
+            );
+
+        if (!tbody) {
+            return null;
+        }
+
+        const codigoNormalizado =
+            String(codigo || '').trim();
+
+        // No permitir duplicados.
+        if (codigoNormalizado) {
+
+            const existe =
+                Array.from(
+                    tbody.querySelectorAll(
+                        '.inp-codigo'
+                    )
+                ).some(input =>
+                    String(input.value || '')
+                        .trim() === codigoNormalizado
+                );
+
+            if (existe) {
+                return null;
+            }
+
+        }
+
+        const tr =
+            document.createElement('tr');
+
+        tr.dataset.codigo =
+            codigoNormalizado;
+
+        tr.innerHTML = `
+            <td
+                class="border border-slate-200
+                    p-0 celda-interactiva relative"
+            >
+
+                <input
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    inputmode="numeric"
+                    value="${escaparHtmlInventario(codigoNormalizado)}"
+                    class="inp-codigo w-full
+                        px-2 py-1.5
+                        border-0
+                        text-xs font-normal
+                        uppercase
+                        focus:bg-white
+                        focus:outline-none
+                        bg-transparent"
+                >
+
+            </td>
+
+
+            <td
+                class="border border-slate-200
+                    p-0 celda-interactiva relative"
+            >
+
+                <input
+                    type="text"
+                    readonly
+                    tabindex="-1"
+                    value="${escaparHtmlInventario(descripcion)}"
+                    class="inp-desc w-full
+                        px-2 py-1.5
+                        bg-slate-50
+                        text-xs font-normal
+                        text-slate-600
+                        focus:outline-none
+                        cursor-default
+                        border-0"
+                >
+
+            </td>
+
+
+            <td
+                class="border border-slate-200
+                    p-0 celda-interactiva relative"
+            >
+
+                <input
+                    type="text"
+                    inputmode="decimal"
+                    autocomplete="off"
+                    value="${cantidad}"
+                    data-valor-anterior="${cantidad}"
+                    class="inp-cantidad
+                        text-right
+                        w-full
+                        px-2 py-1.5
+                        border-0
+                        text-xs font-normal
+                        focus:bg-white
+                        focus:outline-none
+                        bg-transparent"
+                >
+
+            </td>
+
+
+            <td
+                class="border border-slate-200
+                    p-0 text-center
+                    bg-slate-50/50"
+            >
+
+                <button
+                    type="button"
+                    class="btn-eliminar-fila
+                        w-full h-full
+                        text-slate-400
+                        hover:text-rose-600
+                        transition py-1.5"
+                    title="Eliminar producto"
+                >
+                    <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+
+            </td>
+        `;
+
+        tbody.appendChild(tr);
+
+        configurarFilaInventario(tr);
+
+        return tr;
+    }
+
+
+    function escaparHtmlInventario(valor) {
+
+        return String(valor ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+    }
+
+    function configurarFilaInventario(tr) {
+
+        if (!tr) {
+            return;
+        }
+
+        const inputCantidad =
+            tr.querySelector(
+                '.inp-cantidad'
+            );
+
+        const inputCodigo =
+            tr.querySelector(
+                '.inp-codigo'
+            );
+
+
+
+        // ---------------------------------------------------------
+        // CANTIDAD
+        // ---------------------------------------------------------
+
+        if (inputCantidad) {
+
+            inputCantidad.addEventListener(
+                'input',
+                function () {
+
+                    recalcularTotalEmpaques();
+
+                }
+            );
+
+            inputCantidad.addEventListener(
+                'blur',
+                function () {
+
+                    validarCantidadInventario(
+                        inputCantidad
+                    );
+
+                }
+            );
+
+            // ---------------------------------------------------------
+            // ENTER EN CANTIDAD
+            // ---------------------------------------------------------
+
+            if (inputCantidad) {
+
+                inputCantidad.addEventListener(
+                    'keydown',
+                    function (e) {
+
+                        if (e.key !== 'Enter') {
+                            return;
+                        }
+
+                        e.preventDefault();
+
+                        /*
+                         * Evita que analisis-interaccion.js
+                         * procese nuevamente este Enter.
+                         */
+                        e.stopPropagation();
+
+                        /*
+                         * Validar y normalizar cantidad.
+                         */
+                        validarCantidadInventario(
+                            inputCantidad
+                        );
+
+                        /*
+                         * Salimos del modo edición.
+                         */
+                        inputCantidad.blur();
+
+                        /*
+                         * Buscar la siguiente fila REAL.
+                         */
+                        let siguienteFila =
+                            tr.nextElementSibling;
+
+                        /*
+                         * Si estamos en la última fila,
+                         * crear automáticamente una nueva.
+                         */
+                        if (!siguienteFila) {
+
+                            if (
+                                typeof window.agregarFilaInventario ===
+                                'function'
+                            ) {
+                                siguienteFila =
+                                    window.agregarFilaInventario();
+                            }
+
+                        }
+
+                        /*
+                         * Si por alguna razón no se pudo crear
+                         * la fila, no continuamos.
+                         */
+                        if (!siguienteFila) {
+                            return;
+                        }
+
+                        const siguienteCodigo =
+                            siguienteFila.querySelector(
+                                '.inp-codigo'
+                            );
+
+                        if (!siguienteCodigo) {
+                            return;
+                        }
+
+                        siguienteCodigo.focus();
+
+                        try {
+                            siguienteCodigo.select();
+                        } catch (_) { }
+
+                    }
+                );
+
+            }
+        }
+
+
+        // ---------------------------------------------------------
+        // CÓDIGO
+        // ---------------------------------------------------------
+
+        if (inputCodigo) {
+
+            inputCodigo.addEventListener(
+                'keydown',
+                async function (e) {
+
+                    if (e.key !== 'Enter') {
+                        return;
+                    }
+
+                    e.preventDefault();
+
+                    /*
+                     * IMPORTANTE:
+                     * Evita que el Enter continúe hasta
+                     * analisis-interaccion.js y se procese
+                     * dos veces.
+                     */
+                    e.stopPropagation();
+
+                    if (
+                        typeof window.consultarProductoInventario ===
+                        'function'
+                    ) {
+
+                        await window.consultarProductoInventario(
+                            inputCodigo
+                        );
+
+                    }
+
+                    /*
+                     * Después de consultar el producto,
+                     * pasamos directamente a CANTIDAD
+                     * de esta misma fila.
+                     */
+                    const tdCantidad =
+                        tr.querySelector(
+                            '.inp-cantidad'
+                        )?.closest('td');
+
+                    if (!tdCantidad) {
+                        return;
+                    }
+
+                    /*
+                     * Quitamos el modo edición del código.
+                     */
+                    inputCodigo.blur();
+
+                    /*
+                     * Actualizamos la selección visual
+                     * utilizando la API existente.
+                     */
+                    if (
+                        typeof window.enfocarYSombrearCelda ===
+                        'function'
+                    ) {
+                        window.enfocarYSombrearCelda(
+                            tdCantidad.querySelector(
+                                '.inp-cantidad'
+                            )
+                        );
+                    }
+
+                    /*
+                     * Entramos directamente en edición
+                     * de CANTIDAD.
+                     */
+                    if (
+                        typeof window.iniciarEdicion ===
+                        'function'
+                    ) {
+                        window.iniciarEdicion(
+                            tdCantidad.querySelector(
+                                '.inp-cantidad'
+                            )
+                        );
+                    }
+
+                }
+            );
+
+        }
+
+        window.consultarProductoInventario =
+            async function (
+                inputCodigo
+            ) {
+
+                const tr =
+                    inputCodigo.closest('tr');
+
+                const inputDescripcion =
+                    tr.querySelector(
+                        '.inp-desc'
+                    );
+
+                let codigo =
+                    String(
+                        inputCodigo.value || ''
+                    ).trim();
+
+                if (!codigo) {
+
+                    inputDescripcion.value = '';
+
+                    return;
+
+                }
+
+
+                // Normalización igual que Análisis:
+                // códigos numéricos -> 6 dígitos.
+                if (/^\d+$/.test(codigo)) {
+
+                    codigo =
+                        codigo.padStart(
+                            6,
+                            '0'
+                        );
+
+                    inputCodigo.value =
+                        codigo;
+
+                }
+
+
+                // Evitar duplicados.
+                const existe =
+                    Array.from(
+                        document.querySelectorAll(
+                            '.inp-codigo'
+                        )
+                    ).some(input =>
+                        input !== inputCodigo &&
+                        String(input.value || '')
+                            .trim() === codigo
+                    );
+
+                if (existe) {
+
+                    mostrarNotificacionInventario(
+                        'Ese producto ya está en el inventario.'
+                    );
+
+                    inputCodigo.value = '';
+
+                    inputDescripcion.value = '';
+
+                    return;
+
+                }
+
+
+                try {
+
+                    const response =
+                        await fetch(
+                            `/api/productos/buscar-codigo/${encodeURIComponent(codigo)}`
+                        );
+
+                    const data =
+                        await response.json()
+                            .catch(() => ({}));
+
+
+                    if (
+                        !response.ok ||
+                        !data ||
+                        !data.descripcion
+                    ) {
+
+                        inputDescripcion.value =
+                            'PRODUCTO NO ENCONTRADO';
+
+                        return;
+
+                    }
+
+
+                    inputCodigo.value =
+                        codigo;
+
+                    inputDescripcion.value =
+                        data.descripcion;
+
+                    tr.dataset.codigo =
+                        codigo;
+
+                } catch (error) {
+
+                    console.error(
+                        'Error consultando producto:',
+                        error
+                    );
+
+                    mostrarNotificacionInventario(
+                        'No se pudo consultar el producto.'
+                    );
+
+                }
+
+            };
+    }
+
+    // =========================================================
+    // IMPORTADOR DE PRODUCTOS
+    // =========================================================
+
+    let clasificacionInventario = [];
+
+
+    window.abrirImportadorInventario =
+        function () {
+
+            const modal =
+                document.getElementById(
+                    'modal-importar-inventario'
+                );
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.remove(
+                'hidden'
+            );
+
+            cargarProveedoresInventario();
+
+        };
+
+
+    window.cerrarImportadorInventario =
+        function () {
+
+            const modal =
+                document.getElementById(
+                    'modal-importar-inventario'
+                );
+
+            modal?.classList.add(
+                'hidden'
+            );
+
+        };
+
+
+    async function cargarProveedoresInventario() {
+
+        const select =
+            document.getElementById(
+                'inventario-proveedor'
+            );
+
+        if (!select) {
+            return;
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    '/api/proveedores'
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    'No se pudieron cargar los proveedores.'
+                );
+            }
+
+            const proveedores =
+                await response.json();
+
+            select.innerHTML = `
+            <option value="">
+                Seleccionar proveedor...
+            </option>
+        `;
+
+            proveedores.forEach(
+                proveedor => {
+
+                    const option =
+                        document.createElement(
+                            'option'
+                        );
+
+                    option.value =
+                        proveedor.id;
+
+                    option.textContent =
+                        proveedor.nombre;
+
+                    select.appendChild(
+                        option
+                    );
+
+                }
+            );
+
+        } catch (error) {
+
+            console.error(
+                'Error cargando proveedores:',
+                error
+            );
+
+            mostrarNotificacionInventario(
+                'No se pudieron cargar los proveedores.'
+            );
+
+        }
+
+    }
+
+
+    async function seleccionarProveedorInventario(
+        proveedorId
+    ) {
+
+        clasificacionInventario = [];
+
+        limpiarFiltrosInventario();
+
+        if (!proveedorId) {
+            return;
+        }
+
+        try {
+
+            const response =
+                await fetch(
+                    `/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    'No se pudo cargar la clasificación.'
+                );
+            }
+
+            clasificacionInventario =
+                await response.json();
+
+            poblarFiltroInventario(
+                'inventario-departamento',
+                obtenerValoresClasificacion(
+                    'departamento'
+                ),
+                'Todos'
+            );
+
+            habilitarSelectInventario(
+                'inventario-departamento'
+            );
+
+            poblarFiltroInventario(
+                'inventario-marca',
+                obtenerValoresClasificacion(
+                    'marca'
+                ),
+                'Todas'
+            );
+
+            habilitarSelectInventario(
+                'inventario-marca'
+            );
+
+        } catch (error) {
+
+            console.error(
+                'Error cargando clasificación:',
+                error
+            );
+
+            mostrarNotificacionInventario(
+                'No se pudo cargar la clasificación del proveedor.'
+            );
+
+        }
+
+    }
+
+
+    function obtenerValoresClasificacion(
+        campo
+    ) {
+
+        return [
+            ...new Set(
+                clasificacionInventario
+                    .map(item =>
+                        item?.[campo]
+                    )
+                    .filter(
+                        valor =>
+                            valor !== null &&
+                            valor !== undefined &&
+                            String(valor).trim() !== ''
+                    )
+                    .map(
+                        valor =>
+                            String(valor).trim()
+                    )
+            )
+        ].sort(
+            (a, b) =>
+                a.localeCompare(
+                    b,
+                    'es',
+                    {
+                        sensitivity: 'base'
+                    }
+                )
+        );
+
+    }
+
+
+    function poblarFiltroInventario(
+        id,
+        valores,
+        etiqueta
+    ) {
+
+        const select =
+            document.getElementById(id);
+
+        if (!select) {
+            return;
+        }
+
+        select.innerHTML = '';
+
+        const optionTodos =
+            document.createElement(
+                'option'
+            );
+
+        optionTodos.value = '';
+
+        optionTodos.textContent =
+            etiqueta;
+
+        select.appendChild(
+            optionTodos
+        );
+
+        valores.forEach(
+            valor => {
+
+                const option =
+                    document.createElement(
+                        'option'
+                    );
+
+                option.value =
+                    valor;
+
+                option.textContent =
+                    valor;
+
+                select.appendChild(
+                    option
+                );
+
+            }
+        );
+
+    }
+
+
+    function habilitarSelectInventario(
+        id
+    ) {
+
+        const select =
+            document.getElementById(id);
+
+        if (!select) {
+            return;
+        }
+
+        select.disabled = false;
+
+        select.classList.remove(
+            'bg-slate-100'
+        );
+
+        select.classList.add(
+            'bg-white'
+        );
+
+    }
+
+
+    function deshabilitarSelectInventario(
+        id
+    ) {
+
+        const select =
+            document.getElementById(id);
+
+        if (!select) {
+            return;
+        }
+
+        select.disabled = true;
+
+        select.classList.remove(
+            'bg-white'
+        );
+
+        select.classList.add(
+            'bg-slate-100'
+        );
+
+    }
+
+
+    function limpiarFiltrosInventario() {
+
+        const filtros = [
+            'inventario-departamento',
+            'inventario-grupo',
+            'inventario-subgrupo',
+            'inventario-marca'
+        ];
+
+        filtros.forEach(id => {
+
+            const select =
+                document.getElementById(id);
+
+            if (!select) {
+                return;
+            }
+
+            select.innerHTML =
+                `<option value="">${id === 'inventario-marca'
+                    ? 'Todas'
+                    : 'Todos'
+                }</option>`;
+
+            select.value = '';
+
+        });
+
+        deshabilitarSelectInventario(
+            'inventario-departamento'
+        );
+
+        deshabilitarSelectInventario(
+            'inventario-grupo'
+        );
+
+        deshabilitarSelectInventario(
+            'inventario-subgrupo'
+        );
+
+        deshabilitarSelectInventario(
+            'inventario-marca'
+        );
+
+    }
+
+
+    function actualizarGruposInventario() {
+
+        const departamento =
+            document.getElementById(
+                'inventario-departamento'
+            )?.value || '';
+
+        const registros =
+            clasificacionInventario
+                .filter(item =>
+                    !departamento ||
+                    item.departamento === departamento
+                );
+
+        const valores = [
+            ...new Set(
+                registros
+                    .map(item => item.grupo)
+                    .filter(Boolean)
+            )
+        ].sort();
+
+        poblarFiltroInventario(
+            'inventario-grupo',
+            valores,
+            'Todos'
+        );
+
+        habilitarSelectInventario(
+            'inventario-grupo'
+        );
+
+        actualizarSubgruposInventario();
+
+        actualizarMarcasInventario();
+
+    }
+
+
+    function actualizarSubgruposInventario() {
+
+        const departamento =
+            document.getElementById(
+                'inventario-departamento'
+            )?.value || '';
+
+        const grupo =
+            document.getElementById(
+                'inventario-grupo'
+            )?.value || '';
+
+        const registros =
+            clasificacionInventario
+                .filter(item =>
+                    (!departamento ||
+                        item.departamento === departamento) &&
+                    (!grupo ||
+                        item.grupo === grupo)
+                );
+
+        const valores = [
+            ...new Set(
+                registros
+                    .map(item => item.subgrupo)
+                    .filter(Boolean)
+            )
+        ].sort();
+
+        poblarFiltroInventario(
+            'inventario-subgrupo',
+            valores,
+            'Todos'
+        );
+
+        habilitarSelectInventario(
+            'inventario-subgrupo'
+        );
+
+        actualizarMarcasInventario();
+
+    }
+
+
+    function actualizarMarcasInventario() {
+
+        const departamento =
+            document.getElementById(
+                'inventario-departamento'
+            )?.value || '';
+
+        const grupo =
+            document.getElementById(
+                'inventario-grupo'
+            )?.value || '';
+
+        const subgrupo =
+            document.getElementById(
+                'inventario-subgrupo'
+            )?.value || '';
+
+        const registros =
+            clasificacionInventario
+                .filter(item =>
+                    (!departamento ||
+                        item.departamento === departamento) &&
+                    (!grupo ||
+                        item.grupo === grupo) &&
+                    (!subgrupo ||
+                        item.subgrupo === subgrupo)
+                );
+
+        const valores = [
+            ...new Set(
+                registros
+                    .map(item => item.marca)
+                    .filter(Boolean)
+            )
+        ].sort();
+
+        poblarFiltroInventario(
+            'inventario-marca',
+            valores,
+            'Todas'
+        );
+
+        habilitarSelectInventario(
+            'inventario-marca'
+        );
+
+    }
+
+    async function importarProductosInventario() {
+
+        const proveedorId =
+            document.getElementById(
+                'inventario-proveedor'
+            )?.value;
+
+        if (!proveedorId) {
+
+            mostrarNotificacionInventario(
+                'Selecciona un proveedor.'
+            );
+
+            return;
+
+        }
+
+        const params =
+            new URLSearchParams({
+
+                proveedor_id:
+                    proveedorId,
+
+                departamento:
+                    document.getElementById(
+                        'inventario-departamento'
+                    )?.value || '',
+
+                grupo:
+                    document.getElementById(
+                        'inventario-grupo'
+                    )?.value || '',
+
+                subgrupo:
+                    document.getElementById(
+                        'inventario-subgrupo'
+                    )?.value || '',
+
+                marca:
+                    document.getElementById(
+                        'inventario-marca'
+                    )?.value || ''
+
+            });
+
+
+        try {
+
+            const response =
+                await fetch(
+                    `/api/productos/importar-analisis?${params.toString()}`
+                );
+
+            if (!response.ok) {
+                throw new Error(
+                    'No se pudieron obtener los productos.'
+                );
+            }
+
+            const productos =
+                await response.json();
+
+
+            if (
+                !Array.isArray(productos) ||
+                productos.length === 0
+            ) {
+
+                mostrarNotificacionInventario(
+                    'No se encontraron productos con los filtros seleccionados.'
+                );
+
+                return;
+
+            }
+
+
+            const codigosExistentes =
+                new Set(
+                    Array.from(
+                        document.querySelectorAll(
+                            '.inp-codigo'
+                        )
+                    )
+                        .map(input =>
+                            String(
+                                input.value || ''
+                            ).trim()
+                        )
+                        .filter(Boolean)
+                );
+
+
+            let importados = 0;
+
+
+            for (
+                const producto
+                of productos
+            ) {
+
+                const codigo =
+                    String(
+                        producto.codigo_st ||
+                        producto.codigo ||
+                        ''
+                    ).trim();
+
+                if (!codigo) {
+                    continue;
+                }
+
+                if (
+                    codigosExistentes.has(
+                        codigo
+                    )
+                ) {
+                    continue;
+                }
+
+
+                const fila =
+                    agregarFilaInventario(
+                        codigo,
+                        producto.descripcion || '',
+                        0
+                    );
+
+                if (fila) {
+
+                    codigosExistentes.add(
+                        codigo
+                    );
+
+                    importados++;
+
+                }
+
+            }
+
+
+            window.cerrarImportadorInventario();
+
+            recalcularTotalEmpaques();
+
+
+            if (importados > 0) {
+
+                mostrarNotificacionInventario(
+                    `${importados} producto(s) agregado(s) al inventario.`
+                );
+
+            } else {
+
+                mostrarNotificacionInventario(
+                    'Los productos seleccionados ya están en el inventario.'
+                );
+
+            }
+
+        } catch (error) {
+
+            console.error(
+                'Error importando productos:',
+                error
+            );
+
+            mostrarNotificacionInventario(
+                error.message ||
+                'No se pudieron importar los productos.'
+            );
+
+        }
+
+    }
+
+
+    window.agregarFilaInventario =
+        agregarFilaInventario;
+
+    window.validarCantidadInventario =
+        validarCantidadInventario;
+
+    window.recalcularTotalEmpaques =
+        recalcularTotalEmpaques;
+</script>
+
+{% endblock %}
