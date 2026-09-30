@@ -1609,12 +1609,20 @@
         // F2
         // --------------------------------------------------------
 
+        // ========================================================
+        // F2 EN CÓDIGO → ABRIR BUSCADOR DE PRODUCTOS
+        // ========================================================
+
         if (
             e.key === 'F2' &&
             campoActual === 'codigo'
         ) {
             e.preventDefault();
+            e.stopPropagation();
 
+            // IMPORTANTE:
+            // No llamar iniciarEdicion().
+            // El código abre directamente el modal.
             if (
                 typeof abrirModalBuscadorProductos ===
                 'function'
@@ -2003,14 +2011,17 @@
         // F2 entra en edición / abre buscador para Código.
         if (e.key === 'F2') {
             e.preventDefault();
+            e.stopPropagation();
 
             const campo = obtenerCampo(celdaActiva);
 
-            if (campo === 'codigo') {
-                if (typeof abrirModalBuscadorProductos === 'function') {
-                    abrirModalBuscadorProductos(inputActivo);
-                }
-            } else {
+            if (
+                campo === 'codigo' &&
+                typeof abrirModalBuscadorProductos === 'function'
+            ) {
+                abrirModalBuscadorProductos(inputActivo);
+            } else if (campo !== 'codigo') {
+                // F2 tipo Excel se mantiene para las demás celdas.
                 iniciarEdicion(inputActivo);
             }
 
@@ -2020,6 +2031,32 @@
 
     document.addEventListener('keydown', e => {
         if (!celdaActiva) {
+            return;
+        }
+
+        /*
+         * IMPORTANTE:
+         * Si el modal de búsqueda de productos está abierto
+         * y la tecla proviene de cualquier elemento del modal,
+         * NO debemos enviar esa tecla al controlador Excel.
+         *
+         * El modal tiene su propio teclado:
+         * - escritura
+         * - Enter
+         * - ArrowUp
+         * - ArrowDown
+         * - Escape
+         */
+        const modalBusqueda =
+            document.getElementById(
+                'modal-buscador-productos'
+            );
+
+        if (
+            modalBusqueda &&
+            !modalBusqueda.classList.contains('hidden') &&
+            modalBusqueda.contains(e.target)
+        ) {
             return;
         }
 

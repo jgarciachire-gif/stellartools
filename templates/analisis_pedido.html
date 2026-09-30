@@ -518,47 +518,6 @@
             </div>
         </div>
     </div>
-    <!-- Modal Buscador de Productos por Descripción -->
-    <div id="modal-buscador-productos"
-        class="hidden fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
-        <!-- Contenedor principal del modal -->
-        <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-lg p-6 flex flex-col max-h-[80vh]">
-            <!-- Encabezado con título e icono -->
-            <div class="flex items-center justify-between mb-4">
-                <h3 class="text-base font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-magnifying-glass text-blue-600"></i> Buscar Producto
-                </h3>
-                <button type="button" onclick="cerrarModalBuscadorProductos()"
-                    class="text-slate-400 hover:text-rose-500">
-                    <i class="fa-solid fa-xmark text-base"></i>
-                </button>
-            </div>
-
-            <!-- Campo de texto para ingresar la descripción -->
-            <div class="relative mb-4">
-                <input type="text" id="input-buscar-producto-modal" autocomplete="off" spellcheck="false"
-                    placeholder="Escriba la descripción y presione Enter..." onkeydown="manejarKeySearchModal(event)"
-                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-xs font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none">
-            </div>
-
-            <!-- Contenedor dinámico con scroll para renderizar los resultados -->
-            <div id="contenedor-resultados-productos"
-                class="flex-1 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 min-h-[160px] max-h-60">
-                <div class="p-4 text-center text-xs text-slate-400 italic">Lista de productos</div>
-            </div>
-
-            <!-- Pie de modal con atajos de teclado y botón cancelar -->
-            <div
-                class="flex items-center justify-between pt-4 border-t border-slate-100 mt-4 text-[11px] text-slate-500">
-                <span>Navegar: <kbd class="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px]">↑</kbd>
-                    <kbd class="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px]">↓</kbd> |
-                    Seleccionar: <kbd
-                        class="px-1 py-0.5 bg-slate-100 border border-slate-300 rounded text-[10px]">Enter</kbd></span>
-                <button type="button" onclick="cerrarModalBuscadorProductos()"
-                    class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg">Cancelar</button>
-            </div>
-        </div>
-    </div>
 
     <!-- MODAL: CAMBIOS PENDIENTES EN PRODUCTOS -->
 
@@ -655,9 +614,29 @@
 
 
     <script src="/static/js/componentes/modal.js"></script>
+    <script src="/static/js/componentes/buscador-productos.js"></script>
     <script src="/static/js/analisis/analisis-productos.js"></script>
     <script src="/static/js/analisis/analisis-interaccion.js"></script>
     <script src="/static/js/analisis/analisis-cambios.js"></script>
+
+    <script>
+        // =========================================================
+        // BUSCADOR DE PRODUCTOS — INTEGRACIÓN CON ANÁLISIS
+        // =========================================================
+
+        window.onProductoSeleccionadoBuscador =
+            async function (codigo, input) {
+
+                if (!input) {
+                    return;
+                }
+
+                // El buscador compartido entrega el código.
+                // Análisis conserva su lógica original.
+                consultarProductoCodigo(input);
+            };
+    </script>
+
     <script>
         window.matrizTiendas = window.matrizTiendas || {};
         window.tiendaActivaPestana =
@@ -2725,151 +2704,9 @@ ${nodosProductosXML.join('\n')}
         function cerrarModalExportarTiendas() {
             document.getElementById('modal-exportar-tiendas').style.display = 'none'; // Ocultar modal
         }
-
-        // --- LÓGICA DE MODAL DE BÚSQUEDA DE PRODUCTOS (TECLA F2) ---
-        let celdaCodigoActivaModal = null; // Referencia global a la celda tipo input desde donde se accionó F2
-        let indiceProductoDestacadoModal = -1; // Índice seleccionado para la navegación con flechas arriba/abajo
-
-        // Despliega el modal de búsqueda y guarda la referencia de la celda de origen
-        function abrirModalBuscadorProductos(inputElem) {
-            celdaCodigoActivaModal = inputElem; // Almacena el input activo de la tabla
-            const modal = document.getElementById('modal-buscador-productos'); // Referencia al modal
-            const inputBuscar = document.getElementById('input-buscar-producto-modal'); // Campo de texto del modal
-            const contRes = document.getElementById('contenedor-resultados-productos'); // Div de resultados
-
-            if (!modal) return;
-            modal.classList.remove('hidden'); // Muestra el modal en pantalla
-            if (inputBuscar) {
-                inputBuscar.value = ''; // Limpia las búsquedas previas
-                setTimeout(() => inputBuscar.focus(), 100); // Coloca el foco de forma automática en el input
-            }
-            if (contRes) {
-                contRes.innerHTML = '<div class="p-4 text-center text-xs text-slate-400 italic">Lista de productos</div>';
-            }
-            indiceProductoDestacadoModal = -1; // Reinicia la posición del cursor de la lista
-        }
-
-        // Oculta el modal de búsqueda y regresa el foco a la tabla
-        function cerrarModalBuscadorProductos() {
-            const modal = document.getElementById('modal-buscador-productos'); // Referencia al modal
-            if (modal) modal.classList.add('hidden'); // Agrega la clase de ocultado
-            if (celdaCodigoActivaModal) {
-                celdaCodigoActivaModal.focus(); // Retorna el cursor a la celda de código
-            }
-        }
-
-        // Consulta en el servidor FastAPI los productos coincidentes por descripción
-        async function ejecutarBusquedaProductoModal() {
-            const inputBuscar = document.getElementById('input-buscar-producto-modal'); // Referencia al campo de búsqueda
-            const contRes = document.getElementById('contenedor-resultados-productos'); // Referencia al contenedor de resultados
-            const query = inputBuscar?.value.trim(); // Captura el texto sin espacios extra
-
-            if (!query) return; // Cancela la operación si el campo está vacío
-
-            if (contRes) {
-                contRes.innerHTML = '<div class="p-4 text-center text-xs text-slate-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Buscando productos...</div>';
-            }
-
-            try {
-                // Realiza la petición HTTP GET a la ruta API recién agregada
-                const response = await fetch(`/api/productos/buscar?q=${encodeURIComponent(query)}`);
-                if (!response.ok) throw new Error('Error al consultar el servidor');
-
-                const data = await response.json(); // Parsea la lista de productos devuelta
-
-                if (!data || data.length === 0) {
-                    if (contRes) contRes.innerHTML = '<div class="p-4 text-center text-xs text-slate-400 italic">No se encontraron productos coincidentes</div>';
-                    return;
-                }
-
-                // Limpia el contenedor de la lista y resetea el índice seleccionado
-                contRes.innerHTML = '';
-                indiceProductoDestacadoModal = -1;
-
-                data.forEach((item, index) => {
-                    const div = document.createElement('div'); // Crea la fila contenedora para el producto
-                    div.className = 'opcion-prod-modal p-2.5 text-xs flex justify-between items-center cursor-pointer hover:bg-blue-50 transition border-b border-slate-100 last:border-b-0';
-                    div.dataset.codigo = item.codigo; // Guarda el código de producto en atributo dataset
-
-                    div.innerHTML = `
-                        <div class="flex flex-col min-w-0 pr-2">
-                            <span class="font-bold text-slate-800 truncate">${item.descripcion || 'Sin descripción'}</span>
-                            <span class="text-[10px] text-slate-400">Código: ${item.codigo}</span>
-                        </div>
-                        <div class="text-right shrink-0">
-                            <span class="font-bold text-blue-600 block">$ ${(parseFloat(item.precio) || 0).toFixed(2)}</span>
-                            <span class="text-[10px] text-slate-400">Emp: ${item.unidad_manejo || 1}</span>
-                        </div>
-                    `;
-
-                    // Clic doble para seleccionar el producto de inmediato
-                    div.ondblclick = () => seleccionarProductoDesdeModal(item.codigo);
-
-                    // Clic simple para marcar la opción activa
-                    div.onclick = () => {
-                        indiceProductoDestacadoModal = index;
-                        resaltarOpcionProductoModal();
-                    };
-
-                    contRes.appendChild(div); // Agrega el nodo a la lista visible
-                });
-            } catch (err) {
-                console.error('Error al buscar productos:', err);
-                if (contRes) contRes.innerHTML = '<div class="p-4 text-center text-xs text-rose-500">Error al realizar la búsqueda</div>';
-            }
-        }
-
-        // Controla la navegación del teclado dentro del input de búsqueda del modal
-        function manejarKeySearchModal(e) {
-            const opciones = Array.from(document.querySelectorAll('.opcion-prod-modal')); // Elementos de la lista renderizados
-
-            if (e.key === 'Enter') {
-                e.preventDefault(); // Detiene el salto por defecto
-                if (indiceProductoDestacadoModal >= 0 && opciones[indiceProductoDestacadoModal]) {
-                    const cod = opciones[indiceProductoDestacadoModal].dataset.codigo; // Captura el código seleccionado
-                    seleccionarProductoDesdeModal(cod); // Transfiere el código a la celda
-                } else {
-                    ejecutarBusquedaProductoModal(); // Si no hay selección, ejecuta la búsqueda en BD
-                }
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault(); // Evita scroll vertical de pantalla
-                if (opciones.length > 0) {
-                    indiceProductoDestacadoModal = Math.min(indiceProductoDestacadoModal + 1, opciones.length - 1); // Desplaza hacia abajo
-                    resaltarOpcionProductoModal();
-                }
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault(); // Evita scroll vertical de pantalla
-                if (opciones.length > 0) {
-                    indiceProductoDestacadoModal = Math.max(indiceProductoDestacadoModal - 1, 0); // Desplaza hacia arriba
-                    resaltarOpcionProductoModal();
-                }
-            } else if (e.key === 'Escape') {
-                cerrarModalBuscadorProductos(); // Cierra el modal de búsqueda
-            }
-        }
-
-        // Aplica estilo visual de resaltado a la opción activa
-        function resaltarOpcionProductoModal() {
-            const opciones = document.querySelectorAll('.opcion-prod-modal'); // Lista de elementos HTML
-            opciones.forEach((op, idx) => {
-                if (idx === indiceProductoDestacadoModal) {
-                    op.classList.add('bg-blue-100', 'border-l-4', 'border-l-blue-600'); // Resalta elemento
-                    op.scrollIntoView({ block: 'nearest' }); // Mantiene visible el elemento enfocado dentro del contenedor
-                } else {
-                    op.classList.remove('bg-blue-100', 'border-l-4', 'border-l-blue-600'); // Remueve resaltado
-                }
-            });
-        }
-
-        // Asigna el código del producto seleccionado a la celda de la tabla y ejecuta la consulta de información
-        function seleccionarProductoDesdeModal(codigo) {
-            if (celdaCodigoActivaModal) {
-                celdaCodigoActivaModal.value = codigo; // Inserta el código en el input
-                consultarProductoCodigo(celdaCodigoActivaModal); // Invoca la función existente para cargar datos
-            }
-            cerrarModalBuscadorProductos(); // Cierra el modal
-        }
     </script>
+
+
 
 
     {% endblock %}

@@ -383,33 +383,227 @@ async def cargar_lista_productos(
 
 # Endpoint asíncrono para buscar productos por coincidencia parcial en la descripción
 @router.get("/api/productos/buscar")
-async def buscar_productos_por_descripcion(
-    q: Optional[str] = "", # Captura el texto de búsqueda enviado desde el frontend
-    access_token: str = Cookie(None), # Galleta de autenticación de acceso
-    refresh_token: str = Cookie(None) # Galleta de autenticación de refresco
+async def buscar_productos(
+    q: Optional[str] = "",
+    tags: Optional[str] = "",
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token) # Verifica el usuario logueado
-    if not user or not q.strip(): # Si no está autenticado o la búsqueda está vacía
-        return [] # Retorna un listado vacío
+    """
+    Buscador flexible utilizado por F2 en Análisis.
 
-    query_limpia = q.strip() # Remueve espacios en blanco innecesarios
-    
-    # Consulta en la tabla productos filtrando coincidencias en la columna descripcion
-    res = await config.supabase_async.table("productos") \
-        .select("codigo_st, descripcion, precio, unidad_manejo") \
-        .ilike("descripcion", f"%{query_limpia}%") \
-        .limit(30) \
-        .execute()
+    Replica la lógica de búsqueda de /productos:
 
-    # Mapea los resultados adecuando la columna codigo_st como codigo para la plantilla
+    - Código ST
+    - Código EAN
+    - Descripción
+    - Marca
+    - Departamento
+    - Grupo
+    - Subgrupo
+    - Proveedor
+    - Múltiples términos mediante badges
+    """
+
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return []
+
+    # ---------------------------------------------------------
+    # Construir lista de términos.
+    # q se mantiene compatible con llamadas anteriores.
+    # ---------------------------------------------------------
+
+    terminos = []
+
+    if q and q.strip():
+        terminos.append(q.strip())
+
+    if tags and tags.strip():
+        terminos.extend(
+            t.strip()
+            for t in tags.split(',')
+            if t.strip()
+        )
+
+    if not terminos:
+        return []
+
+    # Evitar términos duplicados
+    terminos_unicos = []
+
+    vistos = set()
+
+    for termino in terminos:
+
+        clave = termino.lower()
+
+        if clave not in vistos:
+            vistos.add(clave)
+            terminos_unicos.append(termino)
+
+    # ---------------------------------------------------------
+    # Consulta base
+    # ---------------------------------------------------------
+
+    builder = (
+        config.supabase_async
+        .table("productos")
+        .select(
+            "codigo_st, "
+            "codigo_ean, "
+            "descripcion, "
+            "marca, "
+            "departamento, "
+            "grupo, "
+            "subgrupo, "
+            "precio, "
+            "unidad_manejo, "
+            "proveedor_id"
+        )
+    )
+
+    # ---------------------------------------------------------
+    # Cada badge funciona como filtro acumulativo.
+    #
+    # Ejemplo:
+    #   COCA
+    #   COLA
+    #
+    # obliga a que ambos términos participen.
+    # ---------------------------------------------------------
+
+    for termino in terminos_unicos:
+
+        termino_limpio = re.sub(
+            r'[^\w\s-]',
+            '',
+            termino
+        ).strip()
+
+        if not termino_limpio:
+            continue
+
+        palabras = termino_limpio.split()
+
+        patron_busqueda = (
+            f"%{'%'.join(palabras)}%"
+        )
+
+        # -----------------------------------------------------
+        # Buscar proveedores usando el término COMPLETO.
+        #
+        # "COCA COLA" -> %coca%cola%
+        #
+        # No se busca "coca" y "cola" por separado.
+        # -----------------------------------------------------
+
+        query_prov = (
+            config.supabase_async
+            .table("proveedores")
+            .select("id")
+            .ilike(
+                "nombre",
+                patron_busqueda
+            )
+        )
+
+        res_prov = await (
+            ejecutar_supabase_con_reintento_async(
+                lambda:
+                query_prov.execute()
+            )
+        )
+
+        ids_prov = [
+            str(p["id"])
+            for p in (res_prov.data or [])
+            if p.get("id") is not None
+        ]
+
+        # -----------------------------------------------------
+        # Campos del producto
+        # -----------------------------------------------------
+
+        condiciones = [
+            f"codigo_st.ilike.{patron_busqueda}",
+            f"codigo_ean.ilike.{patron_busqueda}",
+            f"descripcion.ilike.{patron_busqueda}",
+            f"marca.ilike.{patron_busqueda}",
+            f"departamento.ilike.{patron_busqueda}",
+            f"grupo.ilike.{patron_busqueda}",
+            f"subgrupo.ilike.{patron_busqueda}",
+        ]
+
+        # Coincidencia por proveedor
+        for proveedor_id in ids_prov:
+            condiciones.append(
+                f"proveedor_id.eq.{proveedor_id}"
+            )
+
+        builder = builder.or_(
+            ",".join(condiciones)
+        )
+
+    # ---------------------------------------------------------
+    # Resultados
+    # ---------------------------------------------------------
+
+    res = await (
+        ejecutar_supabase_con_reintento_async(
+            lambda:
+            builder
+            .order(
+                "descripcion",
+                desc=False
+            )
+            .limit(30)
+            .execute()
+        )
+    )
+
+    # ---------------------------------------------------------
+    # Estructura que necesita el modal
+    # ---------------------------------------------------------
+
     return [
         {
-            "codigo": p.get("codigo_st") or "",
-            "descripcion": p.get("descripcion") or "",
-            "precio": float(p.get("precio") or 0.0),
-            "unidad_manejo": p.get("unidad_manejo") or "1"
+            "codigo":
+                producto.get("codigo_st") or "",
+
+            "descripcion":
+                producto.get("descripcion") or "",
+
+            "precio":
+                float(
+                    producto.get("precio") or 0
+                ),
+
+            "unidad_manejo":
+                producto.get(
+                    "unidad_manejo"
+                ) or 1,
+
+            "departamento":
+                producto.get(
+                    "departamento"
+                ) or "",
+
+            "grupo":
+                producto.get(
+                    "grupo"
+                ) or "",
+
+            "subgrupo":
+                producto.get(
+                    "subgrupo"
+                ) or "",
         }
-        for p in (res.data or [])
+        for producto in (res.data or [])
     ]
 
 @router.post("/api/productos/buscar-lote")

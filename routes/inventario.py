@@ -196,11 +196,11 @@ async def crear_inventario(
         # Por ahora regresamos a la biblioteca.
         # En el siguiente paso este ID abrirá directamente
         # el documento recién creado.
+        # Abrir directamente el Borrador recién creado.
         return RedirectResponse(
-            url="/inventario",
+            url=f"/inventario/{inventario['id']}",
             status_code=303
         )
-
     except HTTPException:
         raise
 

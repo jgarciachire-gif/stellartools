@@ -171,9 +171,6 @@
            transition-colors">
 
                 <i class="fa-solid fa-file-import"></i>
-
-                Importar productos
-
             </button>
 
             {% endif %}
@@ -189,9 +186,6 @@
            transition-colors">
 
                 <i class="fa-solid fa-floppy-disk"></i>
-
-                Guardar
-
             </button>
 
             {% else %}
@@ -204,8 +198,6 @@
                cursor-not-allowed">
 
                 <i class="fa-solid fa-lock"></i>
-
-                Guardado
 
             </button>
 
@@ -238,8 +230,6 @@
                transition-colors">
 
                 <i class="fa-solid fa-trash-can"></i>
-
-                Eliminar documento
 
             </button>
 
@@ -712,7 +702,33 @@
 </div>
 
 <script src="/static/js/componentes/modal.js"></script>
+<script src="/static/js/componentes/buscador-productos.js"></script>
 <script src="/static/js/analisis/analisis-interaccion.js"></script>
+
+<script>
+    // =========================================================
+    // BUSCADOR DE PRODUCTOS — INTEGRACIÓN CON INVENTARIO
+    // =========================================================
+
+    window.onProductoSeleccionadoBuscador =
+        async function (codigo, input) {
+
+            if (!input) {
+                return;
+            }
+
+            // Inventario conserva su propia lógica
+            // para completar y validar el producto.
+            if (
+                typeof window.consultarProductoInventario ===
+                'function'
+            ) {
+                await window.consultarProductoInventario(
+                    input
+                );
+            }
+        };
+</script>
 
 <script>
 
@@ -846,7 +862,7 @@
 
         // Solo números positivos o cero
         // y hasta 3 decimales.
-        if (!/^\d+(?:\.\d{0,3})?$/.test(valor)) {
+        if (!/^\d+(?:\.\d{0, 3})?$/.test(valor)) {
 
             input.value =
                 input.dataset.valorAnterior ||
@@ -1533,18 +1549,18 @@
             codigoNormalizado;
 
         tr.innerHTML = `
-            <td
-                class="border border-slate-200
+        <td
+            class="border border-slate-200
                     p-0 celda-interactiva relative"
-            >
+        >
 
-                <input
-                    type="text"
-                    autocomplete="off"
-                    spellcheck="false"
-                    inputmode="numeric"
-                    value="${escaparHtmlInventario(codigoNormalizado)}"
-                    class="inp-codigo w-full
+            <input
+                type="text"
+                autocomplete="off"
+                spellcheck="false"
+                inputmode="numeric"
+                value="${escaparHtmlInventario(codigoNormalizado)}"
+                class="inp-codigo w-full
                         px-2 py-1.5
                         border-0
                         text-xs font-normal
@@ -1552,22 +1568,22 @@
                         focus:bg-white
                         focus:outline-none
                         bg-transparent"
-                >
-
-            </td>
-
-
-            <td
-                class="border border-slate-200
-                    p-0 celda-interactiva relative"
             >
 
-                <input
-                    type="text"
-                    readonly
-                    tabindex="-1"
-                    value="${escaparHtmlInventario(descripcion)}"
-                    class="inp-desc w-full
+        </td>
+
+
+        <td
+            class="border border-slate-200
+                    p-0 celda-interactiva relative"
+        >
+
+            <input
+                type="text"
+                readonly
+                tabindex="-1"
+                value="${escaparHtmlInventario(descripcion)}"
+                class="inp-desc w-full
                         px-2 py-1.5
                         bg-slate-50
                         text-xs font-normal
@@ -1575,23 +1591,23 @@
                         focus:outline-none
                         cursor-default
                         border-0"
-                >
-
-            </td>
-
-
-            <td
-                class="border border-slate-200
-                    p-0 celda-interactiva relative"
             >
 
-                <input
-                    type="text"
-                    inputmode="decimal"
-                    autocomplete="off"
-                    value="${cantidad}"
-                    data-valor-anterior="${cantidad}"
-                    class="inp-cantidad
+        </td>
+
+
+        <td
+            class="border border-slate-200
+                    p-0 celda-interactiva relative"
+        >
+
+            <input
+                type="text"
+                inputmode="decimal"
+                autocomplete="off"
+                value="${cantidad}"
+                data-valor-anterior="${cantidad}"
+                class="inp-cantidad
                         text-right
                         w-full
                         px-2 py-1.5
@@ -1600,30 +1616,30 @@
                         focus:bg-white
                         focus:outline-none
                         bg-transparent"
-                >
-
-            </td>
-
-
-            <td
-                class="border border-slate-200
-                    p-0 text-center
-                    bg-slate-50/50"
             >
 
-                <button
-                    type="button"
-                    class="btn-eliminar-fila
+        </td>
+
+
+        <td
+            class="border border-slate-200
+                    p-0 text-center
+                    bg-slate-50/50"
+        >
+
+            <button
+                type="button"
+                class="btn-eliminar-fila
                         w-full h-full
                         text-slate-400
                         hover:text-rose-600
                         transition py-1.5"
-                    title="Eliminar producto"
-                >
-                    <i class="fa-solid fa-trash-can text-xs"></i>
-                </button>
+                title="Eliminar producto"
+            >
+                <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
 
-            </td>
+        </td>
         `;
 
         tbody.appendChild(tr);
@@ -1760,6 +1776,15 @@
 
                         if (!siguienteCodigo) {
                             return;
+                        }
+
+                        if (
+                            typeof window.enfocarYSombrearCelda ===
+                            'function'
+                        ) {
+                            window.enfocarYSombrearCelda(
+                                siguienteCodigo
+                            );
                         }
 
                         siguienteCodigo.focus();
