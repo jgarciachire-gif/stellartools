@@ -884,15 +884,18 @@
             if (
                 valor === null ||
                 valor === undefined ||
-                valor === ''
+                String(valor).trim() === ''
             ) {
                 return 0;
             }
 
-            const numero = Number(
-                String(valor)
-                    .replace(',', '.')
-            );
+            const texto =
+                String(valor).trim();
+
+            const numero =
+                Number(
+                    texto.replace(',', '.')
+                );
 
             if (
                 !Number.isFinite(numero) ||
@@ -901,8 +904,11 @@
                 return null;
             }
 
+            /*
+             * El backend recibe un número,
+             * no el formato visual del campo.
+             */
             return numero;
-
         }
 
 
@@ -964,28 +970,40 @@
                 return true;
             }
 
-            let valor =
-                String(input.value || '')
-                    .replace(',', '.')
-                    .trim();
+            const valorOriginal =
+                String(input.value ?? '').trim();
 
-            // Permitir campo vacío temporalmente.
-            if (!valor) {
+            // Campo vacío = cero.
+            if (!valorOriginal) {
+
                 input.value = '0';
+                input.dataset.valorAnterior = '0';
+
                 recalcularTotalEmpaques();
+
                 return true;
             }
 
-            // Solo números positivos o cero
-            // y hasta 3 decimales.
-            if (!/^\d+(?:\.\d{0, 3})?$/.test(valor)) {
+            /*
+             * Permitimos:
+             * 12
+             * 12.5
+             * 12.50
+             * 12.500
+             * 12,5
+             *
+             * Máximo 3 decimales.
+             */
+            const patronCantidad =
+                /^\d+(?:[.,]\d{0,3})?$/;
+
+            if (!patronCantidad.test(valorOriginal)) {
 
                 input.value =
-                    input.dataset.valorAnterior ||
-                    '0';
+                    input.dataset.valorAnterior || '0';
 
                 mostrarNotificacionInventario(
-                    'Cantidad inválida. Usa números con máximo 3 decimales.'
+                    'Cantidad inválida. Usa números enteros o decimales con máximo 3 decimales.'
                 );
 
                 recalcularTotalEmpaques();
@@ -993,8 +1011,14 @@
                 return false;
             }
 
+            /*
+             * Para validar numéricamente usamos punto,
+             * pero NO modificamos lo que escribió el usuario.
+             */
             const numero =
-                Number(valor);
+                Number(
+                    valorOriginal.replace(',', '.')
+                );
 
             if (
                 !Number.isFinite(numero) ||
@@ -1002,11 +1026,10 @@
             ) {
 
                 input.value =
-                    input.dataset.valorAnterior ||
-                    '0';
+                    input.dataset.valorAnterior || '0';
 
                 mostrarNotificacionInventario(
-                    'La cantidad no puede ser negativa.'
+                    'La cantidad debe ser un número igual o mayor que cero.'
                 );
 
                 recalcularTotalEmpaques();
@@ -1014,27 +1037,23 @@
                 return false;
             }
 
-            const numeroNormalizado =
-                Number(valor);
-
-
-            input.value =
-                Number.isInteger(numeroNormalizado)
-                    ? numeroNormalizado.toFixed(1)
-                    : String(numeroNormalizado);
+            /*
+             * Conservamos exactamente el formato
+             * introducido por el usuario.
+             */
+            input.value = valorOriginal;
 
             input.dataset.valorAnterior =
-                input.value;
+                valorOriginal;
 
             recalcularTotalEmpaques();
 
             return true;
-
         }
 
-
         function mostrarNotificacionInventario(
-            mensaje
+            mensaje,
+            tipo = 'warning'
         ) {
 
             if (
@@ -1043,7 +1062,7 @@
             ) {
 
                 mostrarNotificacion({
-                    tipo: 'warning',
+                    tipo,
                     mensaje
                 });
 
@@ -1187,7 +1206,8 @@
                 }
 
                 mostrarNotificacionInventario(
-                    'Inventario eliminado correctamente.'
+                    'Inventario eliminado correctamente.',
+                    'success'
                 );
 
                 setTimeout(
@@ -1207,7 +1227,8 @@
 
                 mostrarNotificacionInventario(
                     error.message ||
-                    'No se pudo eliminar el inventario.'
+                    'No se pudo eliminar el inventario.',
+                    'error'
                 );
 
                 if (boton) {
@@ -1304,8 +1325,9 @@
 
                 mostrarNotificacionInventario(
                     estado === 'completado'
-                        ? 'Inventario guardado correctamente.'
-                        : 'Inventario guardado como borrador.'
+                        ? 'Inventario completado correctamente.'
+                        : 'Inventario guardado como borrador.',
+                    'success'
                 );
 
                 // Recarga para que el servidor
@@ -1332,7 +1354,8 @@
 
                 mostrarNotificacionInventario(
                     error.message ||
-                    'No se pudo guardar el inventario.'
+                    'No se pudo guardar el inventario.',
+                    'error'
                 );
 
             } finally {
@@ -1767,11 +1790,34 @@
                     .forEach(input => {
 
                         const valor =
-                            input.value || '0';
-
-                        input.value =
-                            String(valor)
+                            String(
+                                input.value || '0'
+                            )
+                                .trim()
                                 .replace(',', '.');
+
+                        /*
+                         * La base de datos guarda un número,
+                         * por lo que al volver a cargar el documento
+                         * eliminamos ceros decimales innecesarios.
+                         *
+                         * Ejemplos:
+                         * 1.0   → 1
+                         * 1.50  → 1.5
+                         * 1.250 → 1.25
+                         * 12    → 12
+                         */
+                        const numero =
+                            Number(valor);
+
+                        if (
+                            Number.isFinite(numero)
+                        ) {
+                            input.value =
+                                String(numero);
+                        } else {
+                            input.value = '0';
+                        }
 
                         input.dataset.valorAnterior =
                             input.value;
@@ -1780,9 +1826,8 @@
                             'input',
                             function () {
 
-                                // No bloqueamos la escritura.
-                                // La validación definitiva ocurre
-                                // al confirmar el valor.
+                                // Mientras escribe, no modificamos
+                                // el formato introducido.
                                 recalcularTotalEmpaques();
 
                             }
@@ -1800,7 +1845,6 @@
                         );
 
                     });
-
 
                 // Guardar como completado.
                 document
