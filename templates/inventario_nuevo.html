@@ -1277,17 +1277,30 @@
 
                 // Validar todas las cantidades antes
                 // de enviar los datos.
+                let cantidadesValidas = true;
+
                 document
                     .querySelectorAll(
                         '.inp-cantidad'
                     )
                     .forEach(input => {
 
-                        validarCantidadInventario(
-                            input
-                        );
+                        const esValida =
+                            validarCantidadInventario(
+                                input
+                            );
+
+                        if (!esValida) {
+                            cantidadesValidas = false;
+                        }
 
                     });
+
+                // Si alguna cantidad es inválida,
+                // detenemos el guardado antes del fetch.
+                if (!cantidadesValidas) {
+                    return;
+                }
 
                 const productos =
                     obtenerProductosInventario();
@@ -1360,7 +1373,7 @@
 
             } finally {
 
-                if (botonGuardar && estado !== 'completado') {
+                if (botonGuardar) {
 
                     botonGuardar.disabled = false;
 
