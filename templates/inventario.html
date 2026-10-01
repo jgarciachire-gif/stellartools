@@ -8,10 +8,13 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
 
         <div>
-            <h1 class="text-2xl font-bold text-slate-800">
-                Inventario de tiendas
+            <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                <div
+                    class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-950 via-rose-800 to-red-400 flex items-center justify-center text-white text-2xl shadow-lg shadow-purple-500/30 group-hover:scale-105 transition-transform">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <span>Inventario de tiendas</span>
             </h1>
-
             <p class="text-sm text-slate-500 mt-1">
                 Listas de inventario registradas
             </p>
@@ -19,14 +22,14 @@
 
         <button type="button" onclick="abrirModalNuevoInventario()" class="inline-flex items-center justify-center gap-2
                    px-5 py-3 rounded-xl
-                   bg-indigo-600 hover:bg-indigo-700
+                   bg-slate-900 hover:bg-slate-800
                    text-white font-semibold
                    shadow-sm hover:shadow-md
                    transition-all">
 
             <i class="fa-solid fa-plus"></i>
 
-            Nueva lista
+            Crear lista
         </button>
 
     </div>
@@ -41,34 +44,29 @@
 
             <table class="w-full text-sm">
 
-                <thead class="bg-slate-50 border-b border-slate-200">
+                <thead class="bg-slate-900 border-b border-slate-200">
 
                     <tr>
 
-                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                        <th class="px-5 py-2.5 text-left font-semibold text-white">
                             Nombre de la lista
                         </th>
 
-                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                        <th class="px-5 py-2.5 text-left font-semibold text-white">
                             Tienda
                         </th>
 
-                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                        <th class="px-5 py-2.5 text-left font-semibold text-white">
                             Realizado por
                         </th>
 
-                        <th class="px-5 py-4 text-left font-semibold text-slate-600">
+                        <th class="px-5 py-2.5 text-left font-semibold text-white">
                             Fecha
                         </th>
 
-                        <th class="px-5 py-4 text-center font-semibold text-slate-600">
+                        <th class="px-5 py-2.5 text-center font-semibold text-white">
                             Estado
                         </th>
-
-                        <th class="px-5 py-4 text-center font-semibold text-slate-600">
-                            Acción
-                        </th>
-
                     </tr>
 
                 </thead>
@@ -77,25 +75,27 @@
 
                     {% for inventario in inventarios %}
 
-                    <tr class="hover:bg-slate-50 transition-colors">
+                    <tr class="cursor-pointer hover:bg-indigo-50/60 transition-colors"
+                        onclick="window.location.href='/inventario/{{ inventario.id }}'" title="Abrir inventario">
 
-                        <td class="px-5 py-4 font-medium text-slate-800">
+                        <td class="px-4 py-1.5 font-medium text-slate-800">
                             {{ inventario.nombre }}
                         </td>
 
-                        <td class="px-5 py-4 text-slate-600">
+                        <td class="px-4 py-1.5 text-slate-600">
                             {{ inventario.tienda }}
                         </td>
 
-                        <td class="px-5 py-4 text-slate-600">
+                        <td class="px-4 py-1.5 text-slate-600">
                             {{ inventario.realizado_por }}
                         </td>
 
-                        <td class="px-5 py-4 text-slate-500 whitespace-nowrap">
+                        <td class="px-4 py-1.5 text-slate-500 whitespace-nowrap"
+                            data-fecha="{{ inventario.created_at }}">
                             {{ inventario.created_at }}
                         </td>
 
-                        <td class="px-5 py-4 text-center">
+                        <td class="px-4 py-1.5 text-center">
 
                             {% if inventario.estado == 'completado' %}
 
@@ -124,22 +124,6 @@
                             {% endif %}
 
                         </td>
-
-                        <td class="px-5 py-4 text-center">
-
-                            <a href="/inventario/{{ inventario.id }}" class="inline-flex items-center justify-center
-                                       w-9 h-9 rounded-lg
-                                       text-slate-500
-                                       hover:text-indigo-600
-                                       hover:bg-indigo-50
-                                       transition-colors" title="Abrir inventario">
-
-                                <i class="fa-solid fa-folder-open"></i>
-
-                            </a>
-
-                        </td>
-
                     </tr>
 
                     {% endfor %}
@@ -171,15 +155,6 @@
             <p class="mt-1 text-sm text-slate-500">
                 Crea tu primera lista de inventario.
             </p>
-
-            <button type="button" onclick="abrirModalNuevoInventario()" class="mt-5 px-5 py-2.5 rounded-xl
-                       bg-indigo-600 hover:bg-indigo-700
-                       text-white font-semibold
-                       transition-colors">
-
-                Nueva lista
-
-            </button>
 
         </div>
 
@@ -255,8 +230,8 @@
                     class="w-full px-4 py-3
                            rounded-xl border border-slate-300
                            focus:outline-none
-                           focus:ring-2 focus:ring-indigo-500/30
-                           focus:border-indigo-500" placeholder="Ej. Inventario septiembre">
+                           focus:ring-2 focus:ring-slate-500/30
+                           focus:border-slate-500" placeholder="Ej. Inventario septiembre">
 
             </div>
 
@@ -275,8 +250,8 @@
                     autocomplete="off" class="w-full px-4 py-3
                            rounded-xl border border-slate-300
                            focus:outline-none
-                           focus:ring-2 focus:ring-indigo-500/30
-                           focus:border-indigo-500" placeholder="Nombre de quien realiza el inventario">
+                           focus:ring-2 focus:ring-slate-500/30
+                           focus:border-slate-500" placeholder="Nombre de quien realiza el inventario">
 
             </div>
 
@@ -295,8 +270,8 @@
                            rounded-xl border border-slate-300
                            bg-white
                            focus:outline-none
-                           focus:ring-2 focus:ring-indigo-500/30
-                           focus:border-indigo-500">
+                           focus:ring-2 focus:ring-slate-500/30
+                           focus:border-slate-500">
 
                     <option value="">
                         Seleccionar tienda...
@@ -347,7 +322,7 @@
                 </button>
 
                 <button type="submit" class="px-5 py-2.5 rounded-xl
-                           bg-indigo-600 hover:bg-indigo-700
+                           bg-slate-900 hover:bg-slate-700
                            text-white
                            font-semibold
                            transition-colors">
@@ -365,6 +340,84 @@
 
 </div>
 
+<script>
+    /*
+     * Formatea fechas ISO de Supabase para mostrarlas
+     * de forma amigable en la Biblioteca.
+     *
+     * Ejemplo:
+     * 2026-10-01T12:42:04.844559+00:00
+     * →
+     * 01-10-2026 08:42 AM
+     */
+    document.addEventListener(
+        'DOMContentLoaded',
+        function () {
+
+            document
+                .querySelectorAll('[data-fecha]')
+                .forEach(function (elemento) {
+
+                    const fechaISO =
+                        elemento.dataset.fecha;
+
+                    if (!fechaISO) {
+                        return;
+                    }
+
+                    const fecha =
+                        new Date(fechaISO);
+
+                    if (
+                        Number.isNaN(
+                            fecha.getTime()
+                        )
+                    ) {
+                        return;
+                    }
+
+                    const dia =
+                        String(
+                            fecha.getDate()
+                        ).padStart(2, '0');
+
+                    const mes =
+                        String(
+                            fecha.getMonth() + 1
+                        ).padStart(2, '0');
+
+                    const año =
+                        fecha.getFullYear();
+
+                    let horas =
+                        fecha.getHours();
+
+                    const minutos =
+                        String(
+                            fecha.getMinutes()
+                        ).padStart(2, '0');
+
+                    const periodo =
+                        horas >= 12
+                            ? 'PM'
+                            : 'AM';
+
+                    horas =
+                        horas % 12 || 12;
+
+                    const horasFormateadas =
+                        String(horas)
+                            .padStart(2, '0');
+
+                    elemento.textContent =
+                        `${dia}-${mes}-${año} ` +
+                        `${horasFormateadas}:${minutos} ` +
+                        `${periodo}`;
+                });
+
+        }
+    );
+</script>
 
 <script>
 

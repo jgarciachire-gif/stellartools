@@ -193,12 +193,8 @@ async def crear_inventario(
                 detail="No se pudo crear el inventario."
             )
 
-        # Por ahora regresamos a la biblioteca.
-        # En el siguiente paso este ID abrirá directamente
-        # el documento recién creado.
-        # Abrir directamente el Borrador recién creado.
         return RedirectResponse(
-            url=f"/inventario/{inventario['id']}",
+            url=f"/inventario/{inventario['id']}?nuevo=1",
             status_code=303
         )
     except HTTPException:
@@ -595,6 +591,157 @@ async def guardar_inventario(
                 "ok": False,
                 "error":
                     "No se pudo guardar el inventario."
+            }
+        )
+
+# ============================================================
+# DESCARTAR BORRADOR NUEVO
+# ============================================================
+
+@router.delete("/api/inventario/{inventario_id}/descartar")
+async def descartar_inventario_nuevo(
+    inventario_id: int,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    # --------------------------------------------------------
+    # 1. VALIDAR SESIÓN
+    # --------------------------------------------------------
+
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "ok": False,
+                "error": "No autorizado."
+            }
+        )
+
+
+    # --------------------------------------------------------
+    # 2. BUSCAR EL BORRADOR
+    # --------------------------------------------------------
+
+    try:
+
+        res = await (
+            config.supabase_async
+            .table("inventarios")
+            .select(
+                "id, estado, usuario_creador_id"
+            )
+            .eq("id", inventario_id)
+            .maybe_single()
+            .execute()
+        )
+
+        inventario = res.data
+
+        if not inventario:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "ok": False,
+                    "error":
+                        "Inventario no encontrado."
+                }
+            )
+
+
+        # ----------------------------------------------------
+        # 3. SEGURIDAD
+        # ----------------------------------------------------
+        # Solo se puede descartar un borrador creado
+        # por el usuario actual.
+
+        if str(
+            inventario.get(
+                "usuario_creador_id"
+            )
+        ) != str(user.id):
+
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error":
+                        "No tienes permiso para descartar este inventario."
+                }
+            )
+
+
+        # ----------------------------------------------------
+        # 4. SOLO SE PUEDEN DESCARTAR BORRADORES
+        # ----------------------------------------------------
+
+        if (
+            str(
+                inventario.get("estado")
+            ).strip().lower()
+            != "borrador"
+        ):
+
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error":
+                        "Solo se pueden descartar inventarios en borrador."
+                }
+            )
+
+
+        # ----------------------------------------------------
+        # 5. ELIMINAR
+        # ----------------------------------------------------
+        # inventarios_detalle tiene ON DELETE CASCADE,
+        # por lo que sus productos se eliminan
+        # automáticamente.
+
+        await (
+            config.supabase_async
+            .table("inventarios")
+            .delete()
+            .eq("id", inventario_id)
+            .eq(
+                "usuario_creador_id",
+                str(user.id)
+            )
+            .eq(
+                "estado",
+                "borrador"
+            )
+            .execute()
+        )
+
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "ok": True
+            }
+        )
+
+
+    except Exception as e:
+
+        print(
+            "ERROR EN "
+            f"/api/inventario/{inventario_id}/descartar: "
+            f"{str(e)}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error":
+                    "No se pudo descartar el documento."
             }
         )
 
