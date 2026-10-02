@@ -1373,10 +1373,11 @@
 
     function copiarSeleccion() {
         if (!celdasSeleccionadasAnalisis.length) {
-            return;
+            return false;
         }
 
-        const primera = celdasSeleccionadasAnalisis[0];
+        const primera =
+            celdasSeleccionadasAnalisis[0];
 
         const filaInicio =
             obtenerIndiceFila(primera);
@@ -1395,6 +1396,15 @@
         const colFin =
             obtenerIndiceColumna(ultima);
 
+        if (
+            filaInicio < 0 ||
+            filaFin < 0 ||
+            colInicio < 0 ||
+            colFin < 0
+        ) {
+            return false;
+        }
+
         const matriz = [];
 
         for (
@@ -1409,27 +1419,77 @@
                 columna <= colFin;
                 columna++
             ) {
+                const td =
+                    obtenerCelda(
+                        fila,
+                        columna
+                    );
+
                 valores.push(
-                    obtenerValorCelda(
-                        obtenerCelda(
-                            fila,
-                            columna
-                        )
-                    )
+                    obtenerValorCelda(td)
                 );
             }
 
-            matriz.push(valores.join('\t'));
+            matriz.push(
+                valores.join('\t')
+            );
         }
 
-        navigator.clipboard
-            ?.writeText(matriz.join('\n'))
-            .catch(error => {
-                console.warn(
-                    'No se pudo copiar al portapapeles:',
-                    error
-                );
-            });
+        const textoCopiar =
+            matriz.join('\n');
+
+        /*
+         * Copia sincrónica.
+         *
+         * Es importante ejecutarla directamente
+         * dentro del evento Ctrl+C para conservar
+         * el permiso temporal del navegador.
+         */
+        const textarea =
+            document.createElement('textarea');
+
+        textarea.value = textoCopiar;
+
+        textarea.setAttribute(
+            'readonly',
+            ''
+        );
+
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        textarea.style.width = '1px';
+        textarea.style.height = '1px';
+        textarea.style.opacity = '0';
+
+        document.body.appendChild(textarea);
+
+        textarea.focus();
+        textarea.select();
+
+        let copiado = false;
+
+        try {
+            copiado =
+                document.execCommand('copy');
+        } catch (error) {
+            console.error(
+                'Error al copiar al portapapeles:',
+                error
+            );
+        }
+
+        textarea.remove();
+
+        if (!copiado) {
+            console.error(
+                'El navegador rechazó la copia al portapapeles.'
+            );
+
+            return false;
+        }
+
+        return true;
     }
 
     // ============================================================
@@ -2159,12 +2219,18 @@
                 e.key.toLowerCase() === 'c' &&
                 celdasSeleccionadasAnalisis.length
             ) {
+                // Evita la copia nativa del navegador.
                 e.preventDefault();
+                e.stopPropagation();
 
-                copiarSeleccion();
+                // La copia debe ejecutarse inmediatamente
+                // dentro del evento Ctrl+C.
+                const copiado =
+                    copiarSeleccion();
 
-                // Resalta visualmente el rango recién copiado.
-                resaltarSeleccionCopiada();
+                if (copiado) {
+                    resaltarSeleccionCopiada();
+                }
 
                 return;
             }

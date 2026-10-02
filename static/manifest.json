@@ -1,0 +1,19 @@
+{
+    "name": "StellarTools+",
+    "short_name": "StellarTools",
+    "description": "Gestión de inventarios y herramientas de StellarTools.",
+    "start_url": "/login",
+    "scope": "/",
+    "display": "standalone",
+    "background_color": "#0f172a",
+    "theme_color": "#0f172a",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/static/favicon.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

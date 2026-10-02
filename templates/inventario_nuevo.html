@@ -199,10 +199,14 @@
     <!-- ===================================================== -->
 
     <div id="contenedor-tabla-inventario" class="mt-5 w-full max-w-[1000px] mx-auto
-            bg-white border border-slate-300
-            rounded-2xl shadow-xs overflow-hidden">
+        bg-white border border-slate-300
+        rounded-2xl shadow-xs">
 
-        <div class="overflow-x-auto">
+        <!-- ===================================================== -->
+        <!-- VISTA DESKTOP -->
+        <!-- ===================================================== -->
+
+        <div class="hidden md:block overflow-x-auto">
 
             <!--
         Cuadrícula de inventario con el mismo lenguaje visual
@@ -363,16 +367,16 @@
                 {% if inventario.estado == 'borrador' %}
 
                 <button type="button" id="btn-agregar-fila-inventario" class="px-3 py-1.5
-                            bg-slate-900
-                            hover:bg-slate-700
-                            text-white
-                            font-normal
-                            rounded-lg
-                            text-xs
-                            transition
-                            shadow-xs
-                            flex items-center gap-2
-                            order-1 md:order-1">
+               bg-slate-900
+               hover:bg-slate-700
+               text-white
+               font-normal
+               rounded-lg
+               text-xs
+               transition
+               shadow-xs
+               flex items-center gap-2
+               order-1 md:order-1">
                     <i class="fa-solid fa-plus"></i>
                     Agregar fila
                 </button>
@@ -382,7 +386,10 @@
 
                 <!-- TOTAL DEBAJO DE CANTIDAD -->
 
-                <div class="text-xs text-slate-600 text-right order-2 md:order-2 ml-auto">
+                <div class="text-xs text-slate-600
+                text-right
+                order-2 md:order-2
+                ml-auto">
 
                     <span class="text-slate-400 block font-normal">
                         TOTAL EMPAQUES
@@ -393,6 +400,196 @@
                     </span>
 
                 </div>
+
+            </div>
+
+        </div>
+        <!-- FIN VISTA DESKTOP -->
+
+
+        <!-- ===================================================== -->
+        <!-- VISTA MÓVIL -->
+        <!-- ===================================================== -->
+
+        <div id="inventario-movil" class="md:hidden">
+
+            <!-- LISTA DE PRODUCTOS -->
+
+            <div id="lista-productos-movil" class="divide-y divide-slate-100">
+            </div>
+
+
+            <!-- AGREGAR PRODUCTO -->
+
+            {% if inventario.estado == 'borrador' %}
+
+            <div class="p-3 border-t border-slate-200">
+
+                <button type="button" id="btn-agregar-producto-movil" class="w-full
+                   inline-flex
+                   items-center
+                   justify-center
+                   gap-2
+                   px-4 py-3.5
+                   rounded-xl
+                   bg-slate-900
+                   hover:bg-slate-800
+                   active:scale-[0.98]
+                   text-white
+                   font-semibold
+                   text-sm
+                   shadow-sm
+                   transition">
+                    <i class="fa-solid fa-plus"></i>
+                    Agregar Producto
+                </button>
+
+            </div>
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
+    <!-- ========================================================= -->
+    <!-- MODAL MÓVIL — BUSCAR PRODUCTO -->
+    <!-- ========================================================= -->
+
+    <div id="modal-producto-movil" class="hidden fixed
+           top-14 right-0 bottom-0 left-0
+           z-[120]
+           bg-slate-900/50
+           backdrop-blur-sm
+           items-end justify-center">
+
+        <div class="w-full
+               h-full
+               max-h-[88vh]
+               bg-white
+               rounded-t-3xl
+               shadow-2xl
+               overflow-hidden
+               flex flex-col">
+            <!-- CABECERA -->
+
+            <div class="relative z-20 shrink-0
+                px-4 py-4
+                border-b border-slate-200
+                bg-white
+                flex items-center justify-between">
+
+                <div>
+
+                    <h2 class="text-base font-bold text-slate-800">
+                        Buscar Producto
+                    </h2>
+
+                    <p class="text-xs text-slate-500 mt-1">
+                        Busca por código o descripción
+                    </p>
+
+                </div>
+
+                <button type="button" id="btn-cerrar-producto-movil" class="w-9 h-9
+                       rounded-full
+                       flex items-center justify-center
+                       text-slate-400
+                       active:bg-slate-100">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+
+            </div>
+
+
+            <!-- BUSCADOR -->
+
+            <div class="shrink-0
+                    p-4
+                    border-b border-slate-100">
+
+                <div id="contenedor-buscador-producto-movil" class="w-full min-h-[46px]
+               px-3 py-2
+               border border-slate-300
+               rounded-xl
+               bg-white
+               flex flex-wrap
+               items-center
+               gap-1.5
+               focus-within:ring-2
+               focus-within:ring-slate-500/30">
+
+                    <i class="fa-solid fa-magnifying-glass
+                  text-slate-400
+                  shrink-0"></i>
+
+                    <!-- BADGES -->
+
+                    <div id="lista-etiquetas-producto-movil" class="flex flex-wrap
+                   items-center
+                   gap-1.5"></div>
+
+                    <!-- TEXTO ACTUAL -->
+
+                    <input type="text" id="input-buscar-producto-movil" autocomplete="off" spellcheck="false"
+                        placeholder="Buscar producto..." class="flex-1
+                   min-w-[120px]
+                   border-0
+                   outline-none
+                   bg-transparent
+                   text-sm
+                   text-slate-800
+                   placeholder:text-slate-400">
+
+                </div>
+
+            </div>
+
+
+            <!-- RESULTADOS -->
+
+            <div id="resultados-productos-movil" class="flex-1
+                            min-h-0
+                            overflow-y-auto
+                            overscroll-contain
+                            divide-y divide-slate-100">
+
+                <div class="p-6 text-center text-sm text-slate-400">
+                    Escribe para buscar un producto
+                </div>
+
+            </div>
+
+
+            <!-- PIE -->
+
+            <div class="shrink-0
+                    p-4
+                    border-t border-slate-200
+                    space-y-2">
+
+                <button type="button" id="btn-agregar-producto-seleccionado-movil" class="hidden w-full
+                        px-4 py-3.5
+                        rounded-xl
+                        bg-slate-900
+                        active:bg-slate-800
+                        text-white
+                        font-semibold
+                        text-sm">
+                    <i class="fa-solid fa-plus mr-1"></i>
+                    Agregar producto
+                </button>
+
+                <button type="button" id="btn-cancelar-producto-movil" class="w-full
+               px-4 py-3
+               rounded-xl
+               bg-slate-100
+               active:bg-slate-200
+               text-slate-700
+               font-semibold
+               text-sm">
+                    Cancelar
+                </button>
 
             </div>
 
@@ -994,6 +1191,10 @@
                     await window.consultarProductoInventario(
                         input
                     );
+
+                    // Sincronizar la vista móvil
+                    // después de completar el producto.
+                    renderizarProductosMovil();
                 }
             };
     </script>
@@ -1129,7 +1330,6 @@
             );
         }
 
-
         // =========================================================
         // UTILIDADES
         // =========================================================
@@ -1140,6 +1340,154 @@
                 document.querySelectorAll(
                     '#filas-tabla-inventario tr'
                 )
+            );
+
+        }
+
+        // =========================================================
+        // VISTA MÓVIL — RENDERIZAR PRODUCTOS
+        // =========================================================
+
+        function renderizarProductosMovil() {
+
+            const contenedor =
+                document.getElementById(
+                    'lista-productos-movil'
+                );
+
+            if (!contenedor) {
+                return;
+            }
+
+            const filas =
+                obtenerFilasInventario();
+
+            contenedor.innerHTML = '';
+
+            filas.forEach(
+                function (fila) {
+
+                    const inputCodigo =
+                        fila.querySelector(
+                            '.inp-codigo'
+                        );
+
+                    const inputDescripcion =
+                        fila.querySelector(
+                            '.inp-desc'
+                        );
+
+                    const inputCantidad =
+                        fila.querySelector(
+                            '.inp-cantidad'
+                        );
+
+                    if (
+                        !inputCodigo ||
+                        !inputDescripcion ||
+                        !inputCantidad
+                    ) {
+                        return;
+                    }
+
+                    const codigo =
+                        String(
+                            inputCodigo.value || ''
+                        ).trim();
+
+                    const descripcion =
+                        String(
+                            inputDescripcion.value || ''
+                        ).trim();
+
+                    const cantidad =
+                        String(
+                            inputCantidad.value || '0'
+                        ).trim();
+
+                    if (!codigo) {
+                        return;
+                    }
+
+                    const tarjeta =
+                        document.createElement('div');
+
+                    tarjeta.className =
+                        'p-4 bg-white';
+
+                    tarjeta.innerHTML = `
+                <div class="flex items-start justify-between gap-3">
+
+                    <div class="min-w-0 flex-1">
+
+                        <p class="text-sm font-semibold
+                                  text-slate-800
+                                  break-words">
+                            ${escaparHtmlInventario(descripcion)}
+                        </p>
+
+                        <p class="mt-1 text-xs
+                                  text-slate-400">
+                            código:
+                            ${escaparHtmlInventario(codigo)}
+                        </p>
+
+                    </div>
+
+                    <div class="shrink-0">
+
+                        <input
+                            type="text"
+                            inputmode="decimal"
+                            value="${escaparHtmlInventario(cantidad)}"
+                            class="campo-cantidad-movil
+                                   w-20
+                                   px-2 py-2
+                                   text-center
+                                   text-sm font-semibold
+                                   border border-slate-300
+                                   rounded-lg
+                                   focus:outline-none
+                                   focus:ring-2
+                                   focus:ring-slate-500/30"
+                        >
+
+                    </div>
+
+                </div>
+            `;
+
+                    const inputCantidadMovil =
+                        tarjeta.querySelector(
+                            '.campo-cantidad-movil'
+                        );
+
+                    if (inputCantidadMovil) {
+
+                        inputCantidadMovil.addEventListener(
+                            'change',
+                            function () {
+
+                                inputCantidad.value =
+                                    inputCantidadMovil.value;
+
+                                validarCantidadInventario(
+                                    inputCantidad
+                                );
+
+                                inputCantidadMovil.value =
+                                    inputCantidad.value;
+
+                            }
+                        );
+
+                    }
+
+                    contenedor.appendChild(
+                        tarjeta
+                    );
+
+                }
             );
 
         }
@@ -2324,6 +2672,10 @@
                 // después de cargar y configurar sus filas.
                 capturarEstadoInicialInventario();
 
+                // Sincronizar la vista móvil
+                // con las filas reales del inventario.
+                renderizarProductosMovil();
+
 
                 document
                     .getElementById('filas-tabla-inventario')
@@ -2353,8 +2705,972 @@
 
                         }
                     );
+                // =========================================================
+                // AGREGAR PRODUCTO — VISTA MÓVIL
+                // =========================================================
+
+                document
+                    .getElementById(
+                        'btn-agregar-producto-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+
+                            const fila =
+                                agregarFilaInventario();
+
+                            if (!fila) {
+
+                                mostrarNotificacionInventario(
+                                    'No se pudo preparar el producto.'
+                                );
+
+                                return;
+                            }
+
+                            const inputCodigo =
+                                fila.querySelector(
+                                    '.inp-codigo'
+                                );
+
+                            if (!inputCodigo) {
+                                return;
+                            }
+
+                            abrirModalProductoMovil(
+                                inputCodigo
+                            );
+
+                        }
+                    );
             }
         );
+
+        // =========================================================
+        // CONTROLES DEL MODAL DE PRODUCTOS MÓVIL
+        // =========================================================
+
+        document
+            .getElementById(
+                'btn-cerrar-producto-movil'
+            )
+            ?.addEventListener(
+                'click',
+                cerrarModalProductoMovil
+            );
+
+        document
+            .getElementById(
+                'input-buscar-producto-movil'
+            )
+            ?.addEventListener(
+                'keydown',
+                function (e) {
+
+                    // ENTER → convertir texto en badge
+                    if (e.key === 'Enter') {
+
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        const valor =
+                            String(
+                                this.value || ''
+                            ).trim();
+
+                        if (valor) {
+                            agregarEtiquetaProductoMovil(
+                                valor
+                            );
+                        }
+
+                        return;
+                    }
+
+
+                    // BACKSPACE → eliminar último badge
+                    if (
+                        e.key === 'Backspace' &&
+                        this.value === '' &&
+                        etiquetasFiltroProductosMovil.length > 0
+                    ) {
+
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        removerUltimaEtiquetaProductoMovil();
+
+                    }
+
+                }
+            );
+
+        document
+            .getElementById(
+                'btn-cancelar-producto-movil'
+            )
+            ?.addEventListener(
+                'click',
+                cerrarModalProductoMovil
+            );
+
+        document
+            .getElementById(
+                'btn-agregar-producto-seleccionado-movil'
+            )
+            ?.addEventListener(
+                'click',
+                confirmarProductoSeleccionadoMovil
+            );
+
+
+        document
+            .getElementById(
+                'input-buscar-producto-movil'
+            )
+            ?.addEventListener(
+                'input',
+                function () {
+
+                    clearTimeout(
+                        temporizadorBusquedaMovil
+                    );
+
+                    temporizadorBusquedaMovil =
+                        setTimeout(
+                            buscarProductosMovil,
+                            300
+                        );
+
+                }
+            );
+
+
+        document
+            .getElementById(
+                'modal-producto-movil'
+            )
+            ?.addEventListener(
+                'click',
+                function (e) {
+
+                    if (
+                        e.target.id ===
+                        'modal-producto-movil'
+                    ) {
+                        cerrarModalProductoMovil();
+                    }
+
+                }
+            );
+
+        // =========================================================
+        // BUSCADOR DE PRODUCTOS — VISTA MÓVIL
+        // =========================================================
+
+        let inputCodigoMovilActivo = null;
+        let temporizadorBusquedaMovil = null;
+
+        let etiquetasFiltroProductosMovil = [];
+
+        // Producto seleccionado pendiente de confirmar.
+        let productoSeleccionadoModalMovil = null;
+
+        // =========================================================
+        // BADGES — BUSCADOR DE PRODUCTOS MÓVIL
+        // =========================================================
+
+        function normalizarTextoProductoMovil(texto) {
+
+            if (!texto) {
+                return '';
+            }
+
+            return String(texto)
+                .normalize('NFD')
+                .replace(/[\u0300-\u036f]/g, '')
+                .toLowerCase()
+                .trim();
+        }
+
+
+        function renderizarEtiquetasProductoMovil() {
+
+            const contenedor =
+                document.getElementById(
+                    'lista-etiquetas-producto-movil'
+                );
+
+            if (!contenedor) {
+                return;
+            }
+
+            contenedor.innerHTML = '';
+
+            etiquetasFiltroProductosMovil.forEach(
+                function (etiqueta, indice) {
+
+                    const badge =
+                        document.createElement('span');
+
+                    badge.className =
+                        'inline-flex items-center gap-1 ' +
+                        'px-2 py-1 ' +
+                        'rounded-lg ' +
+                        'bg-slate-100 ' +
+                        'text-slate-700 ' +
+                        'text-xs font-medium';
+
+                    const texto =
+                        document.createElement('span');
+
+                    texto.textContent =
+                        etiqueta;
+
+                    const boton =
+                        document.createElement('button');
+
+                    boton.type = 'button';
+
+                    boton.className =
+                        'ml-0.5 ' +
+                        'text-slate-400 ' +
+                        'active:text-rose-500';
+
+                    boton.title =
+                        'Quitar filtro';
+
+                    boton.innerHTML =
+                        '<i class="fa-solid fa-xmark text-[10px]"></i>';
+
+                    boton.addEventListener(
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            etiquetasFiltroProductosMovil.splice(
+                                indice,
+                                1
+                            );
+
+                            renderizarEtiquetasProductoMovil();
+
+                            buscarProductosMovil();
+                        }
+                    );
+
+                    badge.appendChild(texto);
+                    badge.appendChild(boton);
+
+                    contenedor.appendChild(badge);
+
+                }
+            );
+        }
+
+
+        function agregarEtiquetaProductoMovil(valor) {
+
+            const valorLimpio =
+                String(valor || '').trim();
+
+            if (!valorLimpio) {
+                return;
+            }
+
+            const existe =
+                etiquetasFiltroProductosMovil.some(
+                    function (etiqueta) {
+
+                        return (
+                            normalizarTextoProductoMovil(
+                                etiqueta
+                            ) ===
+                            normalizarTextoProductoMovil(
+                                valorLimpio
+                            )
+                        );
+
+                    }
+                );
+
+            if (existe) {
+                return;
+            }
+
+            etiquetasFiltroProductosMovil.push(
+                valorLimpio
+            );
+
+            renderizarEtiquetasProductoMovil();
+
+            const inputBuscar =
+                document.getElementById(
+                    'input-buscar-producto-movil'
+                );
+
+            if (inputBuscar) {
+                inputBuscar.value = '';
+                inputBuscar.focus();
+            }
+
+            buscarProductosMovil();
+        }
+
+
+        function removerUltimaEtiquetaProductoMovil() {
+
+            if (
+                etiquetasFiltroProductosMovil.length === 0
+            ) {
+                return;
+            }
+
+            etiquetasFiltroProductosMovil.pop();
+
+            renderizarEtiquetasProductoMovil();
+
+            buscarProductosMovil();
+        }
+
+        function mostrarProductoSeleccionadoMovil(
+            codigo,
+            descripcion
+        ) {
+
+            const resultados =
+                document.getElementById(
+                    'resultados-productos-movil'
+                );
+
+            const inputBuscar =
+                document.getElementById(
+                    'input-buscar-producto-movil'
+                );
+
+            const botonAgregar =
+                document.getElementById(
+                    'btn-agregar-producto-seleccionado-movil'
+                );
+
+            if (
+                !resultados ||
+                !botonAgregar
+            ) {
+                return;
+            }
+
+            productoSeleccionadoModalMovil = {
+                codigo: String(codigo || '').trim(),
+                descripcion: String(descripcion || '').trim()
+            };
+
+            // Ocultar temporalmente la búsqueda.
+            if (inputBuscar) {
+                inputBuscar.value = '';
+                inputBuscar.disabled = true;
+            }
+
+            renderizarEtiquetasProductoMovil();
+
+            resultados.innerHTML = `
+        <div class="p-4">
+
+            <div
+                class="rounded-2xl
+                       border border-slate-200
+                       bg-slate-50
+                       p-4"
+            >
+
+                <div class="flex items-start gap-3">
+
+                    <div
+                        class="w-10 h-10
+                               shrink-0
+                               rounded-xl
+                               bg-slate-200
+                               flex items-center
+                               justify-center"
+                    >
+                        <i
+                            class="fa-solid fa-box
+                                   text-slate-500"
+                        ></i>
+                    </div>
+
+                    <div class="min-w-0 flex-1">
+
+                        <p
+                            class="text-sm
+                                   font-semibold
+                                   text-slate-800
+                                   break-words"
+                        >
+                            ${escaparHtmlInventario(descripcion)}
+                        </p>
+
+                        <p
+                            class="mt-1
+                                   text-xs
+                                   text-slate-400"
+                        >
+                            Código:
+                            ${escaparHtmlInventario(codigo)}
+                        </p>
+
+                    </div>
+
+                </div>
+
+
+                <!-- CANTIDAD -->
+
+                <div class="mt-5">
+
+                    <label
+                        for="cantidad-producto-modal-movil"
+                        class="block
+                               text-sm
+                               font-semibold
+                               text-slate-700
+                               mb-2"
+                    >
+                        Cantidad
+                    </label>
+
+                    <input
+                        type="text"
+                        id="cantidad-producto-modal-movil"
+                        inputmode="decimal"
+                        autocomplete="off"
+                        value="0"
+                        class="w-full
+                               px-4 py-3
+                               text-lg
+                               font-semibold
+                               text-center
+                               border border-slate-300
+                               rounded-xl
+                               bg-white
+                               focus:outline-none
+                               focus:ring-2
+                               focus:ring-slate-500/30"
+                    >
+
+                    <p
+                        class="mt-2
+                               text-xs
+                               text-slate-400
+                               text-center"
+                    >
+                        Puedes usar números enteros o
+                        hasta 3 decimales.
+                    </p>
+
+                </div>
+
+            </div>
+
+
+            <!-- CAMBIAR PRODUCTO -->
+
+            <button
+                type="button"
+                id="btn-cambiar-producto-movil"
+                class="mt-3 w-full
+                       px-4 py-3
+                       rounded-xl
+                       border border-slate-200
+                       text-slate-600
+                       font-semibold
+                       text-sm
+                       active:bg-slate-50"
+            >
+                <i class="fa-solid fa-arrow-left mr-1"></i>
+                Cambiar producto
+            </button>
+
+        </div>
+    `;
+
+            botonAgregar.classList.remove('hidden');
+
+            const inputCantidad =
+                document.getElementById(
+                    'cantidad-producto-modal-movil'
+                );
+
+            inputCantidad?.focus();
+
+            inputCantidad?.select();
+
+            document
+                .getElementById(
+                    'btn-cambiar-producto-movil'
+                )
+                ?.addEventListener(
+                    'click',
+                    volverBuscadorProductoMovil
+                );
+
+            inputCantidad?.addEventListener(
+                'keydown',
+                function (e) {
+
+                    if (e.key !== 'Enter') {
+                        return;
+                    }
+
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    confirmarProductoSeleccionadoMovil();
+
+                }
+            );
+        }
+
+        function volverBuscadorProductoMovil() {
+
+            productoSeleccionadoModalMovil = null;
+
+            const resultados =
+                document.getElementById(
+                    'resultados-productos-movil'
+                );
+
+            const inputBuscar =
+                document.getElementById(
+                    'input-buscar-producto-movil'
+                );
+
+            const botonAgregar =
+                document.getElementById(
+                    'btn-agregar-producto-seleccionado-movil'
+                );
+
+            if (botonAgregar) {
+                botonAgregar.classList.add('hidden');
+            }
+
+            if (inputBuscar) {
+                inputBuscar.disabled = false;
+                inputBuscar.value = '';
+            }
+
+            if (resultados) {
+                resultados.innerHTML = `
+            <div
+                class="p-6
+                       text-center
+                       text-sm
+                       text-slate-400"
+            >
+                Escribe para buscar un producto
+            </div>
+        `;
+            }
+
+            setTimeout(
+                function () {
+                    inputBuscar?.focus();
+                },
+                50
+            );
+        }
+
+
+        function confirmarProductoSeleccionadoMovil() {
+
+            if (
+                !productoSeleccionadoModalMovil ||
+                !inputCodigoMovilActivo
+            ) {
+                return;
+            }
+
+            const inputCantidad =
+                document.getElementById(
+                    'cantidad-producto-modal-movil'
+                );
+
+            if (!inputCantidad) {
+                return;
+            }
+
+            const cantidadValida =
+                validarCantidadInventario(
+                    inputCantidad
+                );
+
+            if (!cantidadValida) {
+                inputCantidad.focus();
+                return;
+            }
+
+            const cantidad =
+                inputCantidad.value || '0';
+
+            // La fila ya existe desde "Agregar Producto".
+            inputCodigoMovilActivo.value =
+                productoSeleccionadoModalMovil.codigo;
+
+            const fila =
+                inputCodigoMovilActivo.closest('tr');
+
+            if (!fila) {
+                return;
+            }
+
+            const inputDescripcion =
+                fila.querySelector('.inp-desc');
+
+            const inputCantidadInventario =
+                fila.querySelector('.inp-cantidad');
+
+            if (inputDescripcion) {
+                inputDescripcion.value =
+                    productoSeleccionadoModalMovil.descripcion;
+            }
+
+            if (inputCantidadInventario) {
+                inputCantidadInventario.value =
+                    cantidad;
+
+                inputCantidadInventario.dataset.valorAnterior =
+                    cantidad;
+
+                inputCantidadInventario.dispatchEvent(
+                    new Event('input', {
+                        bubbles: true
+                    })
+                );
+            }
+
+            fila.dataset.codigo =
+                productoSeleccionadoModalMovil.codigo;
+
+            productoSeleccionadoModalMovil = null;
+
+            cerrarModalProductoMovil();
+
+            renderizarProductosMovil();
+
+            recalcularTotalEmpaques();
+        }
+
+
+
+        function abrirModalProductoMovil(inputCodigo) {
+
+            const modal =
+                document.getElementById(
+                    'modal-producto-movil'
+                );
+
+            const inputBuscar =
+                document.getElementById(
+                    'input-buscar-producto-movil'
+                );
+
+            if (!modal || !inputBuscar) {
+                return;
+            }
+
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+
+            modal.style.zIndex = '9999';
+
+            inputCodigoMovilActivo =
+                inputCodigo;
+
+            etiquetasFiltroProductosMovil = [];
+
+            renderizarEtiquetasProductoMovil();
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            inputBuscar.value = '';
+
+            document.getElementById(
+                'resultados-productos-movil'
+            ).innerHTML = `
+        <div class="p-6 text-center text-sm text-slate-400">
+            Escribe para buscar un producto
+        </div>
+    `;
+
+            setTimeout(
+                function () {
+                    inputBuscar.focus();
+                },
+                100
+            );
+        }
+
+
+        function cerrarModalProductoMovil() {
+
+            const modal =
+                document.getElementById(
+                    'modal-producto-movil'
+                );
+
+            if (!modal) {
+                return;
+            }
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+
+            etiquetasFiltroProductosMovil = [];
+
+            renderizarEtiquetasProductoMovil();
+            productoSeleccionadoModalMovil = null;
+
+            const inputBuscar =
+                document.getElementById(
+                    'input-buscar-producto-movil'
+                );
+
+            const botonAgregar =
+                document.getElementById(
+                    'btn-agregar-producto-seleccionado-movil'
+                );
+
+            if (inputBuscar) {
+                inputBuscar.disabled = false;
+            }
+
+            if (botonAgregar) {
+                botonAgregar.classList.add('hidden');
+            }
+
+            inputCodigoMovilActivo = null;
+
+            clearTimeout(
+                temporizadorBusquedaMovil
+            );
+        }
+
+
+        async function buscarProductosMovil() {
+
+            const inputBuscar =
+                document.getElementById(
+                    'input-buscar-producto-movil'
+                );
+
+            const contenedor =
+                document.getElementById(
+                    'resultados-productos-movil'
+                );
+
+            if (!inputBuscar || !contenedor) {
+                return;
+            }
+
+            const textoActual =
+                String(
+                    inputBuscar.value || ''
+                ).trim();
+
+
+            const terminos = [
+                ...etiquetasFiltroProductosMovil
+            ];
+
+
+            if (textoActual) {
+                terminos.push(textoActual);
+            }
+
+
+            if (terminos.length === 0) {
+
+                contenedor.innerHTML = `
+                        <div class="p-6 text-center text-sm text-slate-400">
+                            Escribe un criterio de búsqueda
+                        </div>
+                    `;
+
+                return;
+            }
+
+
+            contenedor.innerHTML = `
+                    <div class="p-6 text-center text-sm text-slate-400">
+                        Buscando...
+                    </div>
+                `;
+
+            try {
+
+                const params =
+                    new URLSearchParams();
+
+
+                params.set(
+                    'tags',
+                    terminos.join(',')
+                );
+
+                const response =
+                    await fetch(
+                        `/api/productos/buscar?${params.toString()}`,
+                        {
+                            headers: {
+                                'Accept':
+                                    'application/json'
+                            }
+                        }
+                    );
+
+                if (!response.ok) {
+                    throw new Error(
+                        `Error HTTP ${response.status}`
+                    );
+                }
+
+                const data =
+                    await response.json();
+
+                if (
+                    !Array.isArray(data) ||
+                    data.length === 0
+                ) {
+
+                    contenedor.innerHTML = `
+                    <div class="p-6 text-center text-sm text-slate-400">
+                        No se encontraron productos
+                    </div>
+                `;
+
+                    return;
+                }
+
+                contenedor.innerHTML = '';
+
+                data.forEach(
+                    function (producto) {
+
+                        const codigo =
+                            String(
+                                producto.codigo ||
+                                producto.codigo_st ||
+                                producto.cod_st ||
+                                ''
+                            ).trim();
+
+                        const descripcion =
+                            String(
+                                producto.descripcion ||
+                                producto.nombre ||
+                                ''
+                            ).trim();
+
+                        if (!codigo) {
+                            return;
+                        }
+
+                        const opcion =
+                            document.createElement('button');
+
+                        opcion.type = 'button';
+
+                        opcion.className =
+                            'w-full text-left ' +
+                            'px-4 py-4 ' +
+                            'active:bg-slate-50 ' +
+                            'transition-colors';
+
+                        opcion.innerHTML = `
+                        <div class="text-sm font-semibold text-slate-800">
+                            ${escaparHtmlInventario(descripcion)}
+                        </div>
+
+                        <div class="mt-1 text-xs text-slate-400">
+                            código: ${escaparHtmlInventario(codigo)}
+                        </div>
+                    `;
+
+                        opcion.addEventListener(
+                            'click',
+                            async function () {
+
+                                if (
+                                    !inputCodigoMovilActivo
+                                ) {
+                                    return;
+                                }
+
+                                inputCodigoMovilActivo.value =
+                                    codigo;
+
+                                await consultarProductoInventario(
+                                    inputCodigoMovilActivo
+                                );
+
+                                const fila =
+                                    inputCodigoMovilActivo.closest('tr');
+
+                                const inputDescripcion =
+                                    fila?.querySelector('.inp-desc');
+
+                                const descripcionSeleccionada =
+                                    String(
+                                        inputDescripcion?.value ||
+                                        descripcion ||
+                                        ''
+                                    ).trim();
+
+                                if (
+                                    !descripcionSeleccionada ||
+                                    descripcionSeleccionada ===
+                                    'PRODUCTO NO ENCONTRADO'
+                                ) {
+                                    return;
+                                }
+
+                                mostrarProductoSeleccionadoMovil(
+                                    codigo,
+                                    descripcionSeleccionada
+                                );
+
+                            }
+                        );
+
+                        contenedor.appendChild(
+                            opcion
+                        );
+
+                    }
+                );
+
+            } catch (error) {
+
+                console.error(
+                    'Error al buscar productos desde móvil:',
+                    error
+                );
+
+                contenedor.innerHTML = `
+                <div class="p-6 text-center text-sm text-rose-500">
+                    No se pudo realizar la búsqueda
+                </div>
+            `;
+            }
+        }
+
 
         function agregarFilaInventario(
             codigo = '',

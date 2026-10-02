@@ -58,7 +58,25 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
         request.session["user"] = {"id": user.id, "email": user.email}
         request.session["perfil"] = perfil_data
 
-        response = RedirectResponse(url="/", status_code=303)
+        # Los usuarios provisionales entran
+        # directamente a la biblioteca de inventarios.
+        es_provisional = (
+            isinstance(perfil_data, dict)
+            and str(
+                perfil_data.get("tipo_usuario", "")
+            ).strip().lower() == "provisional"
+        )
+
+        ruta_inicio = (
+            "/inventario"
+            if es_provisional
+            else "/"
+        )
+
+        response = RedirectResponse(
+            url=ruta_inicio,
+            status_code=303
+        )
         
         # Asignación de cookies de autenticación
         response.set_cookie(
