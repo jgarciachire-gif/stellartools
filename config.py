@@ -1,4 +1,6 @@
 import os  # Para interactuar con el sistema de archivos y variables de entorno
+from dotenv import load_dotenv # Carga las variables guardadas en .env
+load_dotenv()
 import sys  # Para configurar rutas de inclusión del sistema
 import urllib.parse  # Para codificar parámetros en URLs
 from fastapi.templating import Jinja2Templates  # Motor de plantillas Jinja2
@@ -23,6 +25,10 @@ SUPABASE_CONNECT_TIMEOUT = float(
 # Credenciales y cliente de Supabase
 SUPABASE_URL = os.getenv("SUPABASE_URL", "https://wrcbuseidkupjndpovdd.supabase.co")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY", "sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA")
+# Clave secreta exclusiva del backend.
+# NUNCA debe enviarse al navegador.
+SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY")
+
 
 supabase: Client = create_client(
     SUPABASE_URL,
@@ -32,6 +38,29 @@ supabase: Client = create_client(
         storage_client_timeout=SUPABASE_TIMEOUT,
     )
 )
+
+# ============================================================
+# CLIENTE ADMINISTRATIVO DE SUPABASE
+# ============================================================
+#
+# Solo se utiliza desde FastAPI para operaciones administrativas.
+# Esta clave NUNCA debe llegar al navegador.
+# ============================================================
+
+if not SUPABASE_SECRET_KEY:
+    raise RuntimeError(
+        "Falta la variable de entorno SUPABASE_SECRET_KEY."
+    )
+
+supabase_admin: Client = create_client(
+    SUPABASE_URL,
+    SUPABASE_SECRET_KEY,
+    options=ClientOptions(
+        postgrest_client_timeout=SUPABASE_TIMEOUT,
+        storage_client_timeout=SUPABASE_TIMEOUT,
+    )
+)
+
 # Adaptador de almacenamiento en memoria 100% asíncrono para el cliente de Supabase Auth
 class AsyncMemoryStorage:
     def __init__(self):

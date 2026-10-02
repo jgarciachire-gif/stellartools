@@ -16,6 +16,44 @@ from config import templates, obtener_usuario_actual
 
 router = APIRouter()
 
+# ============================================================
+# PERFIL Y PERMISOS DE INVENTARIO
+# ============================================================
+
+def obtener_perfil_inventario(request: Request):
+    """
+    Obtiene el perfil cargado durante el inicio de sesión.
+    """
+    perfil = request.session.get("perfil")
+
+    if not isinstance(perfil, dict):
+        return None
+
+    return perfil
+
+
+def es_usuario_provisional(perfil: dict) -> bool:
+    """
+    Determina si el usuario tiene acceso limitado por tienda.
+    """
+    return (
+        str(
+            perfil.get("tipo_usuario", "")
+        ).strip().lower()
+        == "provisional"
+    )
+
+
+def obtener_tienda_provisional(perfil: dict):
+    """
+    Devuelve la tienda asignada al usuario provisional.
+    """
+    tienda = str(
+        perfil.get("tienda", "")
+    ).strip()
+
+    return tienda or None
+
 
 # ============================================================
 # BIBLIOTECA DE INVENTARIOS
@@ -41,16 +79,35 @@ async def vista_inventario(
         )
 
     try:
-        # La biblioteca es GLOBAL:
-        # todos los usuarios autenticados pueden visualizar
-        # los inventarios creados.
-        res = await (
+        perfil = obtener_perfil_inventario(request)
+
+        consulta = (
             config.supabase_async
             .table("inventarios")
             .select(
                 "id, nombre, realizado_por, tienda, "
                 "estado, created_at, updated_at"
             )
+        )
+
+        # Los usuarios provisionales solo ven
+        # inventarios de su tienda asignada.
+        if perfil and es_usuario_provisional(perfil):
+            tienda_provisional = obtener_tienda_provisional(perfil)
+
+            if not tienda_provisional:
+                raise HTTPException(
+                    status_code=403,
+                    detail="El usuario provisional no tiene una tienda asignada."
+                )
+
+            consulta = consulta.eq(
+                "tienda",
+                tienda_provisional
+            )
+
+        res = await (
+            consulta
             .order(
                 "created_at",
                 desc=True
@@ -64,7 +121,12 @@ async def vista_inventario(
             request=request,
             name="inventario.html",
             context={
-                "inventarios": inventarios
+                "inventarios": inventarios,
+                "perfil": perfil,
+                "es_provisional": (
+                    perfil
+                    and es_usuario_provisional(perfil)
+                )
             }
         )
 
@@ -113,6 +175,7 @@ async def vista_nuevo_inventario(
 
 @router.post("/inventario/crear")
 async def crear_inventario(
+    request: Request,
     nombre: str = Form(...),
     realizado_por: str = Form(...),
     tienda: str = Form(...),
@@ -135,6 +198,31 @@ async def crear_inventario(
     nombre = nombre.strip()
     realizado_por = realizado_por.strip()
     tienda = tienda.strip()
+
+    # ----------------------------------------------------
+    # SEGURIDAD DE TIENDA
+    # ----------------------------------------------------
+
+    perfil = obtener_perfil_inventario(request)
+
+    if perfil and es_usuario_provisional(perfil):
+
+        tienda_provisional = obtener_tienda_provisional(
+            perfil
+        )
+
+        if not tienda_provisional:
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "El usuario provisional "
+                    "no tiene una tienda asignada."
+                )
+            )
+
+        # La tienda enviada por el navegador NO se utiliza.
+        # El backend impone la tienda asignada al usuario.
+        tienda = tienda_provisional
 
     # Validaciones obligatorias.
     if not nombre:
@@ -258,11 +346,39 @@ async def vista_inventario_detalle(
 
         inventario = inventarios[0]
 
-        if not inventario:
-            raise HTTPException(
-                status_code=404,
-                detail="Inventario no encontrado."
+        # ----------------------------------------------------
+        # SEGURIDAD POR TIENDA
+        # ----------------------------------------------------
+
+        perfil = obtener_perfil_inventario(request)
+
+        if perfil and es_usuario_provisional(perfil):
+
+            tienda_provisional = obtener_tienda_provisional(
+                perfil
             )
+
+            if not tienda_provisional:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "El usuario provisional "
+                        "no tiene una tienda asignada."
+                    )
+                )
+
+            if (
+                str(inventario.get("tienda", "")).strip()
+                != tienda_provisional
+            ):
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "No tienes permiso para acceder "
+                        "a este inventario."
+                    )
+                )
+
 
         # ----------------------------------------------------
         # DETALLE
@@ -287,7 +403,11 @@ async def vista_inventario_detalle(
             name="inventario_nuevo.html",
             context={
                 "inventario": inventario,
-                "productos": productos
+                "productos": productos,
+                "es_provisional": (
+                    perfil
+                    and es_usuario_provisional(perfil)
+                )
             }
         )
 
@@ -364,7 +484,9 @@ async def guardar_inventario(
     res_actual = await (
         config.supabase_async
         .table("inventarios")
-        .select("id, estado")
+        .select(
+            "id, estado, tienda, usuario_creador_id"
+        )
         .eq("id", inventario_id)
         .maybe_single()
         .execute()
@@ -380,6 +502,61 @@ async def guardar_inventario(
                 "error": "Inventario no encontrado."
             }
         )
+    # ----------------------------------------------------
+    # SEGURIDAD PARA USUARIOS PROVISIONALES
+    # ----------------------------------------------------
+
+    perfil = obtener_perfil_inventario(request)
+
+    if perfil and es_usuario_provisional(perfil):
+
+        tienda_provisional = obtener_tienda_provisional(
+            perfil
+        )
+
+        if not tienda_provisional:
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": (
+                        "El usuario provisional "
+                        "no tiene una tienda asignada."
+                    )
+                }
+            )
+
+        # Debe pertenecer a su tienda.
+        if (
+            str(inventario_actual.get("tienda", "")).strip()
+            != tienda_provisional
+        ):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": (
+                        "No tienes permiso para modificar "
+                        "este inventario."
+                    )
+                }
+            )
+
+        # Además, solo puede modificar sus propios documentos.
+        if (
+            str(inventario_actual.get("usuario_creador_id"))
+            != str(user.id)
+        ):
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": (
+                        "Solo puedes modificar tus "
+                        "propios inventarios."
+                    )
+                }
+            )
 
     # Un inventario completado queda cerrado.
     if inventario_actual.get("estado") == "completado":
@@ -633,7 +810,7 @@ async def descartar_inventario_nuevo(
             config.supabase_async
             .table("inventarios")
             .select(
-                "id, estado, usuario_creador_id"
+                "id, estado, tienda, usuario_creador_id"
             )
             .eq("id", inventario_id)
             .maybe_single()
@@ -652,6 +829,44 @@ async def descartar_inventario_nuevo(
                 }
             )
 
+        # ----------------------------------------------------
+        # SEGURIDAD POR TIENDA
+        # ----------------------------------------------------
+
+        perfil = obtener_perfil_inventario(request)
+
+        if perfil and es_usuario_provisional(perfil):
+
+            tienda_provisional = obtener_tienda_provisional(
+                perfil
+            )
+
+            if not tienda_provisional:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "El usuario provisional "
+                            "no tiene una tienda asignada."
+                        )
+                    }
+                )
+
+            if (
+                str(inventario.get("tienda", "")).strip()
+                != tienda_provisional
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "No tienes permiso para "
+                            "descartar este inventario."
+                        )
+                    }
+                )
 
         # ----------------------------------------------------
         # 3. SEGURIDAD
@@ -666,6 +881,7 @@ async def descartar_inventario_nuevo(
         ) != str(user.id):
 
             return JSONResponse(
+                
                 status_code=403,
                 content={
                     "ok": False,
@@ -674,7 +890,7 @@ async def descartar_inventario_nuevo(
                 }
             )
 
-
+        
         # ----------------------------------------------------
         # 4. SOLO SE PUEDEN DESCARTAR BORRADORES
         # ----------------------------------------------------
@@ -751,6 +967,7 @@ async def descartar_inventario_nuevo(
 
 @router.delete("/api/inventario/{inventario_id}")
 async def eliminar_inventario(
+    request: Request,
     inventario_id: int,
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
@@ -783,7 +1000,9 @@ async def eliminar_inventario(
         res = await (
             config.supabase_async
             .table("inventarios")
-            .select("id, estado")
+            .select(
+                "id, estado, tienda, usuario_creador_id"
+            )
             .eq("id", inventario_id)
             .maybe_single()
             .execute()
@@ -800,6 +1019,80 @@ async def eliminar_inventario(
                         "Inventario no encontrado."
                 }
             )
+
+        # ----------------------------------------------------
+        # SEGURIDAD PARA USUARIOS PROVISIONALES
+        # ----------------------------------------------------
+
+        perfil = obtener_perfil_inventario(request)
+
+        if perfil and es_usuario_provisional(perfil):
+
+            tienda_provisional = obtener_tienda_provisional(
+                perfil
+            )
+
+            if not tienda_provisional:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "El usuario provisional "
+                            "no tiene una tienda asignada."
+                        )
+                    }
+                )
+
+            # Solo puede eliminar documentos de su tienda.
+            if (
+                str(inventario.get("tienda", "")).strip()
+                != tienda_provisional
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "No tienes permiso para "
+                            "eliminar este inventario."
+                        )
+                    }
+                )
+
+            # Solo puede eliminar sus propios documentos.
+            if (
+                str(inventario.get("usuario_creador_id"))
+                != str(user.id)
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "Solo puedes eliminar tus "
+                            "propios inventarios."
+                        )
+                    }
+                )
+
+            # Los usuarios provisionales solo pueden
+            # eliminar documentos en borrador.
+            if (
+                str(inventario.get("estado", "")).strip().lower()
+                != "borrador"
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "Los inventarios completados "
+                            "no se pueden eliminar."
+                        )
+                    }
+                )   
+
 
         # ----------------------------------------------------
         # 3. ELIMINAR CABECERA

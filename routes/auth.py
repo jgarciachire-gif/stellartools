@@ -30,22 +30,6 @@ async def vista_login(request: Request, access_token: str = Cookie(None), refres
 
     return templates.TemplateResponse(request=request, name="login.html", context={})
 
-@router.post("/registro")
-def procesar_registro(email: str = Form(...), password: str = Form(...)):
-    try:
-        supabase.auth.sign_up({"email": email, "password": password})
-        return script_alerta_modal(
-            tipo="exito", 
-            titulo="¡Registro Exitoso!", 
-            mensaje="Hemos enviado un enlace de confirmación a tu correo. Por favor, verifícalo para activar tu cuenta."
-        )
-    except Exception as e:
-        return script_alerta_modal(
-            tipo="error", 
-            titulo="Error de Registro", 
-            mensaje=f"No se pudo crear la cuenta: {str(e)}"
-        )
-
 @router.post("/login")
 async def procesar_login(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
@@ -60,7 +44,10 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
         res_perfil = await (
             client_async
             .table("perfiles")
-            .select("usuario_id, nombre_comprador, cargo")
+            .select(
+                "usuario_id, nombre_comprador, cargo, "
+                "tipo_usuario, tienda"
+            )
             .eq("usuario_id", user.id)
             .maybe_single()
             .execute()

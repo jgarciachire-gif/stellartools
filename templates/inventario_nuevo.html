@@ -48,22 +48,28 @@
 
         {% endif %}
 
-
         <!-- ELIMINAR -->
 
+        {% if not (
+        es_provisional
+        and inventario.estado == 'completado'
+        ) %}
+
         <button type="button" id="btn-eliminar-inventario" class="inline-flex items-center gap-2
-           px-4 py-2.5
-           rounded-xl
-           bg-rose-600
-           hover:bg-rose-700
-           text-white
-           text-sm
-           font-semibold
-           transition-colors
-           shadow-sm">
+            px-4 py-2.5
+            rounded-xl
+            bg-rose-600
+            hover:bg-rose-700
+            text-white
+            text-sm
+            font-semibold
+            transition-colors
+            shadow-sm">
             <i class="fa-solid fa-trash-can"></i>
             Eliminar
         </button>
+
+        {% endif %}
 
 
         <!-- BIBLIOTECA -->
@@ -79,7 +85,7 @@
            font-semibold
            transition-colors">
             <i class="fa-solid fa-arrow-left"></i>
-            Biblioteca
+            Volver
         </a>
 
     </div>
@@ -1169,7 +1175,7 @@
 
                 boton.classList.add(
                     'opacity-60',
-                    'cursor-not-allowed'
+                    'cursor-default'
                 );
 
             }
@@ -1237,7 +1243,7 @@
 
                     boton.classList.remove(
                         'opacity-60',
-                        'cursor-not-allowed'
+                        'cursor-default'
                     );
 
                 }
@@ -1269,7 +1275,7 @@
                 botonGuardar.disabled = true;
                 botonGuardar.classList.add(
                     'opacity-60',
-                    'cursor-not-allowed'
+                    'cursor-default'
                 );
             }
 
@@ -1379,7 +1385,7 @@
 
                     botonGuardar.classList.remove(
                         'opacity-60',
-                        'cursor-not-allowed'
+                        'cursor-default'
                     );
 
                 }
@@ -2054,6 +2060,9 @@
                     .forEach(
                         configurarFilaInventario
                     );
+                // Capturar el estado real del documento
+                // después de cargar y configurar sus filas.
+                capturarEstadoInicialInventario();
 
 
                 document

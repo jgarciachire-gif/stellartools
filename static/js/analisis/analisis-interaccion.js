@@ -1751,6 +1751,27 @@
             return;
         }
 
+        if (
+            !estaEditando &&
+            e.key.length === 1 &&
+            !e.isComposing
+        ) {
+            // No permitir edición de campos de solo lectura.
+            if (inputActivo.readOnly) {
+                return;
+            }
+
+            e.preventDefault();
+
+            entrarEnEdicion(
+                td,
+                true,
+                e.key
+            );
+
+            return;
+        }
+
         /*
          * Una tecla alfanumérica inicia edición tipo Excel.
          */

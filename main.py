@@ -19,7 +19,8 @@ from routes import (
     productos,
     analisis,
     calendario,
-    inventario
+    inventario,
+    usuarios
 )
 
 # Inicialización de la aplicación FastAPI
@@ -36,7 +37,13 @@ async def startup_event():
 @app.middleware("http")
 async def autenticacion_y_cache_middleware(request: Request, call_next):
     # Lista de rutas que se pueden visitar sin iniciar sesión
-    rutas_publicas = ["/login", "/registro", "/recuperar-password", "/reset-password"]
+    rutas_publicas = [
+        "/login",
+        "/registro",
+        "/recuperar-password",
+        "/reset-password",
+        "/logout"
+    ]
     
     path = request.url.path  # Obtiene la ruta actual solicitada por el usuario
     
@@ -52,10 +59,106 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
     
     # Si intenta entrar escribiendo la URL a una vista privada sin credenciales, redirige al login
     if not es_publica and not user and not access_token:
-        return RedirectResponse(url="/login", status_code=303)
+        return RedirectResponse(
+            url="/login",
+            status_code=303
+        )
 
-    request.state.user = user  # Asigna el usuario al estado de la petición actual
-    request.state.perfil = request.session.get("perfil")  # Asigna el perfil al estado de la petición
+
+    # ------------------------------------------------------------
+    # USUARIO PROVISIONAL
+    # ------------------------------------------------------------
+    # Los usuarios provisionales solo pueden trabajar
+    # directamente en Inventario.
+    perfil_sesion = request.session.get("perfil")
+
+    if (
+        user
+        and not es_publica
+        and isinstance(perfil_sesion, dict)
+        and str(
+            perfil_sesion.get("tipo_usuario", "")
+        ).strip().lower() == "provisional"
+    ):
+
+        # ------------------------------------------------------------
+        # USUARIO PROVISIONAL
+        # ------------------------------------------------------------
+        # Los usuarios provisionales solo pueden trabajar
+        # dentro de Inventario y utilizar las APIs estrictamente
+        # necesarias para que esa pantalla funcione.
+        # ------------------------------------------------------------
+
+        if (
+            user
+            and not es_publica
+            and isinstance(perfil_sesion, dict)
+            and str(
+                perfil_sesion.get("tipo_usuario", "")
+            ).strip().lower() == "provisional"
+        ):
+
+            rutas_provisionales_permitidas = (
+                # Pantallas de Inventario.
+                "/inventario",
+
+                # Operaciones propias de Inventario.
+                "/api/inventario",
+
+                # Buscador F2 compartido.
+                "/api/productos/buscar",
+                "/api/productos/buscar-codigo",
+
+                # Importador de productos de Inventario.
+                "/api/productos/importar-analisis",
+
+                # Datos necesarios para los filtros/importador.
+                "/api/proveedores",
+                "/api/clasificacion",
+
+                # Recursos del frontend.
+                "/static/",
+                "/.well-known/",
+            )
+
+            def ruta_provisional_permitida(
+                ruta: str
+            ) -> bool:
+
+                # Recursos con prefijo.
+                if ruta.endswith("/"):
+                    return (
+                        path == ruta
+                        or path.startswith(ruta)
+                    )
+
+                # Endpoints exactos o con parámetros después.
+                return (
+                    path == ruta
+                    or path.startswith(ruta + "/")
+                    or path.startswith(ruta + "?")
+                )
+
+            es_ruta_provisional_permitida = any(
+                ruta_provisional_permitida(ruta)
+                for ruta in rutas_provisionales_permitidas
+            )
+
+            if not es_ruta_provisional_permitida:
+                return RedirectResponse(
+                    url="/inventario",
+                    status_code=303
+                )
+
+        if not es_ruta_provisional_permitida:
+            return RedirectResponse(
+                url="/inventario",
+                status_code=303
+            )
+
+
+    request.state.user = user
+    request.state.perfil = perfil_sesion
 
     response = await call_next(request)
 
@@ -89,3 +192,4 @@ app.include_router(productos.router)
 app.include_router(analisis.router)
 app.include_router(calendario.router)
 app.include_router(inventario.router)
+app.include_router(usuarios.router)

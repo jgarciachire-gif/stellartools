@@ -1,0 +1,304 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="max-w-5xl mx-auto px-4 py-6">
+
+    <!-- ENCABEZADO -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-slate-800">
+            Administración de usuarios
+        </h1>
+
+        <p class="text-sm text-slate-500 mt-1">
+            Crea usuarios normales o usuarios provisionales asignados a una tienda.
+        </p>
+    </div>
+
+
+    <!-- FORMULARIO -->
+    <div class="bg-white border border-slate-200 rounded-xl shadow-sm">
+
+        <div class="px-5 py-4 border-b border-slate-200">
+            <h2 class="font-semibold text-slate-800">
+                Crear usuario
+            </h2>
+        </div>
+
+
+        <form id="form-crear-usuario" class="p-5 space-y-5">
+
+            <!-- CORREO -->
+            <div>
+                <label for="email" class="block text-sm font-medium text-slate-700 mb-1">
+                    Correo electrónico
+                </label>
+
+                <input type="email" id="email" name="email" required autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2
+                           text-sm focus:outline-none focus:ring-2
+                           focus:ring-indigo-500" placeholder="usuario@empresa.com">
+            </div>
+
+
+            <!-- CONTRASEÑA -->
+            <div>
+                <label for="password" class="block text-sm font-medium text-slate-700 mb-1">
+                    Contraseña
+                </label>
+
+                <input type="password" id="password" name="password" required minlength="6" autocomplete="new-password"
+                    class="w-full rounded-lg border border-slate-300 px-3 py-2
+                           text-sm focus:outline-none focus:ring-2
+                           focus:ring-indigo-500" placeholder="Mínimo 6 caracteres">
+            </div>
+
+
+            <!-- NOMBRE -->
+            <div>
+                <label for="nombre_comprador" class="block text-sm font-medium text-slate-700 mb-1">
+                    Nombre del usuario
+                </label>
+
+                <input type="text" id="nombre_comprador" name="nombre_comprador" required autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2
+                           text-sm focus:outline-none focus:ring-2
+                           focus:ring-indigo-500" placeholder="Nombre completo">
+            </div>
+
+
+            <!-- CARGO -->
+            <div>
+                <label for="cargo" class="block text-sm font-medium text-slate-700 mb-1">
+                    Cargo
+                </label>
+
+                <input type="text" id="cargo" name="cargo" autocomplete="off" class="w-full rounded-lg border border-slate-300 px-3 py-2
+                           text-sm focus:outline-none focus:ring-2
+                           focus:ring-indigo-500" placeholder="Ej. Comprador">
+            </div>
+
+
+            <!-- TIPO DE USUARIO -->
+            <div>
+                <label for="tipo_usuario" class="block text-sm font-medium text-slate-700 mb-1">
+                    Tipo de usuario
+                </label>
+
+                <select id="tipo_usuario" name="tipo_usuario" required class="w-full rounded-lg border border-slate-300 px-3 py-2
+                           text-sm focus:outline-none focus:ring-2
+                           focus:ring-indigo-500">
+                    <option value="normal">
+                        Normal
+                    </option>
+
+                    <option value="provisional">
+                        Provisional
+                    </option>
+                </select>
+            </div>
+
+
+            <!-- TIENDA -->
+            <div id="contenedor-tienda">
+
+                <label for="tienda" class="block text-sm font-medium text-slate-700 mb-1">
+                    Tienda asignada
+                </label>
+
+                <select id="tienda" name="tienda" class="w-full rounded-lg border border-slate-300 px-3 py-2
+                           text-sm focus:outline-none focus:ring-2
+                           focus:ring-indigo-500">
+                    <option value="">
+                        Seleccionar tienda
+                    </option>
+
+                    {% for tienda in tiendas %}
+                    <option value="{{ tienda }}">
+                        {{ tienda }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <p class="text-xs text-slate-500 mt-1">
+                    Solo aplica para usuarios provisionales.
+                </p>
+
+            </div>
+
+
+            <!-- ACCIONES -->
+            <div class="flex justify-end gap-2 pt-3 border-t border-slate-200">
+
+                <a href="/" class="px-4 py-2 rounded-lg border border-slate-300
+                           text-sm font-medium text-slate-700
+                           hover:bg-slate-50 transition-colors">
+                    Cancelar
+                </a>
+
+                <button type="submit" id="btn-crear-usuario" class="px-4 py-2 rounded-lg bg-indigo-600
+                           text-white text-sm font-medium
+                           hover:bg-indigo-700 transition-colors">
+                    <i class="fa-solid fa-user-plus mr-1"></i>
+                    Crear usuario
+                </button>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<script>
+
+    document.addEventListener('DOMContentLoaded', function () {
+
+        const tipoUsuario = document.getElementById('tipo_usuario');
+        const contenedorTienda = document.getElementById('contenedor-tienda');
+        const tienda = document.getElementById('tienda');
+        const formulario = document.getElementById('form-crear-usuario');
+        const boton = document.getElementById('btn-crear-usuario');
+
+
+        // --------------------------------------------------------
+        // MOSTRAR / OCULTAR TIENDA
+        // --------------------------------------------------------
+
+        function actualizarCampoTienda() {
+
+            const esProvisional =
+                tipoUsuario.value === 'provisional';
+
+            contenedorTienda.classList.toggle(
+                'hidden',
+                !esProvisional
+            );
+
+            tienda.required = esProvisional;
+
+            if (!esProvisional) {
+                tienda.value = '';
+            }
+        }
+
+
+        tipoUsuario.addEventListener(
+            'change',
+            actualizarCampoTienda
+        );
+
+        actualizarCampoTienda();
+
+
+        // --------------------------------------------------------
+        // CREAR USUARIO
+        // --------------------------------------------------------
+
+        formulario.addEventListener(
+            'submit',
+            async function (event) {
+
+                event.preventDefault();
+
+                boton.disabled = true;
+
+                const textoOriginal = boton.innerHTML;
+
+                boton.innerHTML =
+                    '<i class="fa-solid fa-spinner fa-spin mr-1"></i>' +
+                    'Creando...';
+
+
+                try {
+
+                    const datos = new FormData(formulario);
+
+                    const respuesta = await fetch(
+                        '/api/usuarios/crear',
+                        {
+                            method: 'POST',
+                            body: datos
+                        }
+                    );
+
+
+                    const resultado =
+                        await respuesta.json();
+
+
+                    if (!respuesta.ok || !resultado.ok) {
+
+                        throw new Error(
+                            resultado.error ||
+                            'No se pudo crear el usuario.'
+                        );
+                    }
+
+
+                    if (
+                        typeof mostrarNotificacion ===
+                        'function'
+                    ) {
+
+                        mostrarNotificacion({
+                            tipo: 'success',
+                            mensaje:
+                                resultado.mensaje ||
+                                'Usuario creado correctamente.'
+                        });
+
+                    } else {
+
+                        console.log(
+                            resultado.mensaje
+                        );
+                    }
+
+
+                    formulario.reset();
+
+                    actualizarCampoTienda();
+
+                } catch (error) {
+
+                    console.error(
+                        'Error al crear usuario:',
+                        error
+                    );
+
+
+                    if (
+                        typeof mostrarNotificacion ===
+                        'function'
+                    ) {
+
+                        mostrarNotificacion({
+                            tipo: 'error',
+                            mensaje:
+                                error.message ||
+                                'No se pudo crear el usuario.'
+                        });
+
+                    } else {
+
+                        console.error(
+                            error.message
+                        );
+                    }
+
+                } finally {
+
+                    boton.disabled = false;
+                    boton.innerHTML = textoOriginal;
+
+                }
+
+            }
+        );
+
+    });
+
+</script>
+
+{% endblock %}
