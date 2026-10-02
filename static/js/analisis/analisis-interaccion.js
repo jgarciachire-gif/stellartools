@@ -1756,8 +1756,28 @@
             e.key.length === 1 &&
             !e.isComposing
         ) {
+            const inputEdicion =
+                obtenerInputCelda(td);
+
             // No permitir edición de campos de solo lectura.
-            if (inputActivo.readOnly) {
+            if (!inputEdicion || inputEdicion.readOnly) {
+                return;
+            }
+
+            /*
+             * Inventario → Cantidad:
+             * solo permitimos iniciar edición con
+             * dígitos, punto o coma.
+             *
+             * La validación completa de cantidad
+             * continúa en inventario_nuevo.html.
+             */
+            if (
+                obtenerConfiguracionTabla() ===
+                CONFIG_TABLAS.inventario
+                && campoActual === 'cantidad'
+                && !/^[0-9.,]$/.test(e.key)
+            ) {
                 return;
             }
 

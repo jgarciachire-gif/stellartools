@@ -94,7 +94,8 @@
     <!-- ===================================================== -->
 
     <div class="grid grid-cols-1 md:grid-cols-2
-            gap-x-12 gap-y-3">
+        gap-x-12 gap-y-3
+        w-full max-w-[1000px] mx-auto">
 
         <!-- NOMBRE -->
 
@@ -175,7 +176,7 @@
     <!-- FECHAS -->
     <!-- ===================================================== -->
 
-    <div class="mt-4 text-xs text-slate-400">
+    <div class="mt-4 text-xs text-slate-400 w-full max-w-[1000px] mx-auto">
 
         Creado:
         <span data-fecha-inventario="{{ inventario.created_at }}">
@@ -197,7 +198,8 @@
     <!-- TABLA DE INVENTARIO -->
     <!-- ===================================================== -->
 
-    <div id="contenedor-tabla-inventario" class="mt-5 bg-white border border-slate-300
+    <div id="contenedor-tabla-inventario" class="mt-5 w-full max-w-[1000px] mx-auto
+            bg-white border border-slate-300
             rounded-2xl shadow-xs overflow-hidden">
 
         <div class="overflow-x-auto">
@@ -213,25 +215,33 @@
                     <tr class="bg-slate-900 text-white text-[11px]
                        font-bold uppercase tracking-wider select-none">
 
-                        <th class="py-2.5 px-3 w-36
-                           border-r border-slate-800">
-                            <div class="flex items-center justify-between">
-                                CÓDIGO
+                        <!-- CÓDIGO -->
+                        <th class="px-3 py-2 w-24 text-left text-xs font-semibold
+                            text-white cursor-pointer select-none
+                            hover:bg-slate-800 transition-colors" data-columna-orden-inventario="codigo"
+                            onclick="ordenarInventarioNuevo('codigo')">
+                            <div class="flex items-center gap-2">
+                                <span>CÓDIGO</span>
                             </div>
                         </th>
 
-                        <th class="py-2.5 px-3
-                           border-r border-slate-800">
-                            <div class="flex items-center justify-between">
-                                DESCRIPCIÓN
+                        <!-- DESCRIPCIÓN -->
+                        <th class="px-3 py-2 text-left text-xs font-semibold
+                            text-white cursor-pointer select-none
+                            hover:bg-slate-800 transition-colors" data-columna-orden-inventario="descripcion"
+                            onclick="ordenarInventarioNuevo('descripcion')">
+                            <div class="flex items-center gap-2">
+                                <span>DESCRIPCIÓN</span>
                             </div>
                         </th>
 
-                        <th class="py-2.5 px-3 w-32
-                           text-right
-                           border-r border-slate-800">
-                            <div class="flex items-center justify-end">
-                                CANTIDAD
+                        <!-- CANTIDAD -->
+                        <th class="px-3 py-2 w-12 text-right text-xs font-semibold
+                            text-white cursor-pointer select-none
+                            hover:bg-slate-800 transition-colors" data-columna-orden-inventario="cantidad"
+                            onclick="ordenarInventarioNuevo('cantidad')">
+                            <div class="flex items-center justify-end gap-2">
+                                <span>CANTIDAD</span>
                             </div>
                         </th>
 
@@ -711,6 +721,256 @@
 
             }
         );
+
+        // =========================================================
+        // ORDENAMIENTO DE LA TABLA DE INVENTARIO
+        // =========================================================
+
+        let columnaOrdenInventarioNuevo = null;
+        let direccionOrdenInventarioNuevo = 'asc';
+
+
+        function ordenarInventarioNuevo(columna) {
+
+            const tbody =
+                document.getElementById(
+                    'filas-tabla-inventario'
+                );
+
+            if (!tbody) {
+                return;
+            }
+
+
+            // Si se pulsa nuevamente la misma columna,
+            // invertimos el sentido del orden.
+            if (
+                columnaOrdenInventarioNuevo === columna
+            ) {
+
+                direccionOrdenInventarioNuevo =
+                    direccionOrdenInventarioNuevo === 'asc'
+                        ? 'desc'
+                        : 'asc';
+
+            } else {
+
+                columnaOrdenInventarioNuevo = columna;
+                direccionOrdenInventarioNuevo = 'asc';
+
+            }
+
+
+            const filas =
+                Array.from(
+                    tbody.querySelectorAll('tr')
+                );
+
+
+            filas.sort(
+                function (filaA, filaB) {
+
+                    const valorA =
+                        obtenerValorOrdenInventarioNuevo(
+                            filaA,
+                            columna
+                        );
+
+                    const valorB =
+                        obtenerValorOrdenInventarioNuevo(
+                            filaB,
+                            columna
+                        );
+
+
+                    let resultado = 0;
+
+
+                    // -------------------------------------------------
+                    // CANTIDAD
+                    // -------------------------------------------------
+
+                    if (columna === 'cantidad') {
+
+                        const numeroA =
+                            convertirCantidadOrdenInventario(
+                                valorA
+                            );
+
+                        const numeroB =
+                            convertirCantidadOrdenInventario(
+                                valorB
+                            );
+
+                        resultado =
+                            numeroA - numeroB;
+
+                    }
+
+                    // -------------------------------------------------
+                    // CÓDIGO Y DESCRIPCIÓN
+                    // -------------------------------------------------
+
+                    else {
+
+                        resultado =
+                            valorA.localeCompare(
+                                valorB,
+                                'es',
+                                {
+                                    numeric: true,
+                                    sensitivity: 'base'
+                                }
+                            );
+                    }
+
+
+                    return (
+                        direccionOrdenInventarioNuevo === 'asc'
+                            ? resultado
+                            : -resultado
+                    );
+                }
+            );
+
+
+            // Reinsertar las filas en el nuevo orden.
+            filas.forEach(
+                function (fila) {
+                    tbody.appendChild(fila);
+                }
+            );
+
+
+            actualizarIndicadoresOrdenInventarioNuevo(
+                columna
+            );
+        }
+
+
+        function obtenerValorOrdenInventarioNuevo(
+            fila,
+            columna
+        ) {
+
+            if (!fila) {
+                return '';
+            }
+
+
+            const inputCodigo =
+                fila.querySelector('.inp-codigo');
+
+            const inputDescripcion =
+                fila.querySelector('.inp-desc');
+
+            const inputCantidad =
+                fila.querySelector('.inp-cantidad');
+
+
+            switch (columna) {
+
+                case 'codigo':
+                    return (
+                        inputCodigo?.value || ''
+                    ).trim();
+
+
+                case 'descripcion':
+                    return (
+                        inputDescripcion?.value || ''
+                    ).trim();
+
+
+                case 'cantidad':
+                    return (
+                        inputCantidad?.value || ''
+                    ).trim();
+
+
+                default:
+                    return '';
+            }
+        }
+
+
+        function convertirCantidadOrdenInventario(
+            valor
+        ) {
+
+            if (
+                valor === null ||
+                valor === undefined ||
+                String(valor).trim() === ''
+            ) {
+                return 0;
+            }
+
+
+            const numero =
+                Number(
+                    String(valor)
+                        .trim()
+                        .replace(',', '.')
+                );
+
+
+            return Number.isFinite(numero)
+                ? numero
+                : 0;
+        }
+
+
+        function actualizarIndicadoresOrdenInventarioNuevo(
+            columnaActiva
+        ) {
+
+            document
+                .querySelectorAll(
+                    '[data-columna-orden-inventario]'
+                )
+                .forEach(
+                    function (encabezado) {
+
+                        const indicador =
+                            encabezado.querySelector(
+                                '.indicador-orden-inventario'
+                            );
+
+                        if (!indicador) {
+                            return;
+                        }
+
+
+                        const columna =
+                            encabezado.dataset
+                                .columnaOrdenInventario;
+
+
+                        if (
+                            columna !==
+                            columnaActiva
+                        ) {
+
+                            indicador.textContent = '↕';
+
+                            indicador.className =
+                                'indicador-orden-inventario text-slate-400';
+
+                            return;
+                        }
+
+
+                        indicador.textContent =
+                            direccionOrdenInventarioNuevo === 'asc'
+                                ? '↑'
+                                : '↓';
+
+                        indicador.className =
+                            'indicador-orden-inventario text-white font-bold';
+                    }
+                );
+        }
     </script>
 
     <script>

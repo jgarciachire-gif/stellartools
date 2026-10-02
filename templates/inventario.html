@@ -48,24 +48,44 @@
 
                     <tr>
 
-                        <th class="px-5 py-2.5 text-left font-semibold text-white">
-                            Nombre de la lista
+                        <th class="px-5 py-2.5 text-left font-semibold text-white
+                            cursor-pointer select-none hover:bg-slate-800 transition-colors"
+                            data-columna-orden="nombre" onclick="ordenarInventarios('nombre')">
+                            <div class="flex items-center gap-2">
+                                Nombre de la lista
+                            </div>
                         </th>
 
-                        <th class="px-5 py-2.5 text-left font-semibold text-white">
-                            Tienda
+                        <th class="px-5 py-2.5 text-left font-semibold text-white
+                            cursor-pointer select-none hover:bg-slate-800 transition-colors"
+                            data-columna-orden="tienda" onclick="ordenarInventarios('tienda')">
+                            <div class="flex items-center gap-2">
+                                Tienda
+                            </div>
                         </th>
 
-                        <th class="px-5 py-2.5 text-left font-semibold text-white">
-                            Realizado por
+                        <th class="px-5 py-2.5 text-left font-semibold text-white
+                            cursor-pointer select-none hover:bg-slate-800 transition-colors"
+                            data-columna-orden="realizado_por" onclick="ordenarInventarios('realizado_por')">
+                            <div class="flex items-center gap-2">
+                                Realizado por
+                            </div>
                         </th>
 
-                        <th class="px-5 py-2.5 text-left font-semibold text-white">
-                            Fecha
+                        <th class="px-5 py-2.5 text-left font-semibold text-white
+                            cursor-pointer select-none hover:bg-slate-800 transition-colors" data-columna-orden="fecha"
+                            onclick="ordenarInventarios('fecha')">
+                            <div class="flex items-center gap-2">
+                                Fecha
+                            </div>
                         </th>
 
-                        <th class="px-5 py-2.5 text-center font-semibold text-white">
-                            Estado
+                        <th class="px-5 py-2.5 text-center font-semibold text-white
+                            cursor-pointer select-none hover:bg-slate-800 transition-colors"
+                            data-columna-orden="estado" onclick="ordenarInventarios('estado')">
+                            <div class="flex items-center justify-center gap-2">
+                                Estado
+                            </div>
                         </th>
                     </tr>
 
@@ -353,6 +373,274 @@
     </div>
 
 </div>
+
+<script>
+
+    // =========================================================
+    // ORDENAMIENTO DE LA LISTA DE INVENTARIOS
+    // =========================================================
+
+    let columnaOrdenInventarios = null;
+    let direccionOrdenInventarios = 'asc';
+
+
+    function ordenarInventarios(columna) {
+
+        const tabla =
+            document.querySelector(
+                'table'
+            );
+
+        if (!tabla) {
+            return;
+        }
+
+
+        const tbody =
+            tabla.querySelector('tbody');
+
+        if (!tbody) {
+            return;
+        }
+
+
+        // Si se vuelve a pulsar la misma columna,
+        // invertimos el sentido del orden.
+        if (
+            columnaOrdenInventarios === columna
+        ) {
+
+            direccionOrdenInventarios =
+                direccionOrdenInventarios === 'asc'
+                    ? 'desc'
+                    : 'asc';
+
+        } else {
+
+            columnaOrdenInventarios = columna;
+            direccionOrdenInventarios = 'asc';
+
+        }
+
+
+        const filas =
+            Array.from(
+                tbody.querySelectorAll('tr')
+            );
+
+
+        filas.sort(
+            function (filaA, filaB) {
+
+                const valorA =
+                    obtenerValorOrdenInventario(
+                        filaA,
+                        columna
+                    );
+
+                const valorB =
+                    obtenerValorOrdenInventario(
+                        filaB,
+                        columna
+                    );
+
+
+                let resultado = 0;
+
+
+                // -------------------------------------------------
+                // FECHA
+                // -------------------------------------------------
+
+                if (columna === 'fecha') {
+
+                    const fechaA =
+                        obtenerFechaInventario(
+                            filaA
+                        );
+
+                    const fechaB =
+                        obtenerFechaInventario(
+                            filaB
+                        );
+
+                    resultado =
+                        fechaA - fechaB;
+
+                }
+
+                // -------------------------------------------------
+                // TEXTO
+                // -------------------------------------------------
+
+                else {
+
+                    resultado =
+                        valorA.localeCompare(
+                            valorB,
+                            'es',
+                            {
+                                numeric: true,
+                                sensitivity: 'base'
+                            }
+                        );
+                }
+
+
+                return (
+                    direccionOrdenInventarios === 'asc'
+                        ? resultado
+                        : -resultado
+                );
+            }
+        );
+
+
+        // Reinsertar las filas en el nuevo orden.
+        filas.forEach(
+            function (fila) {
+                tbody.appendChild(fila);
+            }
+        );
+
+
+        actualizarIndicadoresOrdenInventarios(
+            columna
+        );
+    }
+
+
+    function obtenerValorOrdenInventario(
+        fila,
+        columna
+    ) {
+
+        if (!fila) {
+            return '';
+        }
+
+
+        const celdas =
+            fila.querySelectorAll('td');
+
+
+        switch (columna) {
+
+            case 'nombre':
+                return (
+                    celdas[0]?.textContent || ''
+                ).trim();
+
+
+            case 'tienda':
+                return (
+                    celdas[1]?.textContent || ''
+                ).trim();
+
+
+            case 'realizado_por':
+                return (
+                    celdas[2]?.textContent || ''
+                ).trim();
+
+
+            case 'fecha':
+                return (
+                    celdas[3]?.dataset.fecha || ''
+                ).trim();
+
+
+            case 'estado':
+                return (
+                    celdas[4]?.textContent || ''
+                ).trim();
+
+
+            default:
+                return '';
+        }
+    }
+
+
+    function obtenerFechaInventario(fila) {
+
+        const celdaFecha =
+            fila.querySelector(
+                'td[data-fecha]'
+            );
+
+        if (!celdaFecha) {
+            return 0;
+        }
+
+
+        const fecha =
+            new Date(
+                celdaFecha.dataset.fecha
+            );
+
+
+        const tiempo =
+            fecha.getTime();
+
+
+        return Number.isNaN(tiempo)
+            ? 0
+            : tiempo;
+    }
+
+
+    function actualizarIndicadoresOrdenInventarios(
+        columnaActiva
+    ) {
+
+        document
+            .querySelectorAll(
+                '[data-columna-orden]'
+            )
+            .forEach(
+                function (encabezado) {
+
+                    const indicador =
+                        encabezado.querySelector(
+                            '.indicador-orden'
+                        );
+
+                    if (!indicador) {
+                        return;
+                    }
+
+
+                    const columna =
+                        encabezado.dataset.columnaOrden;
+
+
+                    if (
+                        columna !==
+                        columnaActiva
+                    ) {
+
+                        indicador.textContent = '↕';
+
+                        indicador.className =
+                            'indicador-orden text-slate-400';
+
+                        return;
+                    }
+
+
+                    indicador.textContent =
+                        direccionOrdenInventarios === 'asc'
+                            ? '↑'
+                            : '↓';
+
+                    indicador.className =
+                        'indicador-orden text-white font-bold';
+                }
+            );
+    }
+
+</script>
 
 <script>
     /*
