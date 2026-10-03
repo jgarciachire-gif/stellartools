@@ -164,40 +164,30 @@
 
             {% for inventario in inventarios %}
 
-            <div class="p-4 active:bg-slate-50 transition-colors cursor-pointer"
-                onclick="window.location.href='/inventario/{{ inventario.id }}'">
+            <div class="px-4 py-3 active:bg-slate-50
+               transition-colors cursor-pointer" onclick="window.location.href='/inventario/{{ inventario.id }}'">
 
-                <!-- ENCABEZADO DE LA TARJETA -->
+                <!-- NOMBRE + ESTADO -->
 
                 <div class="flex items-start justify-between gap-3">
 
-                    <div class="min-w-0 flex-1">
-
-                        <h3 class="font-semibold text-slate-800
-                                   text-base leading-5
-                                   break-words">
-                            {{ inventario.nombre }}
-                        </h3>
-
-                        <p class="mt-1 text-sm text-slate-500">
-                            {{ inventario.tienda }}
-                        </p>
-
-                    </div>
-
-
-                    <!-- ESTADO -->
+                    <h3 class="min-w-0 flex-1
+                       font-semibold text-slate-800
+                       text-sm leading-5
+                       break-words">
+                        {{ inventario.nombre }}
+                    </h3>
 
                     {% if inventario.estado == 'completado' %}
 
                     <span class="shrink-0
-                               inline-flex items-center gap-1
-                               px-2.5 py-1
-                               rounded-full
-                               bg-emerald-100
-                               text-emerald-700
-                               text-[11px]
-                               font-semibold">
+                         inline-flex items-center gap-1
+                         px-2 py-0.5
+                         rounded-full
+                         bg-emerald-100
+                         text-emerald-700
+                         text-[10px]
+                         font-semibold">
                         <i class="fa-solid fa-circle-check"></i>
                         Completado
                     </span>
@@ -205,13 +195,13 @@
                     {% else %}
 
                     <span class="shrink-0
-                               inline-flex items-center gap-1
-                               px-2.5 py-1
-                               rounded-full
-                               bg-amber-100
-                               text-amber-700
-                               text-[11px]
-                               font-semibold">
+                         inline-flex items-center gap-1
+                         px-2 py-0.5
+                         rounded-full
+                         bg-amber-100
+                         text-amber-700
+                         text-[10px]
+                         font-semibold">
                         <i class="fa-solid fa-pen"></i>
                         Borrador
                     </span>
@@ -223,60 +213,20 @@
 
                 <!-- INFORMACIÓN -->
 
-                <div class="mt-4
-                           grid grid-cols-2
-                           gap-3
-                           text-xs">
+                <div class="mt-1.5
+                    flex items-center justify-between gap-3
+                    text-xs">
 
-                    <div>
+                    <p class="min-w-0 truncate text-slate-500">
+                        <span class="font-semibold text-slate-400">
+                            Realizado por:
+                        </span>
+                        {{ inventario.realizado_por }}
+                    </p>
 
-                        <p class="text-slate-400
-                                  uppercase
-                                  tracking-wide
-                                  font-semibold">
-                            Realizado por
-                        </p>
-
-                        <p class="mt-0.5
-                                  text-slate-600
-                                  truncate">
-                            {{ inventario.realizado_por }}
-                        </p>
-
-                    </div>
-
-
-                    <div>
-
-                        <p class="text-slate-400
-                                  uppercase
-                                  tracking-wide
-                                  font-semibold">
-                            Fecha
-                        </p>
-
-                        <p class="mt-0.5
-                                  text-slate-600" data-fecha="{{ inventario.created_at }}">
-                            {{ inventario.created_at }}
-                        </p>
-
-                    </div>
-
-                </div>
-
-
-                <!-- INDICADOR DE APERTURA -->
-
-                <div class="mt-4
-                           pt-3
-                           border-t border-slate-100
-                           flex items-center justify-end
-                           text-xs
-                           font-semibold
-                           text-indigo-600">
-                    Abrir inventario
-
-                    <i class="fa-solid fa-chevron-right ml-2"></i>
+                    <p class="shrink-0 text-right text-slate-500" data-fecha="{{ inventario.created_at }}">
+                        {{ inventario.created_at }}
+                    </p>
 
                 </div>
 

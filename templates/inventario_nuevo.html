@@ -2,6 +2,38 @@
 
 {% block content %}
 
+<style>
+    /* =========================================================
+       BLOQUEAR SELECCIÓN DE TEXTO EN MÓVIL
+       Evita "Copiar / Seleccionar todo / Búsqueda web" al
+       mantener presionado cualquier elemento del inventario.
+       ========================================================= */
+
+    @media (max-width: 767px) {
+
+        #inventario-app,
+        #inventario-app * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /*
+         * Los campos siguen pudiendo recibir escritura.
+         * Solo evitamos que Android trate el texto como
+         * contenido seleccionable.
+         */
+        #inventario-app input,
+        #inventario-app textarea,
+        #inventario-app [contenteditable="true"] {
+            -webkit-user-select: text;
+            user-select: text;
+            -webkit-touch-callout: default;
+        }
+
+    }
+</style>
+
 <div id="inventario-app" class="max-w-7xl mx-auto px-4 py-5" data-inventario-id="{{ inventario.id }}"
     data-tienda="{{ inventario.tienda }}" data-estado="{{ inventario.estado }}">
 
@@ -9,39 +41,37 @@
     <!-- ACCIONES DEL DOCUMENTO -->
     <!-- ===================================================== -->
 
-    <div class="flex justify-end items-center gap-2 mb-4">
+    <!-- VISTA ESCRITORIO -->
+    <div class="hidden md:flex justify-end items-center gap-2 mb-4">
 
         {% if inventario.estado == 'borrador' %}
 
         <!-- IMPORTAR -->
-
         <button type="button" id="btn-importar-productos" class="inline-flex items-center gap-2
-           px-4 py-2.5
-           rounded-xl
-           bg-indigo-600
-           hover:bg-indigo-700
-           text-white
-           text-sm
-           font-semibold
-           transition-colors
-           shadow-sm">
+               px-4 py-2.5
+               rounded-xl
+               bg-indigo-600
+               hover:bg-indigo-700
+               text-white
+               text-sm
+               font-semibold
+               transition-colors
+               shadow-sm">
             <i class="fa-solid fa-file-import"></i>
             Importar
         </button>
 
-
         <!-- GUARDAR -->
-
         <button type="button" id="btn-guardar-inventario" class="inline-flex items-center gap-2
-           px-4 py-2.5
-           rounded-xl
-           bg-emerald-600
-           hover:bg-emerald-700
-           text-white
-           text-sm
-           font-semibold
-           transition-colors
-           shadow-sm">
+               px-4 py-2.5
+               rounded-xl
+               bg-emerald-600
+               hover:bg-emerald-700
+               text-white
+               text-sm
+               font-semibold
+               transition-colors
+               shadow-sm">
             <i class="fa-solid fa-floppy-disk"></i>
             Guardar
         </button>
@@ -49,46 +79,212 @@
         {% endif %}
 
         <!-- ELIMINAR -->
-
         {% if not (
         es_provisional
         and inventario.estado == 'completado'
         ) %}
 
         <button type="button" id="btn-eliminar-inventario" class="inline-flex items-center gap-2
-            px-4 py-2.5
-            rounded-xl
-            bg-rose-600
-            hover:bg-rose-700
-            text-white
-            text-sm
-            font-semibold
-            transition-colors
-            shadow-sm">
+               px-4 py-2.5
+               rounded-xl
+               bg-rose-600
+               hover:bg-rose-700
+               text-white
+               text-sm
+               font-semibold
+               transition-colors
+               shadow-sm">
             <i class="fa-solid fa-trash-can"></i>
             Eliminar
         </button>
 
         {% endif %}
 
-
         <!-- BIBLIOTECA -->
-
         <a href="/inventario" id="btn-volver-inventarios" class="inline-flex items-center gap-2
-           px-4 py-2.5
-           rounded-xl
-           border border-slate-300
-           text-slate-700
-           bg-white
-           hover:bg-slate-50
-           text-sm
-           font-semibold
-           transition-colors">
+               px-4 py-2.5
+               rounded-xl
+               border border-slate-300
+               text-slate-700
+               bg-white
+               hover:bg-slate-50
+               text-sm
+               font-semibold
+               transition-colors">
             <i class="fa-solid fa-arrow-left"></i>
             Volver
         </a>
 
     </div>
+
+
+    <!-- VISTA MÓVIL -->
+    <div class="md:hidden mb-4">
+
+        <div class="flex items-center justify-between gap-2">
+
+            <!-- VOLVER -->
+            <a href="/inventario" id="btn-volver-inventarios-movil" class="w-10 h-10
+                   shrink-0
+                   inline-flex
+                   items-center
+                   justify-center
+                   rounded-xl
+                   border border-slate-200
+                   bg-white
+                   text-slate-700
+                   active:bg-slate-100
+                   transition" aria-label="Volver a la biblioteca">
+                <i class="fa-solid fa-arrow-left"></i>
+            </a>
+
+
+            <!-- TÍTULO -->
+            <div class="min-w-0 flex-1 px-2">
+
+                <p class="text-[14px]
+                      uppercase
+                      tracking-wider
+                      font-bold
+                      text-slate-800">
+                    Lista de Inventario
+                </p>
+
+            </div>
+
+
+            {% if inventario.estado == 'borrador' %}
+
+            <!-- GUARDAR -->
+            <button type="button" id="btn-guardar-inventario-movil" class="shrink-0
+                   inline-flex
+                   items-center
+                   justify-center
+                   gap-2
+                   px-3.5
+                   py-3.5
+                   rounded-xl
+                   bg-emerald-600
+                   hover:bg-emerald-700
+                   active:scale-[0.98]
+                   text-white
+                   text-sm
+                   font-semibold
+                   shadow-sm
+                   transition">
+                <i class="fa-solid fa-floppy-disk"></i>
+
+            </button>
+
+
+            <!-- MENÚ -->
+            <div class="relative shrink-0">
+
+                <button type="button" id="btn-menu-acciones-movil" class="w-10 h-10
+                       inline-flex
+                       items-center
+                       justify-center
+                       rounded-xl
+                       border border-slate-200
+                       bg-slate-100
+                       text-slate-700
+                       active:bg-slate-200
+                       transition" aria-label="Más acciones" aria-expanded="false">
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+                </button>
+
+
+                <div id="menu-acciones-movil" class="hidden
+                       absolute
+                       right-0
+                       top-12
+                       z-50
+                       w-56
+                       bg-white
+                       border border-slate-200
+                       rounded-2xl
+                       shadow-xl
+                       overflow-hidden">
+
+                    <!-- IMPORTAR -->
+                    <button type="button" id="btn-importar-productos-movil" class="w-full
+                           flex
+                           items-center
+                           gap-3
+                           px-4
+                           py-3.5
+                           text-left
+                           text-sm
+                           font-semibold
+                           text-slate-700
+                           active:bg-slate-50
+                           transition">
+                        <span class="w-9 h-9
+                               shrink-0
+                               inline-flex
+                               items-center
+                               justify-center
+                               rounded-xl
+                               bg-indigo-50
+                               text-indigo-600">
+                            <i class="fa-solid fa-file-import"></i>
+                        </span>
+
+                        <span>
+                            Importar productos
+                        </span>
+                    </button>
+
+
+                    <!-- ELIMINAR INVENTARIO -->
+                    {% if not (
+                    es_provisional
+                    and inventario.estado == 'completado'
+                    ) %}
+
+                    <button type="button" id="btn-eliminar-inventario-movil" class="w-full
+                           flex
+                           items-center
+                           gap-3
+                           px-4
+                           py-3.5
+                           text-left
+                           text-sm
+                           font-semibold
+                           text-rose-600
+                           border-t border-slate-100
+                           active:bg-rose-50
+                           transition">
+                        <span class="w-9 h-9
+                               shrink-0
+                               inline-flex
+                               items-center
+                               justify-center
+                               rounded-xl
+                               bg-rose-50
+                               text-rose-600">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </span>
+
+                        <span>
+                            Eliminar inventario
+                        </span>
+                    </button>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+            {% else %}
+
+            {% endif %}
+
+        </div>
+
+    </div>
+
     <!-- ===================================================== -->
     <!-- CABECERA DEL INVENTARIO -->
     <!-- ===================================================== -->
@@ -200,7 +396,7 @@
 
     <div id="contenedor-tabla-inventario" class="mt-5 w-full max-w-[1000px] mx-auto
         bg-white border border-slate-300
-        rounded-2xl shadow-xs">
+        rounded-2xl overflow-hidden shadow-xs">
 
         <!-- ===================================================== -->
         <!-- VISTA DESKTOP -->
@@ -212,12 +408,13 @@
         Cuadrícula de inventario con el mismo lenguaje visual
         de la tabla de Análisis de Pedido.
     -->
-            <table id="tabla-inventario" class="w-full text-left border-collapse border border-slate-900">
+            <table id="tabla-inventario" class="w-full text-left border-collapse">
 
                 <thead>
 
                     <tr class="bg-slate-900 text-white text-[11px]
-                       font-bold uppercase tracking-wider select-none">
+                            font-bold uppercase tracking-wider select-none
+                            rounded-t-2xl">
 
                         <!-- CÓDIGO -->
                         <th class="px-3 py-2 w-24 text-left text-xs font-semibold
@@ -531,8 +728,8 @@
 
                     <!-- TEXTO ACTUAL -->
 
-                    <input type="text" id="input-buscar-producto-movil" autocomplete="off" spellcheck="false"
-                        placeholder="Buscar producto..." class="flex-1
+                    <input type="search" id="input-buscar-producto-movil" autocomplete="off" autocapitalize="off"
+                        autocorrect="off" spellcheck="false" readonly placeholder="Buscar producto..." class="flex-1
                    min-w-[120px]
                    border-0
                    outline-none
@@ -1323,12 +1520,61 @@
             parametrosInventario.get('nuevo') === '1';
 
         if (esInventarioNuevo) {
+
             window.history.replaceState(
-                {},
+                {
+                    inventarioActual: true
+                },
                 document.title,
                 window.location.pathname
             );
+
+        } else {
+
+            /*
+             * Creamos una entrada adicional en el historial
+             * para poder interceptar el botón "Atrás" del
+             * navegador en Android.
+             */
+            window.history.pushState(
+                {
+                    inventarioActual: true
+                },
+                document.title,
+                window.location.href
+            );
+
         }
+
+        /*
+        * =========================================================
+        * ATRÁS DEL NAVEGADOR / ANDROID
+        * =========================================================
+        *
+        * El botón físico o gesto "Atrás" del celular debe pasar
+        * por la misma lógica de salida que el botón "Volver".
+        */
+        window.addEventListener(
+            'popstate',
+            function () {
+
+                /*
+                 * Volvemos a colocar la entrada del inventario
+                 * para evitar que el navegador abandone la página
+                 * antes de mostrar la confirmación.
+                 */
+                window.history.pushState(
+                    {
+                        inventarioActual: true
+                    },
+                    document.title,
+                    window.location.href
+                );
+
+                salirAlaBiblioteca();
+
+            }
+        );
 
         // =========================================================
         // UTILIDADES
@@ -1416,69 +1662,329 @@
                         'p-4 bg-white';
 
                     tarjeta.innerHTML = `
-                <div class="flex items-start justify-between gap-3">
+    <div class="flex items-start justify-between gap-3">
 
-                    <div class="min-w-0 flex-1">
+        <div class="min-w-0 flex-1">
 
-                        <p class="text-sm font-semibold
-                                  text-slate-800
-                                  break-words">
-                            ${escaparHtmlInventario(descripcion)}
-                        </p>
+            <p class="text-sm font-semibold
+                      text-slate-800
+                      break-words">
+                ${escaparHtmlInventario(descripcion)}
+            </p>
 
-                        <p class="mt-1 text-xs
-                                  text-slate-400">
-                            código:
-                            ${escaparHtmlInventario(codigo)}
-                        </p>
+            <p class="mt-1 text-xs
+                      text-slate-400">
+                código:
+                ${escaparHtmlInventario(codigo)}
+            </p>
 
-                    </div>
+        </div>
 
-                    <div class="shrink-0">
+        <div class="shrink-0">
 
-                        <input
-                            type="text"
-                            inputmode="decimal"
-                            value="${escaparHtmlInventario(cantidad)}"
-                            class="campo-cantidad-movil
-                                   w-20
-                                   px-2 py-2
-                                   text-center
-                                   text-sm font-semibold
-                                   border border-slate-300
-                                   rounded-lg
-                                   focus:outline-none
-                                   focus:ring-2
-                                   focus:ring-slate-500/30"
-                        >
+            <div
+                class="campo-cantidad-movil
+                       w-20
+                       min-h-[42px]
+                       px-2 py-2
+                       flex items-center justify-center
+                       text-center
+                       text-sm font-semibold
+                       border border-slate-300
+                       rounded-lg
+                       select-none
+                       ${estadoInicial === 'completado'
+                            ? 'bg-slate-100 text-slate-500 cursor-default'
+                            : 'bg-white text-slate-800 cursor-text active:bg-slate-50'}"
+                role="textbox"
+                aria-label="Cantidad"
+                ${estadoInicial === 'completado'
+                            ? 'aria-readonly="true"'
+                            : 'aria-readonly="true"'}
+                spellcheck="false"
+            >${escaparHtmlInventario(cantidad)}</div>
 
-                    </div>
+        </div>
 
-                </div>
-            `;
+    </div>
+`;
 
-                    const inputCantidadMovil =
+                    const cantidadMovil =
                         tarjeta.querySelector(
                             '.campo-cantidad-movil'
                         );
 
-                    if (inputCantidadMovil) {
+                    if (cantidadMovil) {
 
-                        inputCantidadMovil.addEventListener(
-                            'change',
-                            function () {
+                        if (estadoInicial !== 'completado') {
 
-                                inputCantidad.value =
-                                    inputCantidadMovil.value;
+                            cantidadMovil.addEventListener(
+                                'click',
+                                function () {
 
-                                validarCantidadInventario(
-                                    inputCantidad
+                                    if (
+                                        this.getAttribute(
+                                            'contenteditable'
+                                        ) === 'true'
+                                    ) {
+                                        return;
+                                    }
+
+                                    const valorOriginal =
+                                        String(
+                                            inputCantidad.value || '0'
+                                        ).trim();
+
+                                    this.dataset.valorOriginal =
+                                        valorOriginal;
+
+                                    this.setAttribute(
+                                        'contenteditable',
+                                        'true'
+                                    );
+
+                                    this.setAttribute(
+                                        'aria-readonly',
+                                        'false'
+                                    );
+
+                                    this.setAttribute(
+                                        'inputmode',
+                                        'decimal'
+                                    );
+
+                                    this.textContent =
+                                        valorOriginal;
+
+                                    this.focus();
+
+                                    const seleccion =
+                                        window.getSelection();
+
+                                    const rango =
+                                        document.createRange();
+
+                                    rango.selectNodeContents(this);
+
+                                    seleccion.removeAllRanges();
+
+                                    seleccion.addRange(rango);
+
+                                }
+                            );
+
+                            cantidadMovil.addEventListener(
+                                'keydown',
+                                function (e) {
+
+                                    if (
+                                        e.key === 'Enter'
+                                    ) {
+
+                                        e.preventDefault();
+
+                                        this.blur();
+
+                                        return;
+                                    }
+
+                                    if (
+                                        e.key === 'Escape'
+                                    ) {
+
+                                        e.preventDefault();
+
+                                        this.textContent =
+                                            this.dataset.valorOriginal ||
+                                            inputCantidad.value ||
+                                            '0';
+
+                                        this.removeAttribute(
+                                            'contenteditable'
+                                        );
+
+                                        this.setAttribute(
+                                            'aria-readonly',
+                                            'true'
+                                        );
+
+                                        this.blur();
+
+                                        return;
+                                    }
+
+                                    /*
+                                     * Durante la edición solo permitimos
+                                     * números, coma y punto.
+                                     */
+                                    if (
+                                        e.key.length === 1 &&
+                                        !/^[0-9.,]$/.test(e.key)
+                                    ) {
+                                        e.preventDefault();
+                                    }
+
+                                }
+                            );
+
+                            cantidadMovil.addEventListener(
+                                'input',
+                                function () {
+
+                                    /*
+                                     * Evita pegar o introducir letras
+                                     * durante la edición.
+                                     */
+                                    const valor =
+                                        this.textContent
+                                            .replace(/[^0-9.,]/g, '');
+
+                                    if (
+                                        this.textContent !== valor
+                                    ) {
+                                        this.textContent = valor;
+
+                                        const rango =
+                                            document.createRange();
+
+                                        rango.selectNodeContents(this);
+
+                                        rango.collapse(false);
+
+                                        const seleccion =
+                                            window.getSelection();
+
+                                        seleccion.removeAllRanges();
+
+                                        seleccion.addRange(rango);
+                                    }
+
+                                }
+                            );
+
+                            cantidadMovil.addEventListener(
+                                'blur',
+                                function () {
+
+                                    if (
+                                        this.getAttribute(
+                                            'contenteditable'
+                                        ) !== 'true'
+                                    ) {
+                                        return;
+                                    }
+
+                                    inputCantidad.value =
+                                        this.textContent.trim();
+
+                                    validarCantidadInventario(
+                                        inputCantidad
+                                    );
+
+                                    this.textContent =
+                                        inputCantidad.value || '0';
+
+                                    this.removeAttribute(
+                                        'contenteditable'
+                                    );
+
+                                    this.setAttribute(
+                                        'aria-readonly',
+                                        'true'
+                                    );
+
+                                    delete this.dataset.valorOriginal;
+
+                                }
+                            );
+
+                        }
+
+                    }
+                    /*
+ * LONG PRESS — ELIMINAR PRODUCTO
+ *
+ * Solo disponible en borradores.
+ * Mantener presionada la tarjeta durante
+ * 650 ms abre la confirmación.
+ */
+                    if (estadoInicial !== 'completado') {
+
+                        let temporizadorLongPress = null;
+                        let longPressActivado = false;
+
+                        const iniciarLongPress = function () {
+
+                            longPressActivado = false;
+
+                            temporizadorLongPress =
+                                setTimeout(
+                                    async function () {
+
+                                        longPressActivado = true;
+
+                                        const confirmar =
+                                            await mostrarConfirmacion({
+                                                titulo: '¿Eliminar producto?',
+                                                mensaje:
+                                                    `${descripcion}\n` +
+                                                    `Cantidad: ${cantidad}`
+                                            });
+
+                                        if (!confirmar) {
+                                            return;
+                                        }
+
+                                        /*
+                                         * Eliminamos la fila real.
+                                         * La tabla sigue siendo la fuente
+                                         * de verdad del inventario.
+                                         */
+                                        fila.remove();
+
+                                        recalcularTotalEmpaques();
+
+                                        renderizarProductosMovil();
+
+                                    },
+                                    650
+                                );
+                        };
+
+                        const cancelarLongPress = function () {
+
+                            if (temporizadorLongPress) {
+
+                                clearTimeout(
+                                    temporizadorLongPress
                                 );
 
-                                inputCantidadMovil.value =
-                                    inputCantidad.value;
+                                temporizadorLongPress = null;
 
                             }
+
+                        };
+
+                        tarjeta.addEventListener(
+                            'touchstart',
+                            iniciarLongPress,
+                            { passive: true }
+                        );
+
+                        tarjeta.addEventListener(
+                            'touchend',
+                            cancelarLongPress
+                        );
+
+                        tarjeta.addEventListener(
+                            'touchcancel',
+                            cancelarLongPress
+                        );
+
+                        tarjeta.addEventListener(
+                            'touchmove',
+                            cancelarLongPress,
+                            { passive: true }
                         );
 
                     }
@@ -1918,6 +2424,21 @@
 
                 const productos =
                     obtenerProductosInventario();
+
+                // Un inventario completado debe contener
+                // al menos un producto.
+                // La cantidad puede ser 0; eso es válido.
+                if (
+                    estado === 'completado' &&
+                    productos.length === 0
+                ) {
+                    mostrarNotificacionInventario(
+                        'No puedes completar el inventario sin productos en la lista.',
+                        'warning'
+                    );
+
+                    return;
+                }
 
                 const response =
                     await fetch(
@@ -2489,7 +3010,159 @@
                         }
                     );
 
+                // =========================================================
+                // ACCIONES MÓVILES DEL DOCUMENTO
+                // =========================================================
+
+                // Guardar como completado.
+                document
+                    .getElementById(
+                        'btn-guardar-inventario-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function () {
+
+                            guardarInventario(
+                                'completado'
+                            );
+
+                        }
+                    );
+
+
+                // Abrir / cerrar menú de acciones.
+                document
+                    .getElementById(
+                        'btn-menu-acciones-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function (e) {
+
+                            e.stopPropagation();
+
+                            const menu =
+                                document.getElementById(
+                                    'menu-acciones-movil'
+                                );
+
+                            if (!menu) {
+                                return;
+                            }
+
+                            const estaOculto =
+                                menu.classList.contains('hidden');
+
+                            menu.classList.toggle(
+                                'hidden',
+                                !estaOculto
+                            );
+
+                            this.setAttribute(
+                                'aria-expanded',
+                                String(estaOculto)
+                            );
+
+                        }
+                    );
+
+
+                // Importar productos.
+                document
+                    .getElementById(
+                        'btn-importar-productos-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function () {
+
+                            document
+                                .getElementById(
+                                    'menu-acciones-movil'
+                                )
+                                ?.classList.add('hidden');
+
+                            window.abrirImportadorInventario();
+
+                        }
+                    );
+
+
+                // Eliminar inventario completo.
+                document
+                    .getElementById(
+                        'btn-eliminar-inventario-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function () {
+
+                            document
+                                .getElementById(
+                                    'menu-acciones-movil'
+                                )
+                                ?.classList.add('hidden');
+
+                            eliminarInventario();
+
+                        }
+                    );
+
+
+                // Cerrar menú al tocar fuera.
+                document.addEventListener(
+                    'click',
+                    function (e) {
+
+                        const menu =
+                            document.getElementById(
+                                'menu-acciones-movil'
+                            );
+
+                        const boton =
+                            document.getElementById(
+                                'btn-menu-acciones-movil'
+                            );
+
+                        if (!menu || !boton) {
+                            return;
+                        }
+
+                        if (
+                            !menu.contains(e.target) &&
+                            !boton.contains(e.target)
+                        ) {
+
+                            menu.classList.add('hidden');
+
+                            boton.setAttribute(
+                                'aria-expanded',
+                                'false'
+                            );
+
+                        }
+
+                    }
+                );
+
+
                 recalcularTotalEmpaques();
+
+                document
+                    .getElementById(
+                        'btn-volver-inventarios-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+
+                            salirAlaBiblioteca();
+
+                        }
+                    );
 
                 document
                     .getElementById(
@@ -2762,51 +3435,60 @@
                 cerrarModalProductoMovil
             );
 
-        document
-            .getElementById(
+        const inputBuscarProductoMovil =
+            document.getElementById(
                 'input-buscar-producto-movil'
-            )
-            ?.addEventListener(
-                'keydown',
-                function (e) {
+            );
 
-                    // ENTER → convertir texto en badge
-                    if (e.key === 'Enter') {
+        inputBuscarProductoMovil?.addEventListener(
+            'focus',
+            function () {
+                this.removeAttribute('readonly');
+            },
+            { once: true }
+        );
 
-                        e.preventDefault();
-                        e.stopPropagation();
+        inputBuscarProductoMovil?.addEventListener(
+            'keydown',
+            function (e) {
 
-                        const valor =
-                            String(
-                                this.value || ''
-                            ).trim();
+                // ENTER → convertir texto en badge
+                if (e.key === 'Enter') {
 
-                        if (valor) {
-                            agregarEtiquetaProductoMovil(
-                                valor
-                            );
-                        }
+                    e.preventDefault();
+                    e.stopPropagation();
 
-                        return;
+                    const valor =
+                        String(
+                            this.value || ''
+                        ).trim();
+
+                    if (valor) {
+                        agregarEtiquetaProductoMovil(
+                            valor
+                        );
                     }
 
+                    return;
+                }
 
-                    // BACKSPACE → eliminar último badge
-                    if (
-                        e.key === 'Backspace' &&
-                        this.value === '' &&
-                        etiquetasFiltroProductosMovil.length > 0
-                    ) {
 
-                        e.preventDefault();
-                        e.stopPropagation();
+                // BACKSPACE → eliminar último badge
+                if (
+                    e.key === 'Backspace' &&
+                    this.value === '' &&
+                    etiquetasFiltroProductosMovil.length > 0
+                ) {
 
-                        removerUltimaEtiquetaProductoMovil();
+                    e.preventDefault();
+                    e.stopPropagation();
 
-                    }
+                    removerUltimaEtiquetaProductoMovil();
 
                 }
-            );
+
+            }
+        );
 
         document
             .getElementById(
@@ -3136,41 +3818,44 @@
                     <label
                         for="cantidad-producto-modal-movil"
                         class="block
-                               text-sm
-                               font-semibold
-                               text-slate-700
-                               mb-2"
+                            text-sm
+                            font-semibold
+                            text-slate-700
+                            mb-2"
                     >
                         Cantidad
                     </label>
 
-                    <input
-                        type="text"
+                    <div
                         id="cantidad-producto-modal-movil"
-                        inputmode="decimal"
-                        autocomplete="off"
-                        value="0"
-                        class="w-full
-                               px-4 py-3
-                               text-lg
-                               font-semibold
-                               text-center
-                               border border-slate-300
-                               rounded-xl
-                               bg-white
-                               focus:outline-none
-                               focus:ring-2
-                               focus:ring-slate-500/30"
-                    >
+                        class="w-20
+                            min-h-[44px]
+                            px-3 py-2
+                            flex items-center justify-center
+                            text-lg
+                            font-semibold
+                            text-center
+                            border border-slate-300
+                            rounded-xl
+                            bg-white
+                            cursor-text
+                            select-none
+                            focus:outline-none
+                            focus:ring-2
+                            focus:ring-slate-500/30"
+                        role="textbox"
+                        aria-label="Cantidad"
+                        aria-readonly="true"
+                        spellcheck="false"
+                    >0</div>
 
                     <p
                         class="mt-2
-                               text-xs
-                               text-slate-400
-                               text-center"
+                            text-xs
+                            text-slate-400
+                            text-center"
                     >
-                        Puedes usar números enteros o
-                        hasta 3 decimales.
+                        Ingresa cantidad en bultos.
                     </p>
 
                 </div>
@@ -3190,6 +3875,7 @@
                        text-slate-600
                        font-semibold
                        text-sm
+                       bg-slate-200
                        active:bg-slate-50"
             >
                 <i class="fa-solid fa-arrow-left mr-1"></i>
@@ -3201,14 +3887,202 @@
 
             botonAgregar.classList.remove('hidden');
 
-            const inputCantidad =
+            const cantidadMovil =
                 document.getElementById(
                     'cantidad-producto-modal-movil'
                 );
 
-            inputCantidad?.focus();
+            if (cantidadMovil) {
 
-            inputCantidad?.select();
+                cantidadMovil.dataset.valorOriginal = '0';
+
+                cantidadMovil.addEventListener(
+                    'click',
+                    function () {
+
+                        if (
+                            this.getAttribute(
+                                'contenteditable'
+                            ) === 'true'
+                        ) {
+                            return;
+                        }
+
+                        const valorOriginal =
+                            String(
+                                this.textContent || '0'
+                            ).trim() || '0';
+
+                        this.dataset.valorOriginal =
+                            valorOriginal;
+
+                        this.setAttribute(
+                            'contenteditable',
+                            'true'
+                        );
+
+                        this.setAttribute(
+                            'aria-readonly',
+                            'false'
+                        );
+
+                        this.setAttribute(
+                            'inputmode',
+                            'decimal'
+                        );
+
+                        this.focus();
+
+                        const seleccion =
+                            window.getSelection();
+
+                        const rango =
+                            document.createRange();
+
+                        rango.selectNodeContents(this);
+
+                        seleccion.removeAllRanges();
+
+                        seleccion.addRange(rango);
+
+                    }
+                );
+
+                cantidadMovil.addEventListener(
+                    'keydown',
+                    function (e) {
+
+                        if (e.key === 'Enter') {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            this.blur();
+
+                            confirmarProductoSeleccionadoMovil();
+
+                            return;
+                        }
+
+                        if (e.key === 'Escape') {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            this.textContent =
+                                this.dataset.valorOriginal || '0';
+
+                            this.removeAttribute(
+                                'contenteditable'
+                            );
+
+                            this.setAttribute(
+                                'aria-readonly',
+                                'true'
+                            );
+
+                            this.blur();
+
+                            return;
+                        }
+
+                        if (
+                            e.key.length === 1 &&
+                            !/^[0-9.,]$/.test(e.key)
+                        ) {
+                            e.preventDefault();
+                        }
+
+                    }
+                );
+
+                cantidadMovil.addEventListener(
+                    'input',
+                    function () {
+
+                        const valor =
+                            this.textContent
+                                .replace(/[^0-9.,]/g, '');
+
+                        if (
+                            this.textContent !== valor
+                        ) {
+
+                            this.textContent = valor;
+
+                            const rango =
+                                document.createRange();
+
+                            rango.selectNodeContents(this);
+
+                            rango.collapse(false);
+
+                            const seleccion =
+                                window.getSelection();
+
+                            seleccion.removeAllRanges();
+
+                            seleccion.addRange(rango);
+                        }
+
+                    }
+                );
+
+                cantidadMovil.addEventListener(
+                    'blur',
+                    function () {
+
+                        if (
+                            this.getAttribute(
+                                'contenteditable'
+                            ) !== 'true'
+                        ) {
+                            return;
+                        }
+
+                        const valor =
+                            this.textContent.trim() || '0';
+
+                        /*
+                         * Creamos un input temporal únicamente
+                         * para reutilizar la validación existente.
+                         * No permanece en el DOM.
+                         */
+                        const inputTemporal =
+                            document.createElement('input');
+
+                        inputTemporal.type = 'text';
+                        inputTemporal.value = valor;
+
+                        const cantidadValida =
+                            validarCantidadInventario(
+                                inputTemporal
+                            );
+
+                        if (!cantidadValida) {
+
+                            this.textContent =
+                                this.dataset.valorOriginal || '0';
+
+                        } else {
+
+                            this.textContent =
+                                inputTemporal.value || '0';
+
+                        }
+
+                        this.removeAttribute(
+                            'contenteditable'
+                        );
+
+                        this.setAttribute(
+                            'aria-readonly',
+                            'true'
+                        );
+
+                    }
+                );
+            }
 
             document
                 .getElementById(
@@ -3218,22 +4092,6 @@
                     'click',
                     volverBuscadorProductoMovil
                 );
-
-            inputCantidad?.addEventListener(
-                'keydown',
-                function (e) {
-
-                    if (e.key !== 'Enter') {
-                        return;
-                    }
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    confirmarProductoSeleccionadoMovil();
-
-                }
-            );
         }
 
         function volverBuscadorProductoMovil() {
@@ -3295,14 +4153,32 @@
                 return;
             }
 
-            const inputCantidad =
+            const cantidadMovil =
                 document.getElementById(
                     'cantidad-producto-modal-movil'
                 );
 
-            if (!inputCantidad) {
+            if (!cantidadMovil) {
                 return;
             }
+
+            /*
+             * La cantidad ahora se muestra en un DIV
+             * contenteditable, por lo que debemos leer
+             * su texto en lugar de .value.
+             */
+            const valorCantidad =
+                cantidadMovil.textContent.trim() || '0';
+
+            /*
+             * Usamos un input temporal únicamente para
+             * reutilizar la validación existente.
+             */
+            const inputCantidad =
+                document.createElement('input');
+
+            inputCantidad.type = 'text';
+            inputCantidad.value = valorCantidad;
 
             const cantidadValida =
                 validarCantidadInventario(
@@ -3310,7 +4186,13 @@
                 );
 
             if (!cantidadValida) {
-                inputCantidad.focus();
+
+                cantidadMovil.textContent =
+                    inputCantidad.dataset.valorAnterior ||
+                    '0';
+
+                cantidadMovil.focus();
+
                 return;
             }
 
