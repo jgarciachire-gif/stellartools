@@ -794,27 +794,29 @@
 
     </div>
 
-    <!-- ========================================================= -->
     <!-- MODAL IMPORTAR PRODUCTOS -->
     <!-- ========================================================= -->
 
     <div id="modal-importar-inventario" class="hidden fixed inset-0 z-[100]
-           bg-slate-900/50
-           flex items-center justify-center
-           p-4">
+            bg-slate-900/50
+            backdrop-blur-sm
+            flex items-center justify-center
+            p-4">
 
-        <div class="bg-white w-full max-w-5xl
-               max-h-[90vh]
-               overflow-y-auto
-               rounded-2xl
-               shadow-2xl
-               border border-slate-200">
+        <div class="bg-white w-full max-w-2xl
+                max-h-[90vh]
+                rounded-2xl
+                shadow-2xl
+                border border-slate-200
+                overflow-hidden
+                flex flex-col">
 
             <!-- CABECERA -->
 
-            <div class="px-6 py-4
-                   border-b border-slate-200
-                   flex items-center justify-between">
+            <div class="shrink-0
+                    px-6 py-4
+                    border-b border-slate-200
+                    flex items-center justify-between">
 
                 <div>
 
@@ -830,9 +832,9 @@
                 </div>
 
                 <button type="button" id="btn-cerrar-importador-inventario" class="w-9 h-9 rounded-lg
-                       text-slate-400
-                       hover:text-slate-700
-                       hover:bg-slate-100">
+                           text-slate-400
+                           hover:text-slate-700
+                           hover:bg-slate-100">
 
                     <i class="fa-solid fa-xmark"></i>
 
@@ -843,33 +845,84 @@
 
             <!-- CONTENIDO -->
 
-            <div class="p-6 space-y-5">
+            <div class="flex-1
+                    min-h-0
+                    overflow-y-auto
+                    p-6
+                    space-y-5">
 
                 <!-- PROVEEDOR -->
 
                 <div>
 
-                    <label class="block text-xs font-semibold
-                           text-slate-700 mb-1.5">
+                    <label for="buscar-proveedor-inventario" class="block text-xs font-semibold
+                              text-slate-700 mb-1.5">
 
                         Proveedor
 
                     </label>
 
-                    <select id="inventario-proveedor" class="w-full px-4 py-2.5
-                           border border-slate-300
-                           rounded-xl
-                           text-sm
-                           focus:ring-2
-                           focus:ring-indigo-500/30
-                           focus:border-indigo-500
-                           outline-none">
+                    <div id="combo-proveedor-inventario" class="relative">
 
-                        <option value="">
-                            Seleccionar proveedor...
-                        </option>
+                        <!-- ID REAL DEL PROVEEDOR -->
 
-                    </select>
+                        <input type="hidden" id="inventario-proveedor" value="">
+
+
+                        <!-- BUSCADOR -->
+
+                        <div class="relative">
+
+                            <input type="text" id="buscar-proveedor-inventario" placeholder="Escriba para buscar..."
+                                autocomplete="off" spellcheck="false" class="w-full
+                                      px-4 py-2.5
+                                      pr-10
+                                      border border-slate-300
+                                      rounded-xl
+                                      text-sm
+                                      bg-white
+                                      focus:ring-2
+                                      focus:ring-indigo-500/30
+                                      focus:border-indigo-500
+                                      outline-none">
+
+
+                            <!-- LIMPIAR -->
+
+                            <button type="button" id="btn-limpiar-proveedor-inventario" class="absolute
+                                       right-3
+                                       top-1/2
+                                       -translate-y-1/2
+                                       text-slate-400
+                                       hover:text-rose-500
+                                       hidden" aria-label="Limpiar proveedor">
+
+                                <i class="fa-solid fa-xmark"></i>
+
+                            </button>
+
+                        </div>
+
+
+                        <!-- LISTA DESPLEGABLE -->
+
+                        <div id="opciones-proveedor-inventario" class="hidden
+                                absolute
+                                left-0
+                                right-0
+                                top-full
+                                mt-1
+                                bg-white
+                                border
+                                border-slate-200
+                                rounded-xl
+                                shadow-lg
+                                max-h-56
+                                overflow-y-auto
+                                z-30">
+                        </div>
+
+                    </div>
 
                 </div>
 
@@ -877,110 +930,268 @@
                 <!-- FILTROS -->
 
                 <div id="inventario-filtros" class="grid grid-cols-1
-                       md:grid-cols-2
-                       lg:grid-cols-4
-                       gap-4">
+                        gap-4">
 
-                    <!-- DEPARTAMENTO -->
+                    <!-- =========================================================
+                     DEPARTAMENTO
+                     ========================================================= -->
 
-                    <div>
+                    <div class="relative" id="combo-departamento-inventario">
 
-                        <label class="block text-xs font-semibold
+                        <label for="buscar-departamento-inventario" class="block text-xs font-semibold
                                   text-slate-700 mb-1.5">
 
                             Departamento
 
                         </label>
 
-                        <select id="inventario-departamento" disabled class="w-full px-3 py-2.5
-                               border border-slate-300
-                               rounded-xl
-                               text-sm
-                               bg-slate-100">
+                        <input type="hidden" id="inventario-departamento" value="">
 
-                            <option value="">
-                                Todos
-                            </option>
 
-                        </select>
+                        <div class="relative">
+
+                            <input type="text" id="buscar-departamento-inventario"
+                                placeholder="Todos los departamentos..." autocomplete="off" autocorrect="off"
+                                autocapitalize="none" spellcheck="false" readonly disabled class="w-full
+                                      px-4 py-2.5
+                                      pr-10
+                                      border border-slate-300
+                                      rounded-xl
+                                      text-sm
+                                      bg-slate-100
+                                      focus:ring-2
+                                      focus:ring-indigo-500/30
+                                      focus:border-indigo-500
+                                      outline-none
+                                      disabled:cursor-default">
+
+
+                            <button type="button" id="btn-limpiar-departamento-inventario" class="absolute
+                                       right-3
+                                       top-1/2
+                                       -translate-y-1/2
+                                       text-slate-400
+                                       hover:text-rose-500">
+
+                                <i class="fa-solid fa-xmark text-xs"></i>
+
+                            </button>
+
+                        </div>
+
+
+                        <div id="opciones-departamento-inventario" class="hidden
+                                absolute
+                                left-0
+                                right-0
+                                top-full
+                                mt-1
+                                bg-white
+                                border border-slate-200
+                                rounded-xl
+                                shadow-lg
+                                max-h-48
+                                overflow-y-auto
+                                z-30">
+                        </div>
 
                     </div>
 
 
-                    <!-- GRUPO -->
+                    <!-- =========================================================
+                     GRUPO
+                     ========================================================= -->
 
-                    <div>
+                    <div class="relative" id="combo-grupo-inventario">
 
-                        <label class="block text-xs font-semibold
+                        <label for="buscar-grupo-inventario" class="block text-xs font-semibold
                                   text-slate-700 mb-1.5">
 
                             Grupo
 
                         </label>
 
-                        <select id="inventario-grupo" disabled class="w-full px-3 py-2.5
-                               border border-slate-300
-                               rounded-xl
-                               text-sm
-                               bg-slate-100">
+                        <input type="hidden" id="inventario-grupo" value="">
 
-                            <option value="">
-                                Todos
-                            </option>
 
-                        </select>
+                        <div class="relative">
+
+                            <input type="text" id="buscar-grupo-inventario" placeholder="Todos los grupos..."
+                                autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" readonly
+                                disabled class="w-full
+                                      px-4 py-2.5
+                                      pr-10
+                                      border border-slate-300
+                                      rounded-xl
+                                      text-sm
+                                      bg-slate-100
+                                      focus:ring-2
+                                      focus:ring-indigo-500/30
+                                      focus:border-indigo-500
+                                      outline-none
+                                      disabled:cursor-default">
+
+
+                            <button type="button" id="btn-limpiar-grupo-inventario" class="absolute
+                                       right-3
+                                       top-1/2
+                                       -translate-y-1/2
+                                       text-slate-400
+                                       hover:text-rose-500">
+
+                                <i class="fa-solid fa-xmark text-xs"></i>
+
+                            </button>
+
+                        </div>
+
+
+                        <div id="opciones-grupo-inventario" class="hidden
+                                absolute
+                                left-0
+                                right-0
+                                top-full
+                                mt-1
+                                bg-white
+                                border border-slate-200
+                                rounded-xl
+                                shadow-lg
+                                max-h-48
+                                overflow-y-auto
+                                z-30">
+                        </div>
 
                     </div>
 
 
-                    <!-- SUBGRUPO -->
+                    <!-- =========================================================
+                     SUBGRUPO
+                     ========================================================= -->
 
-                    <div>
+                    <div class="relative" id="combo-subgrupo-inventario">
 
-                        <label class="block text-xs font-semibold
+                        <label for="buscar-subgrupo-inventario" class="block text-xs font-semibold
                                   text-slate-700 mb-1.5">
 
                             Subgrupo
 
                         </label>
 
-                        <select id="inventario-subgrupo" disabled class="w-full px-3 py-2.5
-                               border border-slate-300
-                               rounded-xl
-                               text-sm
-                               bg-slate-100">
+                        <input type="hidden" id="inventario-subgrupo" value="">
 
-                            <option value="">
-                                Todos
-                            </option>
 
-                        </select>
+                        <div class="relative">
+
+                            <input type="text" id="buscar-subgrupo-inventario" placeholder="Todos los subgrupos..."
+                                autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" readonly
+                                disabled class="w-full
+                                      px-4 py-2.5
+                                      pr-10
+                                      border border-slate-300
+                                      rounded-xl
+                                      text-sm
+                                      bg-slate-100
+                                      focus:ring-2
+                                      focus:ring-indigo-500/30
+                                      focus:border-indigo-500
+                                      outline-none
+                                      disabled:cursor-default">
+
+
+                            <button type="button" id="btn-limpiar-subgrupo-inventario" class="absolute
+                                       right-3
+                                       top-1/2
+                                       -translate-y-1/2
+                                       text-slate-400
+                                       hover:text-rose-500">
+
+                                <i class="fa-solid fa-xmark text-xs"></i>
+
+                            </button>
+
+                        </div>
+
+
+                        <div id="opciones-subgrupo-inventario" class="hidden
+                                absolute
+                                left-0
+                                right-0
+                                top-full
+                                mt-1
+                                bg-white
+                                border border-slate-200
+                                rounded-xl
+                                shadow-lg
+                                max-h-48
+                                overflow-y-auto
+                                z-30">
+                        </div>
 
                     </div>
 
 
-                    <!-- MARCA -->
+                    <!-- =========================================================
+                     MARCA
+                     ========================================================= -->
 
-                    <div>
+                    <div class="relative" id="combo-marca-inventario">
 
-                        <label class="block text-xs font-semibold
+                        <label for="buscar-marca-inventario" class="block text-xs font-semibold
                                   text-slate-700 mb-1.5">
 
                             Marca
 
                         </label>
 
-                        <select id="inventario-marca" disabled class="w-full px-3 py-2.5
-                               border border-slate-300
-                               rounded-xl
-                               text-sm
-                               bg-slate-100">
+                        <input type="hidden" id="inventario-marca" value="">
 
-                            <option value="">
-                                Todas
-                            </option>
 
-                        </select>
+                        <div class="relative">
+
+                            <input type="text" id="buscar-marca-inventario" placeholder="Todas las marcas..."
+                                autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" readonly
+                                disabled class="w-full
+                                      px-4 py-2.5
+                                      pr-10
+                                      border border-slate-300
+                                      rounded-xl
+                                      text-sm
+                                      bg-slate-100
+                                      focus:ring-2
+                                      focus:ring-indigo-500/30
+                                      focus:border-indigo-500
+                                      outline-none
+                                      disabled:cursor-default">
+
+
+                            <button type="button" id="btn-limpiar-marca-inventario" class="absolute
+                                       right-3
+                                       top-1/2
+                                       -translate-y-1/2
+                                       text-slate-400
+                                       hover:text-rose-500">
+
+                                <i class="fa-solid fa-xmark text-xs"></i>
+
+                            </button>
+
+                        </div>
+
+
+                        <div id="opciones-marca-inventario" class="hidden
+                                absolute
+                                left-0
+                                right-0
+                                top-full
+                                mt-1
+                                bg-white
+                                border border-slate-200
+                                rounded-xl
+                                shadow-lg
+                                max-h-48
+                                overflow-y-auto
+                                z-30">
+                        </div>
 
                     </div>
 
@@ -990,11 +1201,12 @@
                 <!-- RESULTADO -->
 
                 <div id="inventario-importacion-info" class="hidden
-                       rounded-xl
-                       border border-indigo-100
-                       bg-indigo-50
-                       px-4 py-3
-                       text-sm text-indigo-700">
+                        rounded-xl
+                        border border-indigo-100
+                        bg-indigo-50
+                        px-4 py-3
+                        text-sm
+                        text-indigo-700">
 
                 </div>
 
@@ -1003,27 +1215,36 @@
 
             <!-- FOOTER -->
 
-            <div class="px-6 py-4
-                   border-t border-slate-200
-                   flex justify-end gap-3">
+            <div class="shrink-0
+                    px-6 py-4
+                    border-t border-slate-200
+                    flex flex-col-reverse
+                    sm:flex-row
+                    sm:justify-end
+                    gap-3">
 
-                <button type="button" id="btn-cancelar-importador-inventario" class="px-4 py-2.5
-                       rounded-xl
-                       border border-slate-300
-                       text-slate-700
-                       font-semibold
-                       hover:bg-slate-50">
+                <button type="button" id="btn-cancelar-importador-inventario" class="w-full
+                           sm:w-auto
+                           px-4 py-2.5
+                           rounded-xl
+                           border border-slate-300
+                           text-slate-700
+                           font-semibold
+                           hover:bg-slate-50">
 
                     Cancelar
 
                 </button>
 
-                <button type="button" id="btn-ejecutar-importacion-inventario" class="px-4 py-2.5
-                       rounded-xl
-                       bg-indigo-600
-                       hover:bg-indigo-700
-                       text-white
-                       font-semibold">
+
+                <button type="button" id="btn-ejecutar-importacion-inventario" class="w-full
+                           sm:w-auto
+                           px-4 py-2.5
+                           rounded-xl
+                           bg-indigo-600
+                           hover:bg-indigo-700
+                           text-white
+                           font-semibold">
 
                     <i class="fa-solid fa-download mr-1"></i>
 
@@ -1036,6 +1257,7 @@
         </div>
 
     </div>
+
 
     <script src="/static/js/componentes/modal.js"></script>
     <script src="/static/js/componentes/buscador-productos.js"></script>
@@ -1902,12 +2124,12 @@
 
                     }
                     /*
- * LONG PRESS — ELIMINAR PRODUCTO
- *
- * Solo disponible en borradores.
- * Mantener presionada la tarjeta durante
- * 650 ms abre la confirmación.
- */
+    * LONG PRESS — ELIMINAR PRODUCTO
+    *
+    * Solo disponible en borradores.
+    * Mantener presionada la tarjeta durante
+    * 650 ms abre la confirmación.
+    */
                     if (estadoInicial !== 'completado') {
 
                         let temporizadorLongPress = null;
@@ -1923,12 +2145,17 @@
 
                                         longPressActivado = true;
 
+                                        const cantidadActual =
+                                            String(
+                                                inputCantidad.value || '0'
+                                            ).trim();
+
                                         const confirmar =
                                             await mostrarConfirmacion({
                                                 titulo: '¿Eliminar producto?',
                                                 mensaje:
                                                     `${descripcion}\n` +
-                                                    `Cantidad: ${cantidad}`
+                                                    `Cantidad: ${cantidadActual}`
                                             });
 
                                         if (!confirmar) {
@@ -3248,6 +3475,70 @@
                         }
                     );
 
+                document.addEventListener(
+                    'click',
+                    function (e) {
+
+                        const combos = [
+                            {
+                                combo: 'combo-proveedor-inventario',
+                                opciones: 'opciones-proveedor-inventario'
+                            },
+                            {
+                                combo: 'combo-departamento-inventario',
+                                opciones: 'opciones-departamento-inventario'
+                            },
+                            {
+                                combo: 'combo-grupo-inventario',
+                                opciones: 'opciones-grupo-inventario'
+                            },
+                            {
+                                combo: 'combo-subgrupo-inventario',
+                                opciones: 'opciones-subgrupo-inventario'
+                            },
+                            {
+                                combo: 'combo-marca-inventario',
+                                opciones: 'opciones-marca-inventario'
+                            }
+                        ];
+
+                        combos.forEach(
+                            config => {
+
+                                const combo =
+                                    document.getElementById(
+                                        config.combo
+                                    );
+
+                                const dropdown =
+                                    document.getElementById(
+                                        config.opciones
+                                    );
+
+                                if (
+                                    !combo ||
+                                    !dropdown
+                                ) {
+                                    return;
+                                }
+
+                                if (
+                                    !combo.contains(
+                                        e.target
+                                    )
+                                ) {
+
+                                    dropdown.classList.add(
+                                        'hidden'
+                                    );
+
+                                }
+
+                            }
+                        );
+
+                    }
+                );
 
                 document
                     .getElementById(
@@ -3261,15 +3552,63 @@
 
                 document
                     .getElementById(
-                        'inventario-proveedor'
+                        'buscar-proveedor-inventario'
                     )
                     ?.addEventListener(
-                        'change',
-                        function () {
+                        'input',
+                        filtrarProveedoresInventario
+                    );
 
-                            seleccionarProveedorInventario(
-                                this.value
-                            );
+                document
+                    .getElementById(
+                        'buscar-proveedor-inventario'
+                    )
+                    ?.addEventListener(
+                        'focus',
+                        mostrarOpcionesProveedorInventario
+                    );
+
+                document
+                    .getElementById(
+                        'buscar-proveedor-inventario'
+                    )
+                    ?.addEventListener(
+                        'keydown',
+                        navegarProveedoresInventario
+                    );
+
+                activarSelectorInventario(
+                    'buscar-departamento-inventario',
+                    'departamento'
+                );
+
+                activarSelectorInventario(
+                    'buscar-grupo-inventario',
+                    'grupo'
+                );
+
+                activarSelectorInventario(
+                    'buscar-subgrupo-inventario',
+                    'subgrupo'
+                );
+
+                activarSelectorInventario(
+                    'buscar-marca-inventario',
+                    'marca'
+                );
+
+                document
+                    .getElementById(
+                        'btn-limpiar-departamento-inventario'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            limpiarDepartamentoInventario();
 
                         }
                     );
@@ -3277,33 +3616,87 @@
 
                 document
                     .getElementById(
-                        'inventario-departamento'
+                        'btn-limpiar-grupo-inventario'
                     )
                     ?.addEventListener(
-                        'change',
-                        actualizarGruposInventario
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            limpiarGrupoInventario();
+
+                        }
                     );
 
 
                 document
                     .getElementById(
-                        'inventario-grupo'
+                        'btn-limpiar-subgrupo-inventario'
                     )
                     ?.addEventListener(
-                        'change',
-                        actualizarSubgruposInventario
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            limpiarSubgrupoInventario();
+
+                        }
                     );
 
 
                 document
                     .getElementById(
-                        'inventario-subgrupo'
+                        'btn-limpiar-marca-inventario'
                     )
                     ?.addEventListener(
-                        'change',
-                        actualizarMarcasInventario
+                        'click',
+                        function (e) {
+
+                            e.preventDefault();
+                            e.stopPropagation();
+
+                            limpiarMarcaInventario();
+
+                        }
                     );
 
+                // Permite filtrar las opciones escribiendo en cada combo.
+                [
+                    ['buscar-departamento-inventario', 'departamento'],
+                    ['buscar-grupo-inventario', 'grupo'],
+                    ['buscar-subgrupo-inventario', 'subgrupo'],
+                    ['buscar-marca-inventario', 'marca']
+                ].forEach(
+                    ([id, tipo]) => {
+
+                        document
+                            .getElementById(id)
+                            ?.addEventListener(
+                                'input',
+                                function () {
+
+                                    filtrarOpcionesInventario(
+                                        tipo
+                                    );
+
+                                }
+                            );
+
+                    }
+                );
+
+                document
+                    .getElementById(
+                        'btn-limpiar-proveedor-inventario'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        limpiarProveedorInventario
+                    );
 
                 document.addEventListener(
                     'keydown',
@@ -5082,7 +5475,14 @@
                     'hidden'
                 );
 
-                cargarProveedoresInventario();
+                // Cargar proveedores solo la primera vez.
+                if (
+                    !Array.isArray(
+                        window.proveedoresInventario
+                    )
+                ) {
+                    cargarProveedoresInventario();
+                }
 
             };
 
@@ -5104,12 +5504,17 @@
 
         async function cargarProveedoresInventario() {
 
-            const select =
+            const input =
                 document.getElementById(
-                    'inventario-proveedor'
+                    'buscar-proveedor-inventario'
                 );
 
-            if (!select) {
+            const dropdown =
+                document.getElementById(
+                    'opciones-proveedor-inventario'
+                );
+
+            if (!input || !dropdown) {
                 return;
             }
 
@@ -5129,31 +5534,18 @@
                 const proveedores =
                     await response.json();
 
-                select.innerHTML = `
-            <option value="">
-                Seleccionar proveedor...
-            </option>
-        `;
+                /*
+                 * Guardamos la lista en memoria para que el
+                 * filtrado sea instantáneo y no haga una petición
+                 * al servidor por cada letra escrita.
+                 */
+                window.proveedoresInventario =
+                    Array.isArray(proveedores)
+                        ? proveedores
+                        : [];
 
-                proveedores.forEach(
-                    proveedor => {
-
-                        const option =
-                            document.createElement(
-                                'option'
-                            );
-
-                        option.value =
-                            proveedor.id;
-
-                        option.textContent =
-                            proveedor.nombre;
-
-                        select.appendChild(
-                            option
-                        );
-
-                    }
+                renderizarProveedoresInventario(
+                    window.proveedoresInventario
                 );
 
             } catch (error) {
@@ -5168,6 +5560,435 @@
                 );
 
             }
+
+        }
+
+        let indiceProveedorInventario = -1;
+
+
+        /*
+         * =========================================================
+         * RENDERIZAR PROVEEDORES
+         * =========================================================
+         */
+        function renderizarProveedoresInventario(
+            proveedores
+        ) {
+
+            const dropdown =
+                document.getElementById(
+                    'opciones-proveedor-inventario'
+                );
+
+            if (!dropdown) {
+                return;
+            }
+
+            dropdown.innerHTML = '';
+
+            /*
+             * Opción para limpiar la selección.
+             */
+            const opcionVacia =
+                document.createElement('div');
+
+            opcionVacia.textContent =
+                '-- Seleccionar Proveedor --';
+
+            opcionVacia.className =
+                'px-4 py-2.5 text-sm text-slate-400 ' +
+                'hover:bg-slate-50 cursor-pointer ' +
+                'border-b border-slate-100';
+
+            opcionVacia.addEventListener(
+                'click',
+                function () {
+                    seleccionarProveedorVisualInventario(
+                        '',
+                        ''
+                    );
+                }
+            );
+
+            dropdown.appendChild(
+                opcionVacia
+            );
+
+
+            /*
+             * Proveedores.
+             */
+            proveedores.forEach(
+                proveedor => {
+
+                    const opcion =
+                        document.createElement('div');
+
+                    opcion.className =
+                        'opcion-prov-inventario ' +
+                        'px-4 py-2.5 ' +
+                        'text-sm text-slate-700 ' +
+                        'hover:bg-indigo-50 ' +
+                        'hover:text-indigo-600 ' +
+                        'cursor-pointer';
+
+                    opcion.dataset.id =
+                        proveedor.id;
+
+                    opcion.dataset.nombre =
+                        proveedor.nombre || '';
+
+                    opcion.textContent =
+                        proveedor.nombre || '';
+
+                    opcion.addEventListener(
+                        'click',
+                        function () {
+
+                            seleccionarProveedorVisualInventario(
+                                proveedor.id,
+                                proveedor.nombre || ''
+                            );
+
+                        }
+                    );
+
+                    dropdown.appendChild(
+                        opcion
+                    );
+
+                }
+            );
+
+        }
+
+
+        /*
+         * =========================================================
+         * MOSTRAR PROVEEDORES
+         * =========================================================
+         */
+        function mostrarOpcionesProveedorInventario() {
+
+            const input =
+                document.getElementById(
+                    'buscar-proveedor-inventario'
+                );
+
+            const dropdown =
+                document.getElementById(
+                    'opciones-proveedor-inventario'
+                );
+
+            if (!input || !dropdown) {
+                return;
+            }
+
+            dropdown.classList.remove(
+                'hidden'
+            );
+
+            filtrarProveedoresInventario();
+        }
+
+
+        /*
+         * =========================================================
+         * FILTRAR PROVEEDORES
+         * =========================================================
+         */
+        function filtrarProveedoresInventario() {
+
+            const input =
+                document.getElementById(
+                    'buscar-proveedor-inventario'
+                );
+
+            const dropdown =
+                document.getElementById(
+                    'opciones-proveedor-inventario'
+                );
+
+            if (!input || !dropdown) {
+                return;
+            }
+
+            const filtro =
+                input.value
+                    .toLowerCase()
+                    .trim();
+
+            const opciones =
+                dropdown.querySelectorAll(
+                    '.opcion-prov-inventario'
+                );
+
+            indiceProveedorInventario = -1;
+
+            opciones.forEach(
+                opcion => {
+
+                    const nombre =
+                        String(
+                            opcion.dataset.nombre || ''
+                        ).toLowerCase();
+
+                    opcion.classList.toggle(
+                        'hidden',
+                        !nombre.includes(filtro)
+                    );
+
+                }
+            );
+
+            dropdown.classList.remove(
+                'hidden'
+            );
+
+        }
+
+
+        /*
+         * =========================================================
+         * NAVEGACIÓN CON TECLADO
+         * =========================================================
+         */
+        function navegarProveedoresInventario(e) {
+
+            const dropdown =
+                document.getElementById(
+                    'opciones-proveedor-inventario'
+                );
+
+            if (!dropdown) {
+                return;
+            }
+
+            const opciones =
+                Array.from(
+                    dropdown.querySelectorAll(
+                        '.opcion-prov-inventario:not(.hidden)'
+                    )
+                );
+
+            if (
+                e.key === 'ArrowDown'
+            ) {
+
+                e.preventDefault();
+
+                if (!opciones.length) {
+                    return;
+                }
+
+                indiceProveedorInventario =
+                    Math.min(
+                        indiceProveedorInventario + 1,
+                        opciones.length - 1
+                    );
+
+                resaltarProveedorInventario(
+                    opciones
+                );
+
+                return;
+            }
+
+            if (
+                e.key === 'ArrowUp'
+            ) {
+
+                e.preventDefault();
+
+                if (!opciones.length) {
+                    return;
+                }
+
+                indiceProveedorInventario =
+                    Math.max(
+                        indiceProveedorInventario - 1,
+                        0
+                    );
+
+                resaltarProveedorInventario(
+                    opciones
+                );
+
+                return;
+            }
+
+            if (
+                e.key === 'Enter'
+            ) {
+
+                if (
+                    !dropdown.classList.contains('hidden') &&
+                    indiceProveedorInventario >= 0 &&
+                    opciones[indiceProveedorInventario]
+                ) {
+
+                    e.preventDefault();
+
+                    opciones[
+                        indiceProveedorInventario
+                    ].click();
+
+                }
+
+                return;
+            }
+
+            if (
+                e.key === 'Escape'
+            ) {
+
+                dropdown.classList.add(
+                    'hidden'
+                );
+
+            }
+
+        }
+
+
+        /*
+         * =========================================================
+         * RESALTAR OPCIÓN ACTIVA
+         * =========================================================
+         */
+        function resaltarProveedorInventario(
+            opciones
+        ) {
+
+            opciones.forEach(
+                opcion => {
+
+                    opcion.classList.remove(
+                        'bg-slate-100',
+                        'text-slate-900',
+                        'font-semibold'
+                    );
+
+                }
+            );
+
+            if (
+                opciones[
+                indiceProveedorInventario
+                ]
+            ) {
+
+                const opcion =
+                    opciones[
+                    indiceProveedorInventario
+                    ];
+
+                opcion.classList.add(
+                    'bg-slate-100',
+                    'text-slate-900',
+                    'font-semibold'
+                );
+
+                opcion.scrollIntoView({
+                    block: 'nearest'
+                });
+
+            }
+
+        }
+
+
+        /*
+         * =========================================================
+         * SELECCIONAR PROVEEDOR
+         * =========================================================
+         */
+        async function seleccionarProveedorVisualInventario(
+            id,
+            nombre
+        ) {
+
+            const input =
+                document.getElementById(
+                    'buscar-proveedor-inventario'
+                );
+
+            const inputId =
+                document.getElementById(
+                    'inventario-proveedor'
+                );
+
+            const dropdown =
+                document.getElementById(
+                    'opciones-proveedor-inventario'
+                );
+
+            const btnLimpiar =
+                document.getElementById(
+                    'btn-limpiar-proveedor-inventario'
+                );
+
+            if (inputId) {
+                inputId.value = id || '';
+            }
+
+            if (input) {
+                input.value =
+                    id
+                        ? nombre
+                        : '';
+
+                input.readOnly =
+                    !!id;
+
+                input.classList.toggle(
+                    'bg-slate-100',
+                    !!id
+                );
+
+                input.classList.toggle(
+                    'cursor-default',
+                    !!id
+                );
+            }
+
+            if (btnLimpiar) {
+                btnLimpiar.classList.toggle(
+                    'hidden',
+                    !id
+                );
+            }
+
+            if (dropdown) {
+                dropdown.classList.add(
+                    'hidden'
+                );
+            }
+
+            indiceProveedorInventario = -1;
+
+            /*
+             * Conservamos toda la lógica existente
+             * de Inventario para cargar la clasificación.
+             */
+            await seleccionarProveedorInventario(
+                id
+            );
+
+        }
+
+
+        /*
+         * =========================================================
+         * LIMPIAR PROVEEDOR
+         * =========================================================
+         */
+        async function limpiarProveedorInventario() {
+
+            await seleccionarProveedorVisualInventario(
+                '',
+                ''
+            );
 
         }
 
@@ -5200,28 +6021,32 @@
                 clasificacionInventario =
                     await response.json();
 
-                poblarFiltroInventario(
-                    'inventario-departamento',
+                /*
+    * Cargar Departamento y Marca con la
+    * clasificación recién obtenida.
+    */
+                poblarOpcionesInventario(
+                    'departamento',
                     obtenerValoresClasificacion(
                         'departamento'
                     ),
-                    'Todos'
+                    'Todos los departamentos'
                 );
 
-                habilitarSelectInventario(
-                    'inventario-departamento'
-                );
-
-                poblarFiltroInventario(
-                    'inventario-marca',
+                poblarOpcionesInventario(
+                    'marca',
                     obtenerValoresClasificacion(
                         'marca'
                     ),
-                    'Todas'
+                    'Todas las marcas'
                 );
 
-                habilitarSelectInventario(
-                    'inventario-marca'
+                habilitarBuscadorInventario(
+                    'buscar-departamento-inventario'
+                );
+
+                habilitarBuscadorInventario(
+                    'buscar-marca-inventario'
                 );
 
             } catch (error) {
@@ -5275,51 +6100,123 @@
         }
 
 
-        function poblarFiltroInventario(
-            id,
+        function poblarOpcionesInventario(
+            tipo,
             valores,
             etiqueta
         ) {
 
-            const select =
-                document.getElementById(id);
+            const mapa = {
+                departamento: {
+                    contenedor: 'opciones-departamento-inventario',
+                    clase: 'opcion-departamento-inventario'
+                },
+                grupo: {
+                    contenedor: 'opciones-grupo-inventario',
+                    clase: 'opcion-grupo-inventario'
+                },
+                subgrupo: {
+                    contenedor: 'opciones-subgrupo-inventario',
+                    clase: 'opcion-subgrupo-inventario'
+                },
+                marca: {
+                    contenedor: 'opciones-marca-inventario',
+                    clase: 'opcion-marca-inventario'
+                }
+            };
 
-            if (!select) {
+            const config = mapa[tipo];
+
+            if (!config) {
                 return;
             }
 
-            select.innerHTML = '';
-
-            const optionTodos =
-                document.createElement(
-                    'option'
+            const container =
+                document.getElementById(
+                    config.contenedor
                 );
 
-            optionTodos.value = '';
+            if (!container) {
+                return;
+            }
 
-            optionTodos.textContent =
+            container.innerHTML = '';
+
+            /*
+             * Primera opción: todos.
+             */
+            const opcionTodos =
+                document.createElement('div');
+
+            opcionTodos.textContent =
                 etiqueta;
 
-            select.appendChild(
-                optionTodos
+            opcionTodos.className =
+                'px-4 py-2 text-sm text-slate-400 ' +
+                'hover:bg-slate-50 cursor-pointer ' +
+                'border-b border-slate-100';
+
+            opcionTodos.dataset.valor = '';
+
+            opcionTodos.addEventListener(
+                'click',
+                function () {
+
+                    seleccionarFiltroInventario(
+                        tipo,
+                        '',
+                        ''
+                    );
+
+                }
             );
 
+            container.appendChild(
+                opcionTodos
+            );
+
+
+            /*
+             * Opciones reales.
+             */
             valores.forEach(
                 valor => {
 
-                    const option =
-                        document.createElement(
-                            'option'
-                        );
+                    const opcion =
+                        document.createElement('div');
 
-                    option.value =
+                    opcion.className =
+                        `${config.clase} ` +
+                        'px-4 py-2 text-sm ' +
+                        'text-slate-700 ' +
+                        'hover:bg-blue-50 ' +
+                        'hover:text-blue-600 ' +
+                        'cursor-pointer';
+
+                    opcion.dataset.valor =
                         valor;
 
-                    option.textContent =
+                    opcion.dataset.nombre =
+                        String(valor).toLowerCase();
+
+                    opcion.textContent =
                         valor;
 
-                    select.appendChild(
-                        option
+                    opcion.addEventListener(
+                        'click',
+                        function () {
+
+                            seleccionarFiltroInventario(
+                                tipo,
+                                valor,
+                                valor
+                            );
+
+                        }
+                    );
+
+                    container.appendChild(
+                        opcion
                     );
 
                 }
@@ -5328,96 +6225,286 @@
         }
 
 
-        function habilitarSelectInventario(
-            id
+        /*
+         * =========================================================
+         * SELECCIONAR FILTRO
+         * =========================================================
+         */
+        function seleccionarFiltroInventario(
+            tipo,
+            valor,
+            etiqueta
         ) {
 
-            const select =
-                document.getElementById(id);
+            const mapa = {
+                departamento: {
+                    hidden: 'inventario-departamento',
+                    input: 'buscar-departamento-inventario',
+                    opciones: 'opciones-departamento-inventario'
+                },
+                grupo: {
+                    hidden: 'inventario-grupo',
+                    input: 'buscar-grupo-inventario',
+                    opciones: 'opciones-grupo-inventario'
+                },
+                subgrupo: {
+                    hidden: 'inventario-subgrupo',
+                    input: 'buscar-subgrupo-inventario',
+                    opciones: 'opciones-subgrupo-inventario'
+                },
+                marca: {
+                    hidden: 'inventario-marca',
+                    input: 'buscar-marca-inventario',
+                    opciones: 'opciones-marca-inventario'
+                }
+            };
 
-            if (!select) {
+            const config = mapa[tipo];
+
+            if (!config) {
                 return;
             }
 
-            select.disabled = false;
+            const hidden =
+                document.getElementById(
+                    config.hidden
+                );
 
-            select.classList.remove(
-                'bg-slate-100'
-            );
+            const input =
+                document.getElementById(
+                    config.input
+                );
 
-            select.classList.add(
-                'bg-white'
-            );
+            const opciones =
+                document.getElementById(
+                    config.opciones
+                );
 
-        }
-
-
-        function deshabilitarSelectInventario(
-            id
-        ) {
-
-            const select =
-                document.getElementById(id);
-
-            if (!select) {
-                return;
+            if (hidden) {
+                hidden.value = valor || '';
             }
 
-            select.disabled = true;
+            if (input) {
+                input.value =
+                    valor
+                        ? etiqueta
+                        : '';
 
-            select.classList.remove(
-                'bg-white'
+                input.disabled =
+                    false;
+            }
+
+            opciones?.classList.add(
+                'hidden'
             );
 
-            select.classList.add(
-                'bg-slate-100'
-            );
 
-        }
+            /*
+             * Cascada.
+             */
+            if (tipo === 'departamento') {
 
+                limpiarGrupoInventario();
 
-        function limpiarFiltrosInventario() {
-
-            const filtros = [
-                'inventario-departamento',
-                'inventario-grupo',
-                'inventario-subgrupo',
-                'inventario-marca'
-            ];
-
-            filtros.forEach(id => {
-
-                const select =
-                    document.getElementById(id);
-
-                if (!select) {
-                    return;
+                if (valor) {
+                    poblarGruposInventario();
+                    habilitarBuscadorInventario(
+                        'buscar-grupo-inventario'
+                    );
                 }
 
-                select.innerHTML =
-                    `<option value="">${id === 'inventario-marca'
-                        ? 'Todas'
-                        : 'Todos'
-                    }</option>`;
+                actualizarMarcasInventario();
 
-                select.value = '';
+                return;
+            }
 
-            });
 
-            deshabilitarSelectInventario(
-                'inventario-departamento'
+            if (tipo === 'grupo') {
+
+                limpiarSubgrupoInventario();
+
+                if (valor) {
+                    poblarSubgruposInventario();
+                    habilitarBuscadorInventario(
+                        'buscar-subgrupo-inventario'
+                    );
+                }
+
+                actualizarMarcasInventario();
+
+                return;
+            }
+
+
+            if (tipo === 'subgrupo') {
+
+                actualizarMarcasInventario();
+
+                return;
+            }
+
+        }
+
+
+        /*
+         * =========================================================
+         * HABILITAR BUSCADOR
+         * =========================================================
+         */
+        function habilitarBuscadorInventario(
+            id
+        ) {
+
+            const input =
+                document.getElementById(id);
+
+            if (!input) {
+                return;
+            }
+
+            input.disabled = false;
+
+            input.classList.remove(
+                'bg-slate-100'
             );
 
-            deshabilitarSelectInventario(
-                'inventario-grupo'
+            input.classList.add(
+                'bg-white'
             );
 
-            deshabilitarSelectInventario(
-                'inventario-subgrupo'
+        }
+
+        function activarSelectorInventario(id, tipo) {
+            const input =
+                document.getElementById(id);
+
+            if (!input) {
+                return;
+            }
+
+            input.addEventListener(
+                'click',
+                function () {
+
+                    if (input.disabled) {
+                        return;
+                    }
+
+                    mostrarOpcionesInventario(tipo);
+                }
+            );
+        }
+
+
+
+        /*
+         * =========================================================
+         * DESHABILITAR BUSCADOR
+         * =========================================================
+         */
+        function deshabilitarBuscadorInventario(
+            id
+        ) {
+
+            const input =
+                document.getElementById(id);
+
+            if (!input) {
+                return;
+            }
+
+            input.disabled = true;
+
+            input.value = '';
+
+            input.classList.remove(
+                'bg-white'
             );
 
-            deshabilitarSelectInventario(
-                'inventario-marca'
+            input.classList.add(
+                'bg-slate-100'
+            );
+
+        }
+
+
+        /*
+         * =========================================================
+         * LIMPIAR FILTROS
+         * =========================================================
+         */
+        function limpiarFiltrosInventario() {
+
+            const configuraciones = [
+                {
+                    hidden: 'inventario-departamento',
+                    input: 'buscar-departamento-inventario',
+                    opciones: 'opciones-departamento-inventario'
+                },
+                {
+                    hidden: 'inventario-grupo',
+                    input: 'buscar-grupo-inventario',
+                    opciones: 'opciones-grupo-inventario'
+                },
+                {
+                    hidden: 'inventario-subgrupo',
+                    input: 'buscar-subgrupo-inventario',
+                    opciones: 'opciones-subgrupo-inventario'
+                },
+                {
+                    hidden: 'inventario-marca',
+                    input: 'buscar-marca-inventario',
+                    opciones: 'opciones-marca-inventario'
+                }
+            ];
+
+            configuraciones.forEach(
+                config => {
+
+                    const hidden =
+                        document.getElementById(
+                            config.hidden
+                        );
+
+                    const input =
+                        document.getElementById(
+                            config.input
+                        );
+
+                    const opciones =
+                        document.getElementById(
+                            config.opciones
+                        );
+
+                    if (hidden) {
+                        hidden.value = '';
+                    }
+
+                    if (input) {
+                        input.value = '';
+                    }
+
+                    opciones?.classList.add(
+                        'hidden'
+                    );
+
+                }
+            );
+
+            deshabilitarBuscadorInventario(
+                'buscar-departamento-inventario'
+            );
+
+            deshabilitarBuscadorInventario(
+                'buscar-grupo-inventario'
+            );
+
+            deshabilitarBuscadorInventario(
+                'buscar-subgrupo-inventario'
+            );
+
+            deshabilitarBuscadorInventario(
+                'buscar-marca-inventario'
             );
 
         }
@@ -5425,17 +6512,24 @@
 
         function actualizarGruposInventario() {
 
+            poblarGruposInventario();
+
+        }
+
+
+        function poblarGruposInventario() {
+
             const departamento =
                 document.getElementById(
                     'inventario-departamento'
                 )?.value || '';
 
             const registros =
-                clasificacionInventario
-                    .filter(item =>
+                clasificacionInventario.filter(
+                    item =>
                         !departamento ||
                         item.departamento === departamento
-                    );
+                );
 
             const valores = [
                 ...new Set(
@@ -5443,26 +6537,25 @@
                         .map(item => item.grupo)
                         .filter(Boolean)
                 )
-            ].sort();
+            ].sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        'es',
+                        { sensitivity: 'base' }
+                    )
+            );
 
-            poblarFiltroInventario(
-                'inventario-grupo',
+            poblarOpcionesInventario(
+                'grupo',
                 valores,
-                'Todos'
+                'Todos los grupos'
             );
-
-            habilitarSelectInventario(
-                'inventario-grupo'
-            );
-
-            actualizarSubgruposInventario();
-
-            actualizarMarcasInventario();
 
         }
 
 
-        function actualizarSubgruposInventario() {
+        function poblarSubgruposInventario() {
 
             const departamento =
                 document.getElementById(
@@ -5475,13 +6568,13 @@
                 )?.value || '';
 
             const registros =
-                clasificacionInventario
-                    .filter(item =>
+                clasificacionInventario.filter(
+                    item =>
                         (!departamento ||
                             item.departamento === departamento) &&
                         (!grupo ||
                             item.grupo === grupo)
-                    );
+                );
 
             const valores = [
                 ...new Set(
@@ -5489,19 +6582,20 @@
                         .map(item => item.subgrupo)
                         .filter(Boolean)
                 )
-            ].sort();
+            ].sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        'es',
+                        { sensitivity: 'base' }
+                    )
+            );
 
-            poblarFiltroInventario(
-                'inventario-subgrupo',
+            poblarOpcionesInventario(
+                'subgrupo',
                 valores,
-                'Todos'
+                'Todos los subgrupos'
             );
-
-            habilitarSelectInventario(
-                'inventario-subgrupo'
-            );
-
-            actualizarMarcasInventario();
 
         }
 
@@ -5524,15 +6618,15 @@
                 )?.value || '';
 
             const registros =
-                clasificacionInventario
-                    .filter(item =>
+                clasificacionInventario.filter(
+                    item =>
                         (!departamento ||
                             item.departamento === departamento) &&
                         (!grupo ||
                             item.grupo === grupo) &&
                         (!subgrupo ||
                             item.subgrupo === subgrupo)
-                    );
+                );
 
             const valores = [
                 ...new Set(
@@ -5540,17 +6634,213 @@
                         .map(item => item.marca)
                         .filter(Boolean)
                 )
-            ].sort();
+            ].sort(
+                (a, b) =>
+                    a.localeCompare(
+                        b,
+                        'es',
+                        { sensitivity: 'base' }
+                    )
+            );
 
-            poblarFiltroInventario(
-                'inventario-marca',
+            poblarOpcionesInventario(
+                'marca',
                 valores,
-                'Todas'
+                'Todas las marcas'
             );
 
-            habilitarSelectInventario(
-                'inventario-marca'
+            habilitarBuscadorInventario(
+                'buscar-marca-inventario'
             );
+
+        }
+
+        function filtrarOpcionesInventario(
+            tipo
+        ) {
+
+            const mapa = {
+                departamento: {
+                    input: 'buscar-departamento-inventario',
+                    opciones: 'opciones-departamento-inventario',
+                    clase: 'opcion-departamento-inventario'
+                },
+                grupo: {
+                    input: 'buscar-grupo-inventario',
+                    opciones: 'opciones-grupo-inventario',
+                    clase: 'opcion-grupo-inventario'
+                },
+                subgrupo: {
+                    input: 'buscar-subgrupo-inventario',
+                    opciones: 'opciones-subgrupo-inventario',
+                    clase: 'opcion-subgrupo-inventario'
+                },
+                marca: {
+                    input: 'buscar-marca-inventario',
+                    opciones: 'opciones-marca-inventario',
+                    clase: 'opcion-marca-inventario'
+                }
+            };
+
+            const config = mapa[tipo];
+
+            if (!config) {
+                return;
+            }
+
+            const input =
+                document.getElementById(
+                    config.input
+                );
+
+            const dropdown =
+                document.getElementById(
+                    config.opciones
+                );
+
+            if (!input || !dropdown) {
+                return;
+            }
+
+            const texto =
+                input.value
+                    .toLowerCase()
+                    .trim();
+
+            dropdown.classList.remove(
+                'hidden'
+            );
+
+            dropdown
+                .querySelectorAll(
+                    `.${config.clase}`
+                )
+                .forEach(
+                    opcion => {
+
+                        const nombre =
+                            opcion.dataset.nombre || '';
+
+                        opcion.classList.toggle(
+                            'hidden',
+                            !nombre.includes(texto)
+                        );
+
+                    }
+                );
+
+        }
+
+
+        /*
+         * =========================================================
+         * MOSTRAR OPCIONES
+         * =========================================================
+         */
+        function mostrarOpcionesInventario(
+            tipo
+        ) {
+
+            const mapa = {
+                departamento:
+                    'opciones-departamento-inventario',
+                grupo:
+                    'opciones-grupo-inventario',
+                subgrupo:
+                    'opciones-subgrupo-inventario',
+                marca:
+                    'opciones-marca-inventario'
+            };
+
+            const dropdown =
+                document.getElementById(
+                    mapa[tipo]
+                );
+
+            dropdown?.classList.remove(
+                'hidden'
+            );
+
+        }
+
+
+        /*
+         * =========================================================
+         * LIMPIAR INDIVIDUALMENTE
+         * =========================================================
+         */
+        function limpiarDepartamentoInventario() {
+
+            seleccionarFiltroInventario(
+                'departamento',
+                '',
+                ''
+            );
+
+            limpiarGrupoInventario();
+
+            actualizarMarcasInventario();
+
+        }
+
+
+        function limpiarGrupoInventario() {
+
+            document.getElementById(
+                'inventario-grupo'
+            ).value = '';
+
+            document.getElementById(
+                'buscar-grupo-inventario'
+            ).value = '';
+
+            document.getElementById(
+                'opciones-grupo-inventario'
+            )?.classList.add('hidden');
+
+            deshabilitarBuscadorInventario(
+                'buscar-grupo-inventario'
+            );
+
+            limpiarSubgrupoInventario();
+
+        }
+
+
+        function limpiarSubgrupoInventario() {
+
+            document.getElementById(
+                'inventario-subgrupo'
+            ).value = '';
+
+            document.getElementById(
+                'buscar-subgrupo-inventario'
+            ).value = '';
+
+            document.getElementById(
+                'opciones-subgrupo-inventario'
+            )?.classList.add('hidden');
+
+            deshabilitarBuscadorInventario(
+                'buscar-subgrupo-inventario'
+            );
+
+        }
+
+
+        function limpiarMarcaInventario() {
+
+            document.getElementById(
+                'inventario-marca'
+            ).value = '';
+
+            document.getElementById(
+                'buscar-marca-inventario'
+            ).value = '';
+
+            document.getElementById(
+                'opciones-marca-inventario'
+            )?.classList.add('hidden');
 
         }
 
@@ -5631,6 +6921,28 @@
                 }
 
 
+                const normalizarCodigoImportacion =
+                    function (valor) {
+
+                        let codigo =
+                            String(
+                                valor || ''
+                            ).trim();
+
+                        // Mantiene la misma regla de códigos
+                        // utilizada por la búsqueda manual.
+                        if (/^\d+$/.test(codigo)) {
+                            codigo =
+                                codigo.padStart(
+                                    6,
+                                    '0'
+                                );
+                        }
+
+                        return codigo;
+                    };
+
+
                 const codigosExistentes =
                     new Set(
                         Array.from(
@@ -5639,9 +6951,9 @@
                             )
                         )
                             .map(input =>
-                                String(
-                                    input.value || ''
-                                ).trim()
+                                normalizarCodigoImportacion(
+                                    input.value
+                                )
                             )
                             .filter(Boolean)
                     );
@@ -5656,11 +6968,11 @@
                 ) {
 
                     const codigo =
-                        String(
+                        normalizarCodigoImportacion(
                             producto.codigo_st ||
                             producto.codigo ||
                             ''
-                        ).trim();
+                        );
 
                     if (!codigo) {
                         continue;
