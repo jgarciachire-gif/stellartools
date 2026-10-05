@@ -1150,8 +1150,7 @@
                         <div class="relative">
 
                             <input type="text" id="buscar-marca-inventario" placeholder="Todas las marcas..."
-                                autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" readonly
-                                disabled class="w-full
+                                autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" class="w-full
                                       px-4 py-2.5
                                       pr-10
                                       border border-slate-300
@@ -6122,6 +6121,22 @@
                 );
 
                 poblarOpcionesInventario(
+                    'grupo',
+                    obtenerValoresClasificacion(
+                        'grupo'
+                    ),
+                    'Todos los grupos'
+                );
+
+                poblarOpcionesInventario(
+                    'subgrupo',
+                    obtenerValoresClasificacion(
+                        'subgrupo'
+                    ),
+                    'Todos los subgrupos'
+                );
+
+                poblarOpcionesInventario(
                     'marca',
                     obtenerValoresClasificacion(
                         'marca'
@@ -6131,6 +6146,14 @@
 
                 habilitarBuscadorInventario(
                     'buscar-departamento-inventario'
+                );
+
+                habilitarBuscadorInventario(
+                    'buscar-grupo-inventario'
+                );
+
+                habilitarBuscadorInventario(
+                    'buscar-subgrupo-inventario'
                 );
 
                 habilitarBuscadorInventario(
@@ -6394,12 +6417,19 @@
 
                 limpiarGrupoInventario();
 
-                if (valor) {
-                    poblarGruposInventario();
-                    habilitarBuscadorInventario(
-                        'buscar-grupo-inventario'
-                    );
-                }
+                // Actualiza los grupos según el departamento.
+                poblarGruposInventario();
+
+                habilitarBuscadorInventario(
+                    'buscar-grupo-inventario'
+                );
+
+                // Actualiza también los subgrupos disponibles.
+                poblarSubgruposInventario();
+
+                habilitarBuscadorInventario(
+                    'buscar-subgrupo-inventario'
+                );
 
                 actualizarMarcasInventario();
 
@@ -6411,12 +6441,13 @@
 
                 limpiarSubgrupoInventario();
 
-                if (valor) {
-                    poblarSubgruposInventario();
-                    habilitarBuscadorInventario(
-                        'buscar-subgrupo-inventario'
-                    );
-                }
+                // Actualiza los subgrupos según
+                // departamento + grupo seleccionados.
+                poblarSubgruposInventario();
+
+                habilitarBuscadorInventario(
+                    'buscar-subgrupo-inventario'
+                );
 
                 actualizarMarcasInventario();
 
@@ -6886,10 +6917,6 @@
                 'opciones-grupo-inventario'
             )?.classList.add('hidden');
 
-            deshabilitarBuscadorInventario(
-                'buscar-grupo-inventario'
-            );
-
             limpiarSubgrupoInventario();
 
         }
@@ -6908,10 +6935,6 @@
             document.getElementById(
                 'opciones-subgrupo-inventario'
             )?.classList.add('hidden');
-
-            deshabilitarBuscadorInventario(
-                'buscar-subgrupo-inventario'
-            );
 
         }
 
