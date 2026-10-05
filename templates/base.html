@@ -83,17 +83,33 @@
             <!-- Menú flotante de Ajustes y Cerrar Sesión -->
             <div x-show="abierto" x-cloak
                 class="absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50 text-slate-700">
+
+                {% if not (
+                request.state.perfil
+                and
+                request.state.perfil.tipo_usuario
+                and
+                request.state.perfil.tipo_usuario|string|lower|trim == 'provisional'
+                ) %}
+
+                <!-- Ajustes: no visible para usuarios provisionales -->
                 <a href="/perfil"
                     class="flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-100 transition-colors">
                     <i class="fa-solid fa-user-gear text-slate-500"></i>
                     <span>Ajustes</span>
                 </a>
+
                 <div class="border-t border-slate-100 my-1"></div>
+
+                {% endif %}
+
+                <!-- Cerrar sesión: visible para todos -->
                 <a href="/logout"
                     class="flex items-center gap-2 px-4 py-2 text-sm text-rose-600 hover:bg-rose-50 transition-colors">
                     <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     <span>Cerrar sesión</span>
                 </a>
+
             </div>
         </div>
     </header>
