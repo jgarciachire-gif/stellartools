@@ -204,6 +204,105 @@ async def eliminar_producto(
     return RedirectResponse(url="/productos", status_code=303)
 
 
+def validar_columnas_producto(columnas):
+    requeridas = {
+        "CodigoDelProducto",
+        "CodigoEAN",
+        "Descripcion",
+        "UnidadManejo",
+        "CostoActual",
+        "Departamento",
+        "Grupo",
+        "SubGrupo",
+        "Proveedor",
+        "Marca"
+    }
+
+    disponibles = {
+        str(col).replace("\ufeff", "").strip()
+        for col in columnas
+    }
+
+    faltantes = sorted(requeridas - disponibles)
+
+    if faltantes:
+        return (
+            False,
+            "Faltan columnas requeridas: "
+            + ", ".join(faltantes)
+        )
+
+    return True, ""
+
+def texto_valor(valor):
+    """Convierte un valor del archivo en texto limpio."""
+    if valor is None or pd.isna(valor):
+        return ""
+
+    texto = str(valor).strip()
+
+    if texto.lower() == "nan":
+        return ""
+
+    return texto
+
+
+def convertir_codigo(valor):
+    """Normaliza CodigoDelProducto a 6 dígitos cuando es numérico."""
+    texto = texto_valor(valor)
+
+    if not texto:
+        return ""
+
+    # Excel puede entregar códigos numéricos como 123456.0
+    if re.fullmatch(r"\d+\.0", texto):
+        texto = texto[:-2]
+
+    return texto.zfill(6) if texto.isdigit() else texto
+
+
+def convertir_unidad_manejo(valor):
+    """Convierte UnidadManejo en entero positivo."""
+    texto = texto_valor(valor)
+
+    if not texto:
+        return None
+
+    try:
+        numero = float(texto.replace(",", "."))
+
+        if not numero.is_integer() or numero <= 0:
+            return None
+
+        return int(numero)
+
+    except (ValueError, TypeError):
+        return None
+
+
+def convertir_precio(valor):
+    """Convierte CostoActual soportando formatos 12.50, 12,50 y 1.234,56."""
+    texto = texto_valor(valor)
+
+    if not texto:
+        return 0.0
+
+    try:
+        # Si viene con punto y coma, asumimos formato 1.234,56
+        if "." in texto and "," in texto:
+            texto = texto.replace(".", "").replace(",", ".")
+
+        # Si solo tiene coma, asumimos decimal 12,50
+        elif "," in texto:
+            texto = texto.replace(",", ".")
+
+        # Si solo tiene punto, se conserva como decimal: 12.50
+
+        return float(texto)
+
+    except (ValueError, TypeError):
+        return 0.0
+
 @router.post("/productos/cargar-lista")
 async def cargar_lista_productos(
     archivo: UploadFile = File(...),
@@ -221,42 +320,99 @@ async def cargar_lista_productos(
     # 1. Extracción de datos según extensión
     if nombre.endswith(".csv"):
         try:
-            df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", encoding="utf-8")
+            df = pd.read_csv(
+                io.BytesIO(contenido),
+                sep=None,
+                engine="python",
+                encoding="utf-8"
+            )
         except Exception:
-            df = pd.read_csv(io.BytesIO(contenido), sep=None, engine="python", encoding="latin1")
+            df = pd.read_csv(
+                io.BytesIO(contenido),
+                sep=None,
+                engine="python",
+                encoding="latin1"
+            )
+
+        # Normalizar encabezados SIEMPRE, independientemente
+        # de la codificación utilizada.
+        df.columns = [
+            str(col).replace("\ufeff", "").strip()
+            for col in df.columns
+        ]
+
+        columnas_validas, mensaje_columnas = validar_columnas_producto(
+            df.columns
+        )
+
+        if not columnas_validas:
+            return script_alerta_modal(
+                "error",
+                "Formato de archivo incorrecto",
+                mensaje_columnas,
+                "/productos"
+            )
 
         for _, r in df.iterrows():
             filas.append({
-                "codigo": str(r.get("CodigoDelProducto", "")),
-                "descripcion": str(r.get("Descripcion", "")),
-                "marca": str(r.get("Marca", "")),
-                "departamento": str(r.get("Departamento", "")),
-                "grupo": str(r.get("Grupo", "")),
-                "subgrupo": str(r.get("SubGrupo", "")),
+                "codigo": r.get("CodigoDelProducto", ""),
+                "codigo_ean": r.get("CodigoEAN", ""),
+                "descripcion": r.get("Descripcion", ""),
+                "unidad_manejo": r.get("UnidadManejo", ""),
+                "marca": r.get("Marca", ""),
+                "departamento": r.get("Departamento", ""),
+                "grupo": r.get("Grupo", ""),
+                "subgrupo": r.get("SubGrupo", ""),
                 "costo": r.get("CostoActual", 0),
-                "proveedor": str(r.get("Proveedor", ""))
+                "proveedor": r.get("Proveedor", "")
             })
+
 
     elif nombre.endswith(".xlsx"):
         df = pd.read_excel(io.BytesIO(contenido))
+
+        # Normalizar encabezados.
+        df.columns = [
+            str(col).replace("\ufeff", "").strip()
+            for col in df.columns
+        ]
+
+        columnas_validas, mensaje_columnas = validar_columnas_producto(
+            df.columns
+        )
+
+        if not columnas_validas:
+            return script_alerta_modal(
+                "error",
+                "Formato de archivo incorrecto",
+                mensaje_columnas,
+                "/productos"
+            )
+
         for _, r in df.iterrows():
             filas.append({
-                "codigo": str(r.get("CodigoDelProducto", "")),
-                "descripcion": str(r.get("Descripcion", "")),
-                "marca": str(r.get("Marca", "")),
-                "departamento": str(r.get("Departamento", "")),
-                "grupo": str(r.get("Grupo", "")),
-                "subgrupo": str(r.get("SubGrupo", "")),
+                "codigo": r.get("CodigoDelProducto", ""),
+                "codigo_ean": r.get("CodigoEAN", ""),
+                "descripcion": r.get("Descripcion", ""),
+                "unidad_manejo": r.get("UnidadManejo", ""),
+                "marca": r.get("Marca", ""),
+                "departamento": r.get("Departamento", ""),
+                "grupo": r.get("Grupo", ""),
+                "subgrupo": r.get("SubGrupo", ""),
                 "costo": r.get("CostoActual", 0),
-                "proveedor": str(r.get("Proveedor", ""))
+                "proveedor": r.get("Proveedor", "")
             })
+
 
     elif nombre.endswith(".xml"):
         root = ET.fromstring(contenido)
+
         for item in (root.findall(".//Producto") or root):
             filas.append({
                 "codigo": item.findtext("CodigoDelProducto", ""),
+                "codigo_ean": item.findtext("CodigoEAN", ""),
                 "descripcion": item.findtext("Descripcion", ""),
+                "unidad_manejo": item.findtext("UnidadManejo", ""),
                 "marca": item.findtext("Marca", ""),
                 "departamento": item.findtext("Departamento", ""),
                 "grupo": item.findtext("Grupo", ""),
@@ -265,36 +421,90 @@ async def cargar_lista_productos(
                 "proveedor": item.findtext("Proveedor", "")
             })
 
+
+    else:
+        return script_alerta_modal(
+            "error",
+            "Formato no compatible",
+            "El archivo debe ser CSV, XLSX o XML.",
+            "/productos"
+        )
+
     # 2. Mapeo asíncrono de proveedores
     res_prov = await config.supabase_async.table("proveedores").select("id, nombre").execute()
     mapa_proveedores = {p["nombre"].strip().upper(): p["id"] for p in (res_prov.data or []) if p.get("nombre")}
 
     # 3. Formateo y limpieza de datos
-    codigos_entrada = []
     filas_procesadas = []
+    errores_filas = []
 
-    for f in filas:
-        raw_cod = f["codigo"].split(".")[0].strip()
-        codigo_st = raw_cod.zfill(6) if raw_cod.isdigit() else raw_cod
-        
-        nombre_prov = f["proveedor"].strip().upper() if f["proveedor"] and f["proveedor"] != "nan" else ""
+    for numero_fila, f in enumerate(filas, start=2):
+
+        codigo_st = convertir_codigo(f["codigo"])
+
+        if not codigo_st:
+            errores_filas.append(
+                f"Fila {numero_fila}: CodigoDelProducto vacío."
+            )
+            continue
+
+        unidad_manejo = convertir_unidad_manejo(
+            f["unidad_manejo"]
+        )
+
+        if unidad_manejo is None:
+            errores_filas.append(
+                f"Fila {numero_fila}: UnidadManejo inválida "
+                f"para el producto {codigo_st}."
+            )
+            continue
+
+        nombre_prov = texto_valor(
+            f["proveedor"]
+        ).upper()
+
         prov_id = mapa_proveedores.get(nombre_prov)
 
-        if codigo_st:
-            codigos_entrada.append(codigo_st)
-            filas_procesadas.append({
-                "codigo_st": codigo_st,
-                "descripcion": f["descripcion"].strip().upper() if f["descripcion"] and f["descripcion"] != "nan" else "",
-                "marca": f["marca"].strip().upper() if f["marca"] and f["marca"] != "nan" else "",
-                "departamento": f["departamento"].strip() if f["departamento"] != "nan" else "",
-                "grupo": f["grupo"].strip() if f["grupo"] != "nan" else "",
-                "subgrupo": f["subgrupo"].strip() if f["subgrupo"] != "nan" else "",
-                "costo_raw": f["costo"],
-                "proveedor_id": prov_id
-            })
+        filas_procesadas.append({
+            "codigo_st": codigo_st,
+            "codigo_ean": texto_valor(f["codigo_ean"]),
+            "descripcion": texto_valor(
+                f["descripcion"]
+            ).upper(),
+            "unidad_manejo": unidad_manejo,
+            "marca": texto_valor(
+                f["marca"]
+            ).upper(),
+            "departamento": texto_valor(
+                f["departamento"]
+            ),
+            "grupo": texto_valor(
+                f["grupo"]
+            ),
+            "subgrupo": texto_valor(
+                f["subgrupo"]
+            ),
+            "costo_raw": f["costo"],
+            "proveedor_id": prov_id
+        })
+
 
     if not filas_procesadas:
-        return RedirectResponse(url="/productos", status_code=303)
+        mensaje = (
+            "No se encontraron productos válidos para importar."
+        )
+
+        if errores_filas:
+            mensaje += "\n\n" + "\n".join(errores_filas[:10])
+
+        return script_alerta_modal(
+            "error",
+            "No se pudo procesar el archivo",
+            mensaje,
+            "/productos"
+        )
+
+    
 
     # ============================================================
     # 4. PREPARAR DATOS PARA IMPORTACIÓN MASIVA
@@ -303,27 +513,16 @@ async def cargar_lista_productos(
     productos_importacion = []
 
     for item in filas_procesadas:
-        costo_raw = item["costo_raw"]
 
-        precio_nuevo = 0.0
-
-        if pd.notna(costo_raw) and costo_raw != "":
-            if isinstance(costo_raw, str):
-                c_limpio = costo_raw.replace(".", "").replace(",", ".")
-
-                try:
-                    precio_nuevo = float(c_limpio)
-                except ValueError:
-                    precio_nuevo = 0.0
-            else:
-                try:
-                    precio_nuevo = float(costo_raw)
-                except (ValueError, TypeError):
-                    precio_nuevo = 0.0
+        precio_nuevo = convertir_precio(
+            item["costo_raw"]
+        )
 
         productos_importacion.append({
             "codigo_st": item["codigo_st"],
+            "codigo_ean": item["codigo_ean"],
             "descripcion": item["descripcion"],
+            "unidad_manejo": item["unidad_manejo"],
             "marca": item["marca"],
             "departamento": item["departamento"],
             "grupo": item["grupo"],
@@ -338,28 +537,51 @@ async def cargar_lista_productos(
     # ============================================================
 
     if productos_importacion:
-        res_importacion = await config.supabase_async.rpc(
-            "importar_productos_masivo",
-            {
-                "p_productos": productos_importacion
-            }
-        ).execute()
 
-        resultado = res_importacion.data or {}
+        try:
+            res_importacion = await (
+                ejecutar_supabase_con_reintento_async(
+                    lambda: config.supabase_async.rpc(
+                        "importar_productos_masivo",
+                        {
+                            "p_productos": productos_importacion
+                        }
+                    ).execute()
+                )
+            )
 
-        total_nuevos = int(resultado.get("creados", 0))
-        total_actualizados = int(resultado.get("actualizados", 0))
+            resultado = res_importacion.data or {}
+
+            total_nuevos = int(
+                resultado.get("creados", 0)
+            )
+
+            total_actualizados = int(
+                resultado.get("actualizados", 0)
+            )
+
+            total_sin_cambios = int(
+                resultado.get("sin_cambios", 0)
+            )
+
+        except Exception as e:
+            print(
+                "ERROR EN IMPORTACIÓN MASIVA DE PRODUCTOS:",
+                repr(e)
+            )
+
+            return script_alerta_modal(
+                "error",
+                "Error al cargar productos",
+                "No fue posible completar la importación. "
+                "Revise el formato del archivo y vuelva a intentarlo.",
+                "/productos"
+            )
 
     else:
         total_nuevos = 0
         total_actualizados = 0
-
-
-    print(
-        "SUCCESS: Carga finalizada con éxito. "
-        f"({total_nuevos} creados, "
-        f"{total_actualizados} actualizados)"
-    )
+        total_sin_cambios = 0
 
 
     # ============================================================
@@ -370,8 +592,9 @@ async def cargar_lista_productos(
 
     msj = (
         f"Proceso finalizado: "
-        f"{total_nuevos} productos creados y "
-        f"{total_actualizados} actualizados."
+        f"{total_nuevos} productos creados, "
+        f"{total_actualizados} actualizados y "
+        f"{total_sin_cambios} sin cambios."
     )
 
     return script_alerta_modal(
