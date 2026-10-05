@@ -35,7 +35,8 @@
 </style>
 
 <div id="inventario-app" class="max-w-7xl mx-auto px-4 py-5" data-inventario-id="{{ inventario.id }}"
-    data-tienda="{{ inventario.tienda }}" data-estado="{{ inventario.estado }}">
+    data-tienda="{{ inventario.tienda }}" data-estado="{{ inventario.estado }}"
+    data-proveedor-nombre="{{ inventario.nombre }}">
 
     <!-- ===================================================== -->
     <!-- ACCIONES DEL DOCUMENTO -->
@@ -5460,7 +5461,7 @@
 
 
         window.abrirImportadorInventario =
-            function () {
+            async function () {
 
                 const modal =
                     document.getElementById(
@@ -5475,17 +5476,29 @@
                     'hidden'
                 );
 
-                // Cargar proveedores solo la primera vez.
+                /*
+                 * El importador necesita tener cargados
+                 * los proveedores antes de intentar
+                 * seleccionar el proveedor de la lista.
+                 */
                 if (
                     !Array.isArray(
                         window.proveedoresInventario
                     )
                 ) {
-                    cargarProveedoresInventario();
+
+                    await cargarProveedoresInventario();
+
                 }
 
-            };
+                /*
+                 * Después de cargar los proveedores,
+                 * seleccionamos automáticamente el proveedor
+                 * cuyo nombre coincide con la lista.
+                 */
+                preseleccionarProveedorInventarioPorNombre();
 
+            };
 
         window.cerrarImportadorInventario =
             function () {
@@ -5565,6 +5578,81 @@
 
         let indiceProveedorInventario = -1;
 
+        // =========================================================
+        // PRESELECCIONAR PROVEEDOR DE LA LISTA
+        // =========================================================
+
+        function preseleccionarProveedorInventarioPorNombre() {
+
+            const inventarioApp =
+                document.getElementById(
+                    'inventario-app'
+                );
+
+            const nombreLista =
+                String(
+                    inventarioApp?.dataset.proveedorNombre || ''
+                ).trim();
+
+            if (!nombreLista) {
+                return;
+            }
+
+            if (
+                !Array.isArray(
+                    window.proveedoresInventario
+                )
+            ) {
+                return;
+            }
+
+            const normalizar =
+                function (texto) {
+
+                    return String(
+                        texto || ''
+                    )
+                        .normalize('NFD')
+                        .replace(
+                            /[\u0300-\u036f]/g,
+                            ''
+                        )
+                        .toLowerCase()
+                        .trim();
+
+                };
+
+            const proveedor =
+                window.proveedoresInventario.find(
+                    function (item) {
+
+                        return (
+                            normalizar(
+                                item?.nombre
+                            ) ===
+                            normalizar(
+                                nombreLista
+                            )
+                        );
+
+                    }
+                );
+
+            /*
+             * Si la lista antigua tiene un nombre que ya
+             * no corresponde a un proveedor, no forzamos
+             * una selección incorrecta.
+             */
+            if (!proveedor) {
+                return;
+            }
+
+            seleccionarProveedorVisualInventario(
+                proveedor.id,
+                proveedor.nombre || ''
+            );
+
+        }
 
         /*
          * =========================================================
@@ -7007,9 +7095,20 @@
                 }
 
 
-                window.cerrarImportadorInventario();
 
+                if (importados > 0) {
+
+                    renderizarProductosMovil();
+
+                }
+
+
+                // Actualizar el total antes de cerrar el modal.
                 recalcularTotalEmpaques();
+
+
+                // Cerrar el importador.
+                window.cerrarImportadorInventario();
 
 
                 if (importados > 0) {
@@ -7025,6 +7124,7 @@
                     );
 
                 }
+
 
             } catch (error) {
 
