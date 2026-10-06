@@ -94,7 +94,7 @@
                         right-0
                         top-12
                         z-50
-                        w-64
+                        w-36
                         bg-white
                         border border-slate-200
                         rounded-xl
@@ -131,7 +131,7 @@
                         </span>
 
                         <span>
-                            Importar productos
+                            Importar
                         </span>
 
                     </button>
@@ -184,7 +184,7 @@
                                font-semibold
                                text-emerald-700
                                border-t border-slate-100
-                               bg-
+                               bg-emerald-100/80
                                hover:bg-emerald-50
                                transition">
 
@@ -227,6 +227,7 @@
                                font-semibold
                                text-rose-600
                                border-t border-slate-100
+                               bg-rose-100/80
                                hover:bg-rose-50
                                transition">
 
@@ -244,7 +245,7 @@
                         </span>
 
                         <span>
-                            Eliminar inventario
+                            Eliminar
                         </span>
 
                     </button>
@@ -299,28 +300,6 @@
 
             {% if inventario.estado == 'borrador' %}
 
-            <!-- GUARDAR -->
-            <button type="button" id="btn-guardar-inventario-movil" class="shrink-0
-                   inline-flex
-                   items-center
-                   justify-center
-                   gap-2
-                   px-3.5
-                   py-3.5
-                   rounded-xl
-                   bg-emerald-600
-                   hover:bg-emerald-700
-                   active:scale-[0.98]
-                   text-white
-                   text-sm
-                   font-semibold
-                   shadow-sm
-                   transition">
-                <i class="fa-solid fa-floppy-disk"></i>
-
-            </button>
-
-
             <!-- MENÚ -->
             <div class="relative shrink-0">
 
@@ -343,7 +322,7 @@
                        right-0
                        top-12
                        z-50
-                       w-56
+                       w-48
                        bg-white
                        border border-slate-200
                        rounded-2xl
@@ -356,7 +335,7 @@
                            items-center
                            gap-3
                            px-4
-                           py-3.5
+                           py-3
                            text-left
                            text-sm
                            font-semibold
@@ -375,8 +354,77 @@
                         </span>
 
                         <span>
-                            Importar productos
+                            Importar
                         </span>
+                    </button>
+
+                    <!-- VACIAR LISTA -->
+                    <button type="button" id="btn-vaciar-lista-movil" class="w-full
+                            flex
+                            items-center
+                            gap-3
+                            px-4
+                            py-3
+                            text-left
+                            text-sm
+                            font-semibold
+                            text-slate-700
+                            border-t border-slate-100
+                            active:bg-slate-50
+                            transition">
+
+                        <span class="w-9 h-9
+                                shrink-0
+                                inline-flex
+                                items-center
+                                justify-center
+                                rounded-xl
+                                bg-amber-50
+                                text-amber-600">
+
+                            <i class="fa-solid fa-broom"></i>
+
+                        </span>
+
+                        <span>
+                            Vaciar lista
+                        </span>
+
+                    </button>
+
+
+                    <!-- COMPLETAR -->
+                    <button type="button" id="btn-guardar-inventario-movil" class="w-full
+                            flex
+                            items-center
+                            gap-3
+                            px-4
+                            py-3
+                            text-left
+                            text-sm
+                            font-semibold
+                            text-emerald-700
+                            border-t border-slate-100
+                            active:bg-emerald-50
+                            transition">
+
+                        <span class="w-9 h-9
+                                shrink-0
+                                inline-flex
+                                items-center
+                                justify-center
+                                rounded-xl
+                                bg-emerald-50
+                                text-emerald-600">
+
+                            <i class="fa-solid fa-check"></i>
+
+                        </span>
+
+                        <span>
+                            Completar
+                        </span>
+
                     </button>
 
 
@@ -391,7 +439,7 @@
                            items-center
                            gap-3
                            px-4
-                           py-3.5
+                           py-3
                            text-left
                            text-sm
                            font-semibold
@@ -411,7 +459,7 @@
                         </span>
 
                         <span>
-                            Eliminar inventario
+                            Eliminar
                         </span>
                     </button>
 
@@ -3512,6 +3560,29 @@
                                 ?.classList.add('hidden');
 
                             window.abrirImportadorInventario();
+
+                        }
+                    );
+
+                // Vaciar lista.
+                document
+                    .getElementById(
+                        'btn-vaciar-lista-movil'
+                    )
+                    ?.addEventListener(
+                        'click',
+                        async function () {
+
+                            // Cerrar el menú antes de ejecutar la acción.
+                            document
+                                .getElementById(
+                                    'menu-acciones-movil'
+                                )
+                                ?.classList.add('hidden');
+
+                            // Ejecutar exactamente la misma función
+                            // utilizada por escritorio.
+                            await vaciarListaInventario();
 
                         }
                     );
