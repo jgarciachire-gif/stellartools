@@ -154,7 +154,7 @@
     let celdasSeleccionadasAnalisis = [];
     let celdaInicio = null;
     let celdaActiva = null;
-
+    let datosCopiarSeleccion = null;
     let isArrastrando = false;
     let estaEditando = false;
 
@@ -1371,9 +1371,14 @@
     // COPIAR
     // ============================================================
 
-    function copiarSeleccion() {
+    // ============================================================
+    // COPIAR SELECCIÓN — COMPATIBLE CON EXCEL
+    // ============================================================
+
+    function obtenerDatosSeleccionParaCopiar() {
+
         if (!celdasSeleccionadasAnalisis.length) {
-            return false;
+            return null;
         }
 
         const primera =
@@ -1402,7 +1407,7 @@
             colInicio < 0 ||
             colFin < 0
         ) {
-            return false;
+            return null;
         }
 
         const matriz = [];
@@ -1412,76 +1417,154 @@
             fila <= filaFin;
             fila++
         ) {
-            const valores = [];
+
+            const valoresFila = [];
 
             for (
                 let columna = colInicio;
                 columna <= colFin;
                 columna++
             ) {
+
                 const td =
                     obtenerCelda(
                         fila,
                         columna
                     );
 
-                valores.push(
-                    obtenerValorCelda(td)
-                );
+                let valor =
+                    obtenerValorCelda(td);
+
+                /*
+                 * Excel utiliza TAB para separar columnas
+                 * y salto de línea para separar filas.
+                 *
+                 * Si algún contenido interno contiene
+                 * saltos de línea, los convertimos en espacios
+                 * para no romper la estructura de la matriz.
+                 */
+                valor =
+                    String(valor ?? '')
+                        .replace(/\r\n/g, ' ')
+                        .replace(/\r/g, ' ')
+                        .replace(/\n/g, ' ');
+
+                valoresFila.push(valor);
             }
 
-            matriz.push(
-                valores.join('\t')
-            );
+            matriz.push(valoresFila);
         }
 
-        const textoCopiar =
-            matriz.join('\n');
+        return {
+            matriz,
+            textoPlano: matriz
+                .map(fila => fila.join('\t'))
+                .join('\r\n')
+        };
+    }
+
+
+    // ============================================================
+    // GENERAR HTML PARA EXCEL
+    // ============================================================
+
+    function generarHtmlSeleccionParaCopiar(matriz) {
+
+        if (
+            !Array.isArray(matriz) ||
+            !matriz.length
+        ) {
+            return '';
+        }
+
+        const escaparHtml =
+            valor => {
+
+                return String(valor ?? '')
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+
+            };
+
+        let html =
+            '<table>';
+
+        matriz.forEach(fila => {
+
+            html += '<tr>';
+
+            fila.forEach(valor => {
+
+                html +=
+                    '<td>' +
+                    escaparHtml(valor) +
+                    '</td>';
+
+            });
+
+            html += '</tr>';
+
+        });
+
+        html += '</table>';
+
+        return html;
+    }
+
+
+    // ============================================================
+    // COPIAR
+    // ============================================================
+
+    function copiarSeleccion() {
+
+        const datos =
+            obtenerDatosSeleccionParaCopiar();
+
+        if (!datos) {
+            return false;
+        }
 
         /*
-         * Copia sincrónica.
-         *
-         * Es importante ejecutarla directamente
-         * dentro del evento Ctrl+C para conservar
-         * el permiso temporal del navegador.
+         * Guardamos temporalmente los datos para que
+         * el evento "copy" pueda escribirlos directamente
+         * en el portapapeles del navegador.
          */
-        const textarea =
-            document.createElement('textarea');
-
-        textarea.value = textoCopiar;
-
-        textarea.setAttribute(
-            'readonly',
-            ''
-        );
-
-        textarea.style.position = 'fixed';
-        textarea.style.left = '-9999px';
-        textarea.style.top = '0';
-        textarea.style.width = '1px';
-        textarea.style.height = '1px';
-        textarea.style.opacity = '0';
-
-        document.body.appendChild(textarea);
-
-        textarea.focus();
-        textarea.select();
+        datosCopiarSeleccion =
+            datos;
 
         let copiado = false;
 
         try {
+
+            /*
+             * Esto dispara el evento "copy" de forma
+             * sincrónica y permite utilizar clipboardData.
+             */
             copiado =
                 document.execCommand('copy');
+
         } catch (error) {
+
             console.error(
-                'Error al copiar al portapapeles:',
+                'Error al copiar la selección:',
                 error
             );
+
+            copiado = false;
+
+        } finally {
+
+            datosCopiarSeleccion =
+                null;
+
         }
 
-        textarea.remove();
-
         if (!copiado) {
+
             console.error(
                 'El navegador rechazó la copia al portapapeles.'
             );
@@ -2207,6 +2290,62 @@
             campo
         );
     });
+
+    // ============================================================
+    // EVENTO COPY — PORTAPAPELES COMPATIBLE CON EXCEL
+    // ============================================================
+
+    document.addEventListener(
+        'copy',
+        function (e) {
+
+            if (!datosCopiarSeleccion) {
+                return;
+            }
+
+            const datos =
+                datosCopiarSeleccion;
+
+            /*
+             * Formato de texto:
+             *
+             * TAB  = columna
+             * CRLF = fila
+             */
+            e.clipboardData.setData(
+                'text/plain',
+                datos.textoPlano
+            );
+
+            /*
+             * Formato HTML:
+             *
+             * Excel puede utilizar esta representación
+             * para reconstruir exactamente la estructura
+             * de filas y columnas.
+             */
+            const html =
+                generarHtmlSeleccionParaCopiar(
+                    datos.matriz
+                );
+
+            if (html) {
+
+                e.clipboardData.setData(
+                    'text/html',
+                    html
+                );
+
+            }
+
+            /*
+             * Evita que el navegador sustituya
+             * nuestro contenido por su copia nativa.
+             */
+            e.preventDefault();
+
+        }
+    );
 
     /*
      * Ctrl/Cmd + C

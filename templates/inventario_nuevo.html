@@ -43,78 +43,220 @@
     <!-- ===================================================== -->
 
     <!-- VISTA ESCRITORIO -->
-    <div class="hidden md:flex justify-end items-center gap-2 mb-4">
+    <div class="hidden md:flex w-full max-w-[1000px] mx-auto mb-4">
 
-        {% if inventario.estado == 'borrador' %}
+        <div class="w-full flex items-center justify-between">
 
-        <!-- IMPORTAR -->
-        <button type="button" id="btn-importar-productos" class="inline-flex items-center gap-2
-               px-4 py-2.5
-               rounded-xl
-               bg-indigo-600
-               hover:bg-indigo-700
-               text-white
-               text-sm
-               font-semibold
-               transition-colors
-               shadow-sm">
-            <i class="fa-solid fa-file-import"></i>
-            Importar
-        </button>
+            <!-- VOLVER -->
+            <a href="/inventario" id="btn-volver-inventarios" class="inline-flex items-center gap-2
+                  px-4 py-2.5
+                  rounded-xl
+                  border border-slate-300
+                  bg-white
+                  hover:bg-slate-50
+                  text-slate-700
+                  text-sm
+                  font-semibold
+                  transition-colors
+                  shadow-sm">
 
-        <!-- GUARDAR -->
-        <button type="button" id="btn-guardar-inventario" class="inline-flex items-center gap-2
-               px-4 py-2.5
-               rounded-xl
-               bg-emerald-600
-               hover:bg-emerald-700
-               text-white
-               text-sm
-               font-semibold
-               transition-colors
-               shadow-sm">
-            <i class="fa-solid fa-floppy-disk"></i>
-            Guardar
-        </button>
+                <i class="fa-solid fa-arrow-left"></i>
+                Volver
 
-        {% endif %}
+            </a>
 
-        <!-- ELIMINAR -->
-        {% if not (
-        es_provisional
-        and inventario.estado == 'completado'
-        ) %}
 
-        <button type="button" id="btn-eliminar-inventario" class="inline-flex items-center gap-2
-               px-4 py-2.5
-               rounded-xl
-               bg-rose-600
-               hover:bg-rose-700
-               text-white
-               text-sm
-               font-semibold
-               transition-colors
-               shadow-sm">
-            <i class="fa-solid fa-trash-can"></i>
-            Eliminar
-        </button>
+            <!-- MENÚ DE ACCIONES -->
+            {% if inventario.estado == 'borrador'
+            or not es_provisional %}
 
-        {% endif %}
+            <div class="relative">
 
-        <!-- BIBLIOTECA -->
-        <a href="/inventario" id="btn-volver-inventarios" class="inline-flex items-center gap-2
-               px-4 py-2.5
-               rounded-xl
-               border border-slate-300
-               text-slate-700
-               bg-white
-               hover:bg-slate-50
-               text-sm
-               font-semibold
-               transition-colors">
-            <i class="fa-solid fa-arrow-left"></i>
-            Volver
-        </a>
+                <button type="button" id="btn-menu-acciones-escritorio" class="w-11 h-11
+                           inline-flex
+                           items-center
+                           justify-center
+                           rounded-xl
+                           border border-slate-200
+                           bg-slate-100
+                           text-slate-700
+                           hover:bg-slate-200
+                           transition
+                           shadow-sm" aria-label="Más acciones" aria-expanded="false">
+
+                    <i class="fa-solid fa-ellipsis-vertical"></i>
+
+                </button>
+
+
+                <div id="menu-acciones-escritorio" class="hidden
+                        absolute
+                        right-0
+                        top-12
+                        z-50
+                        w-64
+                        bg-white
+                        border border-slate-200
+                        rounded-2xl
+                        shadow-xl
+                        overflow-hidden">
+
+                    {% if inventario.estado == 'borrador' %}
+
+                    <!-- IMPORTAR PRODUCTOS -->
+                    <button type="button" id="btn-importar-productos-escritorio" class="w-full
+                               flex
+                               items-center
+                               gap-3
+                               px-4
+                               py-3.5
+                               text-left
+                               text-sm
+                               font-semibold
+                               text-slate-700
+                               hover:bg-slate-50
+                               transition">
+
+                        <span class="w-9 h-9
+                                 shrink-0
+                                 inline-flex
+                                 items-center
+                                 justify-center
+                                 rounded-xl
+                                 bg-indigo-50
+                                 text-indigo-600">
+
+                            <i class="fa-solid fa-file-import"></i>
+
+                        </span>
+
+                        <span>
+                            Importar productos
+                        </span>
+
+                    </button>
+
+
+                    <!-- VACIAR LISTA -->
+                    <button type="button" id="btn-vaciar-lista-escritorio" class="w-full
+                               flex
+                               items-center
+                               gap-3
+                               px-4
+                               py-3.5
+                               text-left
+                               text-sm
+                               font-semibold
+                               text-slate-700
+                               border-t border-slate-100
+                               hover:bg-slate-50
+                               transition">
+
+                        <span class="w-9 h-9
+                                 shrink-0
+                                 inline-flex
+                                 items-center
+                                 justify-center
+                                 rounded-xl
+                                 bg-amber-50
+                                 text-amber-600">
+
+                            <i class="fa-solid fa-broom"></i>
+
+                        </span>
+
+                        <span>
+                            Vaciar lista
+                        </span>
+
+                    </button>
+
+
+                    <!-- COMPLETAR -->
+                    <button type="button" id="btn-guardar-inventario" class="w-full
+                               flex
+                               items-center
+                               gap-3
+                               px-4
+                               py-3.5
+                               text-left
+                               text-sm
+                               font-semibold
+                               text-emerald-700
+                               border-t border-slate-100
+                               hover:bg-emerald-50
+                               transition">
+
+                        <span class="w-9 h-9
+                                 shrink-0
+                                 inline-flex
+                                 items-center
+                                 justify-center
+                                 rounded-xl
+                                 bg-emerald-50
+                                 text-emerald-600">
+
+                            <i class="fa-solid fa-check"></i>
+
+                        </span>
+
+                        <span>
+                            Completar
+                        </span>
+
+                    </button>
+
+                    {% endif %}
+
+
+                    {% if not (
+                    es_provisional
+                    and inventario.estado == 'completado'
+                    ) %}
+
+                    <!-- ELIMINAR INVENTARIO -->
+                    <button type="button" id="btn-eliminar-inventario-escritorio" class="w-full
+                               flex
+                               items-center
+                               gap-3
+                               px-4
+                               py-3.5
+                               text-left
+                               text-sm
+                               font-semibold
+                               text-rose-600
+                               border-t border-slate-100
+                               hover:bg-rose-50
+                               transition">
+
+                        <span class="w-2 h-2
+                                 shrink-0
+                                 inline-flex
+                                 items-center
+                                 justify-center
+                                 rounded-xl
+                                 bg-rose-50
+                                 text-rose-600">
+
+                            <i class="fa-solid fa-trash-can"></i>
+
+                        </span>
+
+                        <span>
+                            Eliminar inventario
+                        </span>
+
+                    </button>
+
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+            {% endif %}
+
+        </div>
 
     </div>
 
@@ -395,7 +537,7 @@
     <!-- TABLA DE INVENTARIO -->
     <!-- ===================================================== -->
 
-    <div id="contenedor-tabla-inventario" class="mt-5 w-full max-w-[1000px] mx-auto
+    <div id="contenedor-tabla-inventario" class="mt-2 w-full max-w-[1000px] mx-auto
         bg-white border border-slate-300
         rounded-2xl overflow-hidden shadow-xs">
 
@@ -2489,6 +2631,64 @@
         }
 
         // =========================================================
+        // VACIAR LISTA
+        // =========================================================
+
+        async function vaciarListaInventario() {
+
+            const filas =
+                document.querySelectorAll(
+                    '#filas-tabla-inventario tr'
+                );
+
+            if (!filas.length) {
+
+                mostrarNotificacionInventario(
+                    'La lista ya está vacía.',
+                    'warning'
+                );
+
+                return;
+            }
+
+
+            const confirmar =
+                await mostrarConfirmacion({
+                    titulo: '¿Vaciar lista?',
+                    mensaje:
+                        'Se eliminarán todas las filas de este documento. Esta acción no eliminará el inventario y podrás volver a agregar productos.'
+                });
+
+
+            if (!confirmar) {
+                return;
+            }
+
+
+            const tbody =
+                document.getElementById(
+                    'filas-tabla-inventario'
+                );
+
+            if (!tbody) {
+                return;
+            }
+
+
+            tbody.innerHTML = '';
+
+
+            recalcularTotalEmpaques();
+
+
+            mostrarNotificacionInventario(
+                'La lista fue vaciada correctamente.',
+                'success'
+            );
+
+        }
+
+        // =========================================================
         // ELIMINAR DOCUMENTO COMPLETO
         // =========================================================
 
@@ -3337,6 +3537,8 @@
                     );
 
 
+
+
                 // Cerrar menú al tocar fuera.
                 document.addEventListener(
                     'click',
@@ -3372,7 +3574,41 @@
 
                     }
                 );
+                // Cerrar menú de escritorio al hacer clic fuera.
+                document.addEventListener(
+                    'click',
+                    function (e) {
 
+                        const menu =
+                            document.getElementById(
+                                'menu-acciones-escritorio'
+                            );
+
+                        const boton =
+                            document.getElementById(
+                                'btn-menu-acciones-escritorio'
+                            );
+
+                        if (!menu || !boton) {
+                            return;
+                        }
+
+                        if (
+                            !menu.contains(e.target) &&
+                            !boton.contains(e.target)
+                        ) {
+
+                            menu.classList.add('hidden');
+
+                            boton.setAttribute(
+                                'aria-expanded',
+                                'false'
+                            );
+
+                        }
+
+                    }
+                );
 
                 recalcularTotalEmpaques();
 
@@ -4946,6 +5182,137 @@
             }
         }
 
+        // =========================================================
+        // ACCIONES DE ESCRITORIO
+        // =========================================================
+
+        // Abrir / cerrar menú de acciones.
+        document
+            .getElementById(
+                'btn-menu-acciones-escritorio'
+            )
+            ?.addEventListener(
+                'click',
+                function (e) {
+
+                    e.stopPropagation();
+
+                    const menu =
+                        document.getElementById(
+                            'menu-acciones-escritorio'
+                        );
+
+                    if (!menu) {
+                        return;
+                    }
+
+                    const estaOculto =
+                        menu.classList.contains(
+                            'hidden'
+                        );
+
+                    menu.classList.toggle(
+                        'hidden',
+                        !estaOculto
+                    );
+
+                    this.setAttribute(
+                        'aria-expanded',
+                        String(estaOculto)
+                    );
+
+                }
+            );
+
+
+        // Importar productos.
+        document
+            .getElementById(
+                'btn-importar-productos-escritorio'
+            )
+            ?.addEventListener(
+                'click',
+                function () {
+
+                    document
+                        .getElementById(
+                            'menu-acciones-escritorio'
+                        )
+                        ?.classList.add('hidden');
+
+                    document
+                        .getElementById(
+                            'btn-menu-acciones-escritorio'
+                        )
+                        ?.setAttribute(
+                            'aria-expanded',
+                            'false'
+                        );
+
+                    window.abrirImportadorInventario();
+
+                }
+            );
+
+
+        // Vaciar lista.
+        document
+            .getElementById(
+                'btn-vaciar-lista-escritorio'
+            )
+            ?.addEventListener(
+                'click',
+                async function () {
+
+                    document
+                        .getElementById(
+                            'menu-acciones-escritorio'
+                        )
+                        ?.classList.add('hidden');
+
+                    document
+                        .getElementById(
+                            'btn-menu-acciones-escritorio'
+                        )
+                        ?.setAttribute(
+                            'aria-expanded',
+                            'false'
+                        );
+
+                    await vaciarListaInventario();
+
+                }
+            );
+
+
+        // Eliminar inventario.
+        document
+            .getElementById(
+                'btn-eliminar-inventario-escritorio'
+            )
+            ?.addEventListener(
+                'click',
+                function () {
+
+                    document
+                        .getElementById(
+                            'menu-acciones-escritorio'
+                        )
+                        ?.classList.add('hidden');
+
+                    document
+                        .getElementById(
+                            'btn-menu-acciones-escritorio'
+                        )
+                        ?.setAttribute(
+                            'aria-expanded',
+                            'false'
+                        );
+
+                    eliminarInventario();
+
+                }
+            );
 
         function agregarFilaInventario(
             codigo = '',
