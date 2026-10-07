@@ -338,7 +338,8 @@ async def vista_inventario_detalle(
             .table("inventarios")
             .select(
                 "id, nombre, realizado_por, tienda, "
-                "estado, created_at, updated_at"
+                "estado, usuario_creador_id, "
+                "created_at, updated_at"
             )
             .eq("id", inventario_id)
             .execute()
@@ -406,12 +407,21 @@ async def vista_inventario_detalle(
 
         productos = res_detalle.data or []
 
+        es_creador_inventario = (
+            str(
+                inventario.get(
+                    "usuario_creador_id"
+                )
+            )
+            == str(user.id)
+        )
         return templates.TemplateResponse(
             request=request,
             name="inventario_nuevo.html",
             context={
                 "inventario": inventario,
                 "productos": productos,
+                "es_creador_inventario": es_creador_inventario,
                 "es_provisional": (
                     perfil
                     and es_usuario_provisional(perfil)
@@ -516,7 +526,23 @@ async def guardar_inventario(
 
     perfil = obtener_perfil_inventario(request)
 
-    if perfil and es_usuario_provisional(perfil):
+    es_provisional = (
+        perfil
+        and es_usuario_provisional(perfil)
+    )
+
+    es_creador_inventario = (
+        str(
+            inventario_actual.get(
+                "usuario_creador_id"
+            )
+        )
+        == str(user.id)
+    )
+
+    provisional_solo_cantidades = False
+
+    if es_provisional:
 
         tienda_provisional = obtener_tienda_provisional(
             perfil
@@ -534,9 +560,11 @@ async def guardar_inventario(
                 }
             )
 
-        # Debe pertenecer a su tienda.
+        # El inventario debe pertenecer a su tienda.
         if (
-            str(inventario_actual.get("tienda", "")).strip()
+            str(
+                inventario_actual.get("tienda", "")
+            ).strip()
             != tienda_provisional
         ):
             return JSONResponse(
@@ -550,21 +578,10 @@ async def guardar_inventario(
                 }
             )
 
-        # Además, solo puede modificar sus propios documentos.
-        if (
-            str(inventario_actual.get("usuario_creador_id"))
-            != str(user.id)
-        ):
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "ok": False,
-                    "error": (
-                        "Solo puedes modificar tus "
-                        "propios inventarios."
-                    )
-                }
-            )
+        # Si el documento fue creado por otro usuario,
+        # el Provisional únicamente puede modificar cantidades.
+        if not es_creador_inventario:
+            provisional_solo_cantidades = True
 
     # Un inventario completado queda cerrado.
     if inventario_actual.get("estado") == "completado":
@@ -594,14 +611,45 @@ async def guardar_inventario(
             }
         )
 
-    if not isinstance(productos, list):
-        return JSONResponse(
-            status_code=400,
-            content={
-                "ok": False,
-                "error": "La lista de productos no es válida."
-            }
+    # --------------------------------------------------------
+    # 3.5. ESTRUCTURA ORIGINAL PARA PROVISIONAL
+    # --------------------------------------------------------
+    #
+    # Si el Provisional está trabajando sobre una lista
+    # creada por otro usuario, los productos existentes
+    # son intocables.
+    #
+    # Solo pueden cambiar sus cantidades.
+
+    productos_originales = []
+
+    if provisional_solo_cantidades:
+
+        res_detalle_original = await (
+            config.supabase_async
+            .table("inventarios_detalle")
+            .select(
+                "codigo, descripcion, orden, cantidad"
+            )
+            .eq(
+                "inventario_id",
+                inventario_id
+            )
+            .order(
+                "orden",
+                desc=False
+            )
+            .execute()
         )
+
+        productos_originales = (
+            res_detalle_original.data or []
+        )
+
+        codigos_originales = {
+            str(producto.get("codigo", "")).strip()
+            for producto in productos_originales
+        }
 
     # --------------------------------------------------------
     # 4. VALIDAR CADA PRODUCTO EN BACKEND
@@ -726,6 +774,66 @@ async def guardar_inventario(
             "descripcion": descripcion,
             "cantidad": cantidad_3
         })
+    # --------------------------------------------------------
+    # 4.5. PROTEGER LA ESTRUCTURA DEL INVENTARIO
+    # --------------------------------------------------------
+
+    if provisional_solo_cantidades:
+
+        codigos_recibidos = {
+            producto["codigo"]
+            for producto in productos_limpios
+        }
+
+        # No puede agregar ni eliminar productos.
+        if codigos_recibidos != codigos_originales:
+
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "ok": False,
+                    "error": (
+                        "No puedes agregar ni eliminar "
+                        "productos de una lista creada "
+                        "por otro usuario."
+                    )
+                }
+            )
+
+        cantidades_por_codigo = {
+            producto["codigo"]: producto["cantidad"]
+            for producto in productos_limpios
+        }
+
+        # Reconstruimos la lista usando la estructura
+        # que realmente existe en la base de datos.
+        #
+        # De esta manera el navegador tampoco puede
+        # modificar descripción ni orden.
+
+        productos_limpios = []
+
+        for producto_original in productos_originales:
+
+            codigo_original = str(
+                producto_original.get(
+                    "codigo",
+                    ""
+                )
+            ).strip()
+
+            productos_limpios.append({
+                "codigo": codigo_original,
+                "descripcion": str(
+                    producto_original.get(
+                        "descripcion",
+                        ""
+                    )
+                ).strip(),
+                "cantidad": cantidades_por_codigo[
+                    codigo_original
+                ]
+            })
 
     # --------------------------------------------------------
     # 5. GUARDAR TODO EN UNA SOLA OPERACIÓN
