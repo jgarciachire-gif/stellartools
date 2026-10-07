@@ -339,9 +339,9 @@ async def vista_inventario_detalle(
         inventarios = res_inventario.data or []
 
         if not inventarios:
-            raise HTTPException(
-                status_code=404,
-                detail="Inventario no encontrado."
+            return RedirectResponse(
+                url="/inventario",
+                status_code=303
             )
 
         inventario = inventarios[0]

@@ -109,7 +109,7 @@
                                items-center
                                gap-3
                                px-4
-                               py-3.5
+                               py-2
                                text-left
                                text-sm
                                font-semibold
@@ -143,7 +143,7 @@
                                items-center
                                gap-3
                                px-4
-                               py-3.5
+                               py-2
                                text-left
                                text-sm
                                font-semibold
@@ -178,13 +178,12 @@
                                items-center
                                gap-3
                                px-4
-                               py-3.5
+                               py-2
                                text-left
                                text-sm
                                font-semibold
                                text-emerald-700
                                border-t border-slate-100
-                               bg-emerald-100/80
                                hover:bg-emerald-50
                                transition">
 
@@ -221,14 +220,13 @@
                                items-center
                                gap-3
                                px-4
-                               py-3.5
+                               py-2
                                text-left
                                text-sm
                                font-semibold
-                               text-rose-600
+                               text-rose-700
                                border-t border-slate-100
-                               bg-rose-100/80
-                               hover:bg-rose-50
+                               hover:bg-rose-100
                                transition">
 
                         <span class="w-2 h-2
@@ -334,8 +332,8 @@
                            flex
                            items-center
                            gap-3
-                           px-4
-                           py-3
+                           px-2
+                           py-2
                            text-left
                            text-sm
                            font-semibold
@@ -363,8 +361,8 @@
                             flex
                             items-center
                             gap-3
-                            px-4
-                            py-3
+                            px-2
+                            py-2
                             text-left
                             text-sm
                             font-semibold
@@ -398,8 +396,8 @@
                             flex
                             items-center
                             gap-3
-                            px-4
-                            py-3
+                            px-2
+                            py-2
                             text-left
                             text-sm
                             font-semibold
@@ -438,8 +436,8 @@
                            flex
                            items-center
                            gap-3
-                           px-4
-                           py-3
+                           px-2
+                           py-2
                            text-left
                            text-sm
                            font-semibold
@@ -1031,6 +1029,27 @@
                     <i class="fa-solid fa-xmark"></i>
 
                 </button>
+
+            </div>
+
+            <!-- ESTADO DE CARGA DE CLASIFICACIÓN -->
+
+            <div id="estado-carga-clasificacion-inventario" class="hidden
+           px-6 py-3
+           border-b border-indigo-100
+           bg-indigo-50
+           text-indigo-700
+           text-sm">
+
+                <div class="flex items-center gap-2">
+
+                    <i class="fa-solid fa-spinner fa-spin"></i>
+
+                    <span>
+                        Cargando departamentos, grupos, subgrupos y marcas...
+                    </span>
+
+                </div>
 
             </div>
 
@@ -2808,8 +2827,7 @@
 
                 setTimeout(
                     () => {
-                        window.location.href =
-                            '/inventario';
+                        window.location.replace('/inventario');
                     },
                     500
                 );
@@ -3420,17 +3438,6 @@
                                 .trim()
                                 .replace(',', '.');
 
-                        /*
-                         * La base de datos guarda un número,
-                         * por lo que al volver a cargar el documento
-                         * eliminamos ceros decimales innecesarios.
-                         *
-                         * Ejemplos:
-                         * 1.0   → 1
-                         * 1.50  → 1.5
-                         * 1.250 → 1.25
-                         * 12    → 12
-                         */
                         const numero =
                             Number(valor);
 
@@ -5906,35 +5913,83 @@
                         'modal-importar-inventario'
                     );
 
+                const estadoCarga =
+                    document.getElementById(
+                        'estado-carga-clasificacion-inventario'
+                    );
+
                 if (!modal) {
                     return;
                 }
 
+                /*
+                 * Abrimos inmediatamente el modal para que
+                 * el usuario vea que la acción respondió.
+                 */
                 modal.classList.remove(
                     'hidden'
                 );
 
                 /*
-                 * El importador necesita tener cargados
-                 * los proveedores antes de intentar
-                 * seleccionar el proveedor de la lista.
+                 * Mostrar indicador de carga.
                  */
-                if (
-                    !Array.isArray(
-                        window.proveedoresInventario
-                    )
-                ) {
+                estadoCarga?.classList.remove(
+                    'hidden'
+                );
 
-                    await cargarProveedoresInventario();
+                try {
+
+                    /*
+                     * Cargar proveedores si todavía no están
+                     * disponibles.
+                     */
+                    if (
+                        !Array.isArray(
+                            window.proveedoresInventario
+                        )
+                    ) {
+
+                        await cargarProveedoresInventario();
+
+                    }
+
+                    /*
+                     * Intentar preseleccionar el proveedor
+                     * asociado a la lista.
+                     */
+                    const proveedorPreseleccionado =
+                        await preseleccionarProveedorInventarioPorNombre();
+
+                    /*
+                     * Si no existe proveedor asociado,
+                     * cargar la clasificación global.
+                     */
+                    if (!proveedorPreseleccionado) {
+
+                        await seleccionarProveedorInventario(
+                            ''
+                        );
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        'Error inicializando importador:',
+                        error
+                    );
+
+                } finally {
+
+                    /*
+                     * La clasificación ya terminó de cargar.
+                     * Ocultar el indicador.
+                     */
+                    estadoCarga?.classList.add(
+                        'hidden'
+                    );
 
                 }
-
-                /*
-                 * Después de cargar los proveedores,
-                 * seleccionamos automáticamente el proveedor
-                 * cuyo nombre coincide con la lista.
-                 */
-                preseleccionarProveedorInventarioPorNombre();
 
             };
 
@@ -6020,7 +6075,7 @@
         // PRESELECCIONAR PROVEEDOR DE LA LISTA
         // =========================================================
 
-        function preseleccionarProveedorInventarioPorNombre() {
+        async function preseleccionarProveedorInventarioPorNombre() {
 
             const inventarioApp =
                 document.getElementById(
@@ -6033,7 +6088,7 @@
                 ).trim();
 
             if (!nombreLista) {
-                return;
+                return false;
             }
 
             if (
@@ -6041,7 +6096,7 @@
                     window.proveedoresInventario
                 )
             ) {
-                return;
+                return false;
             }
 
             const normalizar =
@@ -6082,13 +6137,15 @@
              * una selección incorrecta.
              */
             if (!proveedor) {
-                return;
+                return false;
             }
 
-            seleccionarProveedorVisualInventario(
+            await seleccionarProveedorVisualInventario(
                 proveedor.id,
                 proveedor.nombre || ''
             );
+
+            return true;
 
         }
 
@@ -6527,16 +6584,21 @@
 
             limpiarFiltrosInventario();
 
-            if (!proveedorId) {
-                return;
-            }
-
             try {
 
+                /*
+                 * Con proveedor:
+                 * carga solamente su clasificación.
+                 *
+                 * Sin proveedor:
+                 * carga la clasificación global.
+                 */
+                const url = proveedorId
+                    ? `/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`
+                    : '/api/clasificacion';
+
                 const response =
-                    await fetch(
-                        `/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`
-                    );
+                    await fetch(url);
 
                 if (!response.ok) {
                     throw new Error(
@@ -6548,9 +6610,8 @@
                     await response.json();
 
                 /*
-    * Cargar Departamento y Marca con la
-    * clasificación recién obtenida.
-    */
+                 * Cargar todas las clasificaciones disponibles.
+                 */
                 poblarOpcionesInventario(
                     'departamento',
                     obtenerValoresClasificacion(
@@ -6583,6 +6644,9 @@
                     'Todas las marcas'
                 );
 
+                /*
+                 * Los cuatro filtros quedan disponibles.
+                 */
                 habilitarBuscadorInventario(
                     'buscar-departamento-inventario'
                 );
@@ -6607,7 +6671,9 @@
                 );
 
                 mostrarNotificacionInventario(
-                    'No se pudo cargar la clasificación del proveedor.'
+                    proveedorId
+                        ? 'No se pudo cargar la clasificación del proveedor.'
+                        : 'No se pudo cargar la clasificación general.'
                 );
 
             }
@@ -7401,21 +7467,8 @@
                     'inventario-proveedor'
                 )?.value;
 
-            if (!proveedorId) {
-
-                mostrarNotificacionInventario(
-                    'Selecciona un proveedor.'
-                );
-
-                return;
-
-            }
-
             const params =
                 new URLSearchParams({
-
-                    proveedor_id:
-                        proveedorId,
 
                     departamento:
                         document.getElementById(
@@ -7438,6 +7491,16 @@
                         )?.value || ''
 
                 });
+
+            // Solo enviamos proveedor_id cuando existe.
+            if (proveedorId) {
+
+                params.set(
+                    'proveedor_id',
+                    proveedorId
+                );
+
+            }
 
 
             try {

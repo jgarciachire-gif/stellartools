@@ -41,22 +41,88 @@ async def api_obtener_clasificacion(
     refresh_token: str = Cookie(None)
 ):
     # Verifica que exista una sesión válida.
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
 
-    # Si no hay usuario o proveedor, no consulta la BD.
-    if not user or not proveedor_id:
+    if not user:
         return []
 
-    # PostgreSQL devuelve directamente combinaciones únicas.
-    res = await config.supabase_async.rpc(
-        "obtener_clasificacion_proveedor",
-        {
-            "p_proveedor_id": proveedor_id
-        }
-    ).execute()
+    # =========================================================
+    # CLASIFICACIÓN POR PROVEEDOR
+    # =========================================================
+    if proveedor_id:
 
-    # Devuelve únicamente las combinaciones necesarias para los combos.
-    return res.data or []
+        res = await config.supabase_async.rpc(
+            "obtener_clasificacion_proveedor",
+            {
+                "p_proveedor_id": proveedor_id
+            }
+        ).execute()
+
+        return res.data or []
+
+    # =========================================================
+    # CLASIFICACIÓN GLOBAL
+    # =========================================================
+    # Se utiliza cuando Inventario no tiene proveedor
+    # seleccionado. Solo se cargan los campos necesarios
+    # para construir los filtros.
+    query = (
+        config.supabase_async
+        .table("productos")
+        .select(
+            "departamento, grupo, subgrupo, marca"
+        )
+    )
+
+    registros = []
+    bloque = 1000
+    inicio = 0
+
+    # PostgreSQL/Supabase puede limitar cada respuesta.
+    # Recorremos los productos por bloques.
+    while True:
+
+        res = await query.range(
+            inicio,
+            inicio + bloque - 1
+        ).execute()
+
+        datos = res.data or []
+
+        if not datos:
+            break
+
+        registros.extend(datos)
+
+        if len(datos) < bloque:
+            break
+
+        inicio += bloque
+
+    # Elimina combinaciones completamente duplicadas
+    # para no enviar información innecesaria al navegador.
+    unicos = []
+    vistos = set()
+
+    for item in registros:
+
+        clave = (
+            item.get("departamento") or "",
+            item.get("grupo") or "",
+            item.get("subgrupo") or "",
+            item.get("marca") or ""
+        )
+
+        if clave in vistos:
+            continue
+
+        vistos.add(clave)
+        unicos.append(item)
+
+    return unicos
 
 @router.get("/api/productos/importar-analisis")
 async def api_importar_productos_analisis(
@@ -71,17 +137,52 @@ async def api_importar_productos_analisis(
     # Valida al usuario antes de consultar productos.
     user = await obtener_usuario_actual(access_token, refresh_token)
 
-    # Evita consultas incompletas.
-    if not user or not proveedor_id:
+    # =========================================================
+    # VALIDAR SESIÓN
+    # =========================================================
+
+    if not user:
         return []
 
-    # Solicita únicamente las columnas utilizadas por Análisis de Pedido.
+    # =========================================================
+    # EVITAR UNA IMPORTACIÓN GLOBAL SIN FILTROS
+    # =========================================================
+    # Sin proveedor, debe existir al menos una clasificación.
+    # Esto evita que un clic accidental intente cargar toda
+    # la base de productos.
+    hay_filtro_clasificacion = any(
+        valor and valor.strip()
+        for valor in (
+            departamento,
+            grupo,
+            subgrupo,
+            marca
+        )
+    )
+
+    if not proveedor_id and not hay_filtro_clasificacion:
+        return []
+
+    # =========================================================
+    # CONSULTA DE PRODUCTOS
+    # =========================================================
+
     query = (
         config.supabase_async
         .table("productos")
-        .select("codigo_st, descripcion, unidad_manejo, precio")
-        .eq("proveedor_id", proveedor_id)
+        .select(
+            "codigo_st, descripcion, "
+            "unidad_manejo, precio"
+        )
     )
+
+    # Si existe proveedor, mantenemos exactamente
+    # el comportamiento anterior.
+    if proveedor_id:
+        query = query.eq(
+            "proveedor_id",
+            proveedor_id
+        )
 
     # Aplica el filtro de departamento cuando exista.
     if departamento and departamento.strip():
