@@ -319,7 +319,9 @@
 
         <!-- FORMULARIO -->
 
-        <form method="POST" action="/inventario/crear" class="px-6 py-6 space-y-5">
+        <form id="form-nuevo-inventario" method="POST" action="/inventario/crear" class="px-6 py-6 space-y-5">
+
+            <input type="hidden" id="clave-creacion-inventario" name="clave_creacion" value="">
 
             <!-- NOMBRE DE LA LISTA = PROVEEDOR -->
 
@@ -476,11 +478,11 @@
 
                 </button>
 
-                <button type="submit" class="px-5 py-2.5 rounded-xl
-                           bg-slate-900 hover:bg-slate-700
-                           text-white
-                           font-semibold
-                           transition-colors">
+                <button type="submit" id="btn-crear-inventario" class="px-5 py-2.5 rounded-xl
+                                bg-slate-900 hover:bg-slate-700
+                                text-white
+                                font-semibold
+                                transition-colors">
 
                     <i class="fa-solid fa-plus mr-1"></i>
                     Crear
@@ -496,6 +498,112 @@
 </div>
 
 <script>
+
+    // =========================================================
+    // PROTECCIÓN CONTRA DOBLE ENVÍO — CREAR INVENTARIO
+    // =========================================================
+
+    (function () {
+
+        const formulario =
+            document.getElementById(
+                'form-nuevo-inventario'
+            );
+
+        const boton =
+            document.getElementById(
+                'btn-crear-inventario'
+            );
+
+        const campoClave =
+            document.getElementById(
+                'clave-creacion-inventario'
+            );
+
+        if (
+            !formulario ||
+            !boton ||
+            !campoClave
+        ) {
+            return;
+        }
+
+        /*
+         * Generar una clave única para ESTE intento
+         * de creación.
+         */
+        function generarClaveCreacion() {
+
+            if (
+                window.crypto &&
+                typeof window.crypto.randomUUID === 'function'
+            ) {
+                return window.crypto.randomUUID();
+            }
+
+            /*
+             * Compatibilidad de respaldo.
+             */
+            return (
+                Date.now().toString(36) +
+                '-' +
+                Math.random()
+                    .toString(36)
+                    .substring(2)
+            );
+
+        }
+
+        /*
+         * Crear la clave cuando se carga el formulario.
+         */
+        campoClave.value =
+            generarClaveCreacion();
+
+        formulario.addEventListener(
+            'submit',
+            function (e) {
+
+                /*
+                 * Si ya se está enviando,
+                 * impedir cualquier segundo envío.
+                 */
+                if (
+                    formulario.dataset.enviando === '1'
+                ) {
+                    e.preventDefault();
+                    return;
+                }
+
+                /*
+                 * Marcar inmediatamente como enviado.
+                 */
+                formulario.dataset.enviando = '1';
+
+                /*
+                 * Deshabilitar botón.
+                 */
+                boton.disabled = true;
+
+                boton.classList.add(
+                    'opacity-60',
+                    'cursor-not-allowed'
+                );
+
+                /*
+                 * Cambiar visualmente el contenido
+                 * para informar al usuario.
+                 */
+                boton.innerHTML = `
+                <i class="fa-solid fa-spinner
+                          fa-spin mr-1"></i>
+                Creando...
+            `;
+
+            }
+        );
+
+    })();
 
     // =========================================================
     // ORDENAMIENTO DE LA LISTA DE INVENTARIOS

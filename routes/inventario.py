@@ -179,6 +179,7 @@ async def crear_inventario(
     nombre: str = Form(...),
     realizado_por: str = Form(...),
     tienda: str = Form(...),
+    clave_creacion: str = Form(...),
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
@@ -243,6 +244,12 @@ async def crear_inventario(
             detail="La tienda es obligatoria."
         )
 
+    if not clave_creacion:
+        raise HTTPException(
+            status_code=400,
+            detail="No se pudo validar la solicitud de creación."
+        )
+    
     try:
         # El usuario creador se obtiene del token,
         # nunca del formulario ni de JavaScript.
@@ -251,7 +258,8 @@ async def crear_inventario(
             "realizado_por": realizado_por,
             "tienda": tienda,
             "estado": "borrador",
-            "usuario_creador_id": str(user.id)
+            "usuario_creador_id": str(user.id),
+            "clave_creacion": clave_creacion
         }
 
         res = await (
