@@ -685,6 +685,7 @@
                                bg-slate-50
                                text-xs font-normal
                                text-slate-600
+                               bg-transparent
                                focus:outline-none
                                cursor-default
                                border-0">
@@ -5392,6 +5393,347 @@
 
                 }
             );
+        // =========================================================
+        // PEGADO MASIVO DE CÓDIGOS
+        // =========================================================
+
+        async function manejarPegadoCodigosInventario(
+            e,
+            inputActual
+        ) {
+
+            const clipboardData =
+                e.clipboardData ||
+                window.clipboardData;
+
+            if (!clipboardData) {
+                return;
+            }
+
+            const pastedData =
+                clipboardData.getData('Text');
+
+            const lineas =
+                String(pastedData || '')
+                    .split(/\r\n|\n|\r/)
+                    .map(linea => linea.trim())
+                    .filter(Boolean);
+
+            /*
+             * Una sola línea:
+             * dejamos que el comportamiento normal continúe.
+             */
+            if (lineas.length <= 1) {
+                return;
+            }
+
+            e.preventDefault();
+            e.stopPropagation();
+
+
+            // =====================================================
+            // 1. NORMALIZAR Y DEDUPLICAR
+            // =====================================================
+
+            const codigosPegados = [
+                ...new Set(
+                    lineas
+                        .map(codigo => {
+
+                            let codigoLimpio =
+                                String(codigo || '')
+                                    .trim();
+
+                            if (/^\d+$/.test(codigoLimpio)) {
+
+                                codigoLimpio =
+                                    codigoLimpio.padStart(
+                                        6,
+                                        '0'
+                                    );
+
+                            }
+
+                            return codigoLimpio;
+
+                        })
+                        .filter(Boolean)
+                )
+            ];
+
+
+            if (codigosPegados.length === 0) {
+                return;
+            }
+
+
+            // =====================================================
+            // 2. CÓDIGOS QUE YA EXISTEN EN EL INVENTARIO
+            // =====================================================
+
+            const codigosExistentes =
+                new Set(
+                    Array.from(
+                        document.querySelectorAll(
+                            '#filas-tabla-inventario .inp-codigo'
+                        )
+                    )
+                        .map(input => {
+
+                            let codigo =
+                                String(
+                                    input.value || ''
+                                ).trim();
+
+                            if (/^\d+$/.test(codigo)) {
+
+                                codigo =
+                                    codigo.padStart(
+                                        6,
+                                        '0'
+                                    );
+
+                            }
+
+                            return codigo;
+
+                        })
+                        .filter(Boolean)
+                );
+
+
+            const codigosPendientes =
+                codigosPegados.filter(
+                    codigo =>
+                        !codigosExistentes.has(codigo)
+                );
+
+
+            if (codigosPendientes.length === 0) {
+                return;
+            }
+
+
+            // =====================================================
+            // 3. UNA SOLA CONSULTA PARA TODOS LOS CÓDIGOS
+            // =====================================================
+
+            let productos = [];
+
+            try {
+
+                const response =
+                    await fetch(
+                        '/api/productos/buscar-lote',
+                        {
+                            method: 'POST',
+
+                            headers: {
+                                'Content-Type':
+                                    'application/json'
+                            },
+
+                            body: JSON.stringify({
+                                codigos:
+                                    codigosPendientes
+                            })
+                        }
+                    );
+
+
+                const resultado =
+                    await response.json();
+
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        resultado?.error ||
+                        'No se pudieron consultar los productos.'
+                    );
+
+                }
+
+
+                productos =
+                    Array.isArray(resultado)
+                        ? resultado
+                        : [];
+
+
+            } catch (error) {
+
+                console.error(
+                    'Error en búsqueda masiva de productos del inventario:',
+                    error
+                );
+
+                mostrarNotificacionInventario(
+                    'No se pudieron cargar los códigos pegados.',
+                    'error'
+                );
+
+                return;
+            }
+
+
+            // =====================================================
+            // 4. MAPEAR PRODUCTOS
+            // =====================================================
+
+            const productosMap =
+                new Map(
+                    productos.map(producto => {
+
+                        let codigo =
+                            String(
+                                producto.codigo_st ||
+                                producto.codigo ||
+                                ''
+                            ).trim();
+
+                        if (/^\d+$/.test(codigo)) {
+
+                            codigo =
+                                codigo.padStart(
+                                    6,
+                                    '0'
+                                );
+
+                        }
+
+                        return [
+                            codigo,
+                            producto
+                        ];
+
+                    })
+                );
+
+
+            // =====================================================
+            // 5. EMPEZAR DESDE LA FILA DONDE SE PEGÓ
+            // =====================================================
+
+            let trActual =
+                inputActual.closest('tr');
+
+
+            // =====================================================
+            // 6. RELLENAR FILAS
+            // =====================================================
+
+            for (
+                const codigo
+                of codigosPendientes
+            ) {
+
+                /*
+                 * Si llegamos al final de las filas,
+                 * creamos una nueva.
+                 */
+                if (!trActual) {
+
+                    trActual =
+                        agregarFilaInventario();
+
+                }
+
+
+                if (!trActual) {
+                    break;
+                }
+
+
+                const inpCodigo =
+                    trActual.querySelector(
+                        '.inp-codigo'
+                    );
+
+                const inpDesc =
+                    trActual.querySelector(
+                        '.inp-desc'
+                    );
+
+
+                if (!inpCodigo || !inpDesc) {
+                    break;
+                }
+
+
+                const producto =
+                    productosMap.get(codigo);
+
+
+                // -------------------------------------------------
+                // CÓDIGO
+                // -------------------------------------------------
+
+                inpCodigo.value =
+                    codigo;
+
+                trActual.dataset.codigo =
+                    codigo;
+
+
+                // -------------------------------------------------
+                // PRODUCTO ENCONTRADO
+                // -------------------------------------------------
+
+                if (producto) {
+
+                    inpDesc.value =
+                        String(
+                            producto.descripcion ||
+                            ''
+                        ).trim();
+
+
+                } else {
+
+                    inpDesc.value =
+                        'PRODUCTO NO ENCONTRADO';
+
+                }
+
+
+                /*
+                 * Avanzar a la siguiente fila.
+                 */
+                trActual =
+                    trActual.nextElementSibling;
+
+
+                /*
+                 * Si no existe siguiente fila,
+                 * la próxima iteración de este mismo
+                 * ciclo la creará automáticamente.
+                 */
+
+            }
+
+
+            // =====================================================
+            // 7. ACTUALIZAR VISTA MÓVIL
+            // =====================================================
+
+            if (
+                typeof renderizarProductosMovil ===
+                'function'
+            ) {
+
+                renderizarProductosMovil();
+
+            }
+
+
+            // =====================================================
+            // 8. RECALCULAR TOTAL
+            // =====================================================
+
+            recalcularTotalEmpaques();
+
+        }
 
         function agregarFilaInventario(
             codigo = '',
@@ -5564,6 +5906,25 @@
                 tr.querySelector(
                     '.inp-codigo'
                 );
+            // ---------------------------------------------------------
+            // PEGADO MASIVO DE CÓDIGOS
+            // ---------------------------------------------------------
+
+            if (inputCodigo) {
+
+                inputCodigo.addEventListener(
+                    'paste',
+                    function (e) {
+
+                        manejarPegadoCodigosInventario(
+                            e,
+                            inputCodigo
+                        );
+
+                    }
+                );
+
+            }
 
 
 
@@ -5571,7 +5932,60 @@
             // CANTIDAD
             // ---------------------------------------------------------
 
+            // ---------------------------------------------------------
+            // CANTIDAD
+            // ---------------------------------------------------------
+
             if (inputCantidad) {
+
+                /*
+                 * Evitar cantidades como:
+                 * 01
+                 * 02
+                 * 03
+                 *
+                 * Si el campo contiene únicamente 0 y el usuario
+                 * comienza escribiendo un número distinto de cero,
+                 * reemplazamos directamente ese 0.
+                 */
+                inputCantidad.addEventListener(
+                    'keydown',
+                    function (e) {
+
+                        const valorActual =
+                            String(
+                                inputCantidad.value || ''
+                            ).trim();
+
+                        /*
+                         * Si la cantidad actual es exactamente 0
+                         * y se escribe un dígito del 1 al 9,
+                         * eliminamos el 0 antes de que el navegador
+                         * inserte el nuevo número.
+                         */
+                        if (
+                            valorActual === '0' &&
+                            /^[1-9]$/.test(e.key)
+                        ) {
+                            inputCantidad.value = '';
+
+                            return;
+                        }
+
+                        /*
+                         * Evitar 00, 000, etc.
+                         */
+                        if (
+                            valorActual === '0' &&
+                            e.key === '0'
+                        ) {
+                            e.preventDefault();
+
+                            return;
+                        }
+
+                    }
+                );
 
                 inputCantidad.addEventListener(
                     'input',
@@ -5628,63 +6042,136 @@
                             inputCantidad.blur();
 
                             /*
-                             * Buscar la siguiente fila REAL.
+                             * Buscar únicamente una fila siguiente
+                             * que ya exista.
+                             *
+                             * NO se crea ninguna fila nueva.
                              */
-                            let siguienteFila =
+                            const siguienteFila =
                                 tr.nextElementSibling;
 
                             /*
-                             * Si estamos en la última fila,
-                             * crear automáticamente una nueva.
-                             */
-                            if (!siguienteFila) {
-
-                                if (
-                                    typeof window.agregarFilaInventario ===
-                                    'function'
-                                ) {
-                                    siguienteFila =
-                                        window.agregarFilaInventario();
-                                }
-
-                            }
-
-                            /*
-                             * Si por alguna razón no se pudo crear
-                             * la fila, no continuamos.
+                             * Si no existe una siguiente fila,
+                             * permanecemos en la fila actual.
                              */
                             if (!siguienteFila) {
                                 return;
                             }
 
+                            /*
+                             * La siguiente fila debe tener un código
+                             * ya establecido.
+                             */
                             const siguienteCodigo =
                                 siguienteFila.querySelector(
                                     '.inp-codigo'
                                 );
 
-                            if (!siguienteCodigo) {
+                            const codigo =
+                                String(
+                                    siguienteCodigo?.value || ''
+                                ).trim();
+
+                            /*
+                             * Si la siguiente fila no tiene código,
+                             * no avanzamos.
+                             */
+                            if (!codigo) {
                                 return;
                             }
 
+                            /*
+                             * Buscar la celda CANTIDAD de la
+                             * siguiente fila.
+                             */
+                            const siguienteCantidad =
+                                siguienteFila.querySelector(
+                                    '.inp-cantidad'
+                                );
+
+                            if (!siguienteCantidad) {
+                                return;
+                            }
+
+                            /*
+                            * Resaltar la nueva fila activa.
+                            */
+                            resaltarFilaInventario(
+                                siguienteFila
+                            );
+
+                            /*
+                             * Enfocar la cantidad de la siguiente fila.
+                             */
                             if (
                                 typeof window.enfocarYSombrearCelda ===
                                 'function'
                             ) {
                                 window.enfocarYSombrearCelda(
-                                    siguienteCodigo
+                                    siguienteCantidad
                                 );
                             }
 
-                            siguienteCodigo.focus();
+                            siguienteCantidad.focus();
 
                             try {
-                                siguienteCodigo.select();
+                                siguienteCantidad.select();
                             } catch (_) { }
+
+                            // ---------------------------------------------------------
+                            // RESALTAR FILA ACTIVA
+                            // ---------------------------------------------------------
+
+                            /*
+                             * Quitar el resaltado de cualquier otra fila.
+                             */
+                            document
+                                .querySelectorAll('#filas-tabla-inventario tr')
+                                .forEach(function (fila) {
+
+                                    fila.classList.remove(
+                                        'bg-slate-200'
+                                    );
+
+                                });
+
+                            /*
+                             * Resaltar suavemente la fila que estamos editando.
+                             */
+                            siguienteFila.classList.add(
+                                'bg-slate-200'
+                            );
 
                         }
                     );
 
                 }
+            }
+            function resaltarFilaInventario(fila) {
+
+                if (!fila) {
+                    return;
+                }
+
+                /*
+                 * Quitar el resaltado anterior.
+                 */
+                document
+                    .querySelectorAll('#filas-tabla-inventario tr')
+                    .forEach(function (otraFila) {
+
+                        otraFila.classList.remove(
+                            'bg-slate-200'
+                        );
+
+                    });
+
+                /*
+                 * Resaltar la fila activa.
+                 */
+                fila.classList.add(
+                    'bg-slate-200'
+                );
             }
 
 
