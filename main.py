@@ -58,6 +58,7 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
         "/recuperar-password",
         "/reset-password",
         "/logout"
+        "/service-worker.js"
     ]
     
     path = request.url.path  # Obtiene la ruta actual solicitada por el usuario
