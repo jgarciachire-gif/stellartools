@@ -13,11 +13,12 @@
 '/perfil': 'Perfil'
 } %}
 {% set active_app = app_map.get(request.url.path) %}
+{% set background_image = asset_url('fondo-login.jpg') %}
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="icon" type="image/svg+xml" href="{{ asset_url('favicon.svg') }}">
     <title>StellarTools+</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -30,7 +31,7 @@
 </head>
 
 <body class="bg-cover bg-center bg-no-repeat bg-fixed text-slate-800 min-h-screen flex flex-col font-sans antialiased"
-    style="background-image: url('/static/fondo-login.jpg');">
+    style='background-image: url("{{ background_image }}");'>
 
     <!-- Banner superior con gradiente elegante de izquierda a derecha -->
     <header
