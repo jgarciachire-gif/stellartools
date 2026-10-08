@@ -120,28 +120,21 @@ async def obtener_usuario_actual(
 
 # Configuración del motor de plantillas HTML
 # Configuración del motor de plantillas HTML
+# Configuración del motor de plantillas HTML
 templates = Jinja2Templates(directory="templates")
 
 
 # ============================================================
 # VERSIONADO AUTOMÁTICO DE RECURSOS ESTÁTICOS
 # ============================================================
-#
-# En Vercel utilizamos el hash del commit de Git como versión.
-#
-# Ejemplo:
-# /static/js/analisis/analisis-productos.js?v=8f31c2a...
-#
-# Esto permite que cada commit genere una URL diferente
-# sin cambiar el nombre físico de los archivos.
-#
-# En desarrollo local se utiliza "dev".
-#
+
+import time
+
 
 ASSET_VERSION = (
     os.getenv("VERCEL_GIT_COMMIT_SHA")
     or os.getenv("ASSET_VERSION")
-    or "dev"
+    or str(int(time.time()))
 )
 
 
@@ -153,7 +146,7 @@ def asset_url(path: str) -> str:
         asset_url("js/calendario.js")
 
     devuelve:
-        /static/js/calendario.js?v=<hash>
+        /static/js/calendario.js?v=<version>
     """
 
     path = str(path).lstrip("/")
@@ -162,7 +155,7 @@ def asset_url(path: str) -> str:
 
 
 # Hace la función disponible directamente desde cualquier
-# plantilla Jinja2, sin tener que enviarla en cada contexto.
+# plantilla Jinja2.
 templates.env.globals["asset_url"] = asset_url
 
 # Filtros para plantillas Jinja2

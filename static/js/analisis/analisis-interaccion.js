@@ -1150,15 +1150,38 @@
             );
         }
 
-        if (campo === 'pre') {
-            if (typeof recancularFilaConInventario === 'function') {
-                recancularFilaConInventario(input);
+        /*
+ * PRE. e INV. EMP. afectan directamente
+ * el cálculo del sugerido.
+ *
+ * Por eso ambos deben ejecutar la misma
+ * función al pegar datos.
+ */
+        if (
+            campo === 'pre'
+            || campo === 'inv-emp'
+        ) {
+            if (
+                typeof recancularFilaConInventario
+                === 'function'
+            ) {
+                recancularFilaConInventario(
+                    input
+                );
             }
         }
 
-        if (campo === 'emp' || campo === 'costo') {
-            if (typeof calcularFila === 'function') {
-                calcularFila(input);
+        if (
+            campo === 'emp'
+            || campo === 'costo'
+        ) {
+            if (
+                typeof calcularFila
+                === 'function'
+            ) {
+                calcularFila(
+                    input
+                );
             }
         }
 
