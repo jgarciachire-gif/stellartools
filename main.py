@@ -1,6 +1,9 @@
 import os
 from fastapi import FastAPI, Request  # Framework principal web
-from fastapi.responses import RedirectResponse  # Redirección HTTP para bloqueo de rutas desprotegidas
+from fastapi.responses import (
+    RedirectResponse,
+    FileResponse
+)
 from fastapi.staticfiles import StaticFiles  # Soporte de archivos estáticos
 from starlette.middleware.sessions import SessionMiddleware  # Middleware para manejo de sesiones
 from supabase import create_async_client, ClientOptions  # Importa cliente asíncrono y opciones de timeout
@@ -28,15 +31,17 @@ app = FastAPI(title="Control de Compras", version="2.0")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-
-from fastapi.responses import FileResponse
-
-@app.get("/service-worker.js", include_in_schema=False)
+@app.get(
+    "/service-worker.js",
+    include_in_schema=False
+)
 async def service_worker():
     return FileResponse(
         "static/service-worker.js",
         media_type="application/javascript"
     )
+
+from fastapi.responses import FileResponse
 
 @app.on_event("startup")
 async def startup_event():
