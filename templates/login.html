@@ -221,7 +221,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', function () {
                 navigator.serviceWorker.register(
-                    '/static/service-worker.js',
+                    '/service-worker.js',
                     { scope: '/' }
                 ).catch(function (error) {
                     console.error(

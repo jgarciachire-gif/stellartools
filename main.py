@@ -28,6 +28,16 @@ app = FastAPI(title="Control de Compras", version="2.0")
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+
+from fastapi.responses import FileResponse
+
+@app.get("/service-worker.js", include_in_schema=False)
+async def service_worker():
+    return FileResponse(
+        "static/service-worker.js",
+        media_type="application/javascript"
+    )
+
 @app.on_event("startup")
 async def startup_event():
     # Garantiza la preparación de la instancia asíncrona al levantar FastAPI

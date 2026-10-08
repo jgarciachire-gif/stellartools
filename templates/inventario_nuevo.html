@@ -333,6 +333,10 @@
                        shadow-xl
                        overflow-hidden">
 
+
+                    {% if inventario.estado == 'borrador' %}
+
+
                     <!-- IMPORTAR -->
                     <button type="button" id="btn-importar-productos-movil" class="w-full
                            flex
@@ -430,6 +434,10 @@
                         </span>
 
                     </button>
+
+                    {% endif %}
+
+
 
 
                     <!-- ELIMINAR INVENTARIO -->
