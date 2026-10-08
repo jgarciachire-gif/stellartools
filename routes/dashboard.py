@@ -36,44 +36,85 @@ async def dashboard(
         .table("ordenes_compra")
         .select(
             "id, proveedor, tienda_destino, numero_orden, "
-            "fecha_recepcion, dias_inventario, proveedores(nombre)"
+            "fecha_recepcion, dias_inventario, proveedores(nombre), "
+            "detalles_productos(grupo)"
         )
         .eq("usuario_id", user.id)
         .order("id", desc=False)
         .execute()
     )
-    
+
     proveedores_desglose = {}
-    hoy = datetime.now().date()  
-    
+    hoy = datetime.now().date()
+
     if res_oc.data:
         agrupado = {}
+
+        # =========================================================
+        # AGRUPACIÓN: PROVEEDOR + GRUPO + TIENDA
+        # =========================================================
         for row in res_oc.data:
             prov_obj = row.get("proveedores")
+
             if isinstance(prov_obj, dict) and prov_obj.get("nombre"):
                 prov = prov_obj.get("nombre")
-            elif isinstance(prov_obj, list) and len(prov_obj) > 0 and isinstance(prov_obj[0], dict):
+            elif (
+                isinstance(prov_obj, list)
+                and len(prov_obj) > 0
+                and isinstance(prov_obj[0], dict)
+            ):
                 prov = prov_obj[0].get("nombre")
             else:
-                prov = row.get('proveedor') or "Sin Proveedor"
+                prov = row.get("proveedor") or "Sin Proveedor"
 
-            tienda = row.get('tienda_destino') or "Sin Tienda Asignada"
-            
-            key = (prov, tienda)
-            if key not in agrupado:
-                agrupado[key] = []
-            agrupado[key].append(row) 
+            tienda = row.get("tienda_destino") or "Sin Tienda Asignada"
 
-        for (prov, tienda), lista_ocs in agrupado.items():
+            detalles = row.get("detalles_productos") or []
+
+            # Una misma OC puede pertenecer a varios grupos.
+            grupos = {
+                str(detalle.get("grupo") or "Sin Grupo").strip() or "Sin Grupo"
+                for detalle in detalles
+            }
+
+            # Compatibilidad con OCs antiguas sin detalles/grupo.
+            if not grupos:
+                grupos = {"Sin Grupo"}
+
+            for grupo in grupos:
+                key = (prov, grupo, tienda)
+
+                if key not in agrupado:
+                    agrupado[key] = []
+
+                agrupado[key].append(row)
+
+        # =========================================================
+        # CALCULAR ESTADO PARA CADA
+        # PROVEEDOR + GRUPO + TIENDA
+        # =========================================================
+        for (prov, grupo, tienda), lista_ocs in agrupado.items():
+
             if prov not in proveedores_desglose:
                 proveedores_desglose[prov] = {}
 
+            if grupo not in proveedores_desglose[prov]:
+                proveedores_desglose[prov][grupo] = {}
+
             ocs_recibidas = []
             ocs_enviadas = []
-            
+
             for oc in lista_ocs:
-                f_rec_raw = str(oc.get('fecha_recepcion') or "").strip()
-                tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
+                f_rec_raw = str(
+                    oc.get("fecha_recepcion") or ""
+                ).strip()
+
+                tiene_fecha_rec = (
+                    f_rec_raw != ""
+                    and f_rec_raw.lower()
+                    not in ["none", "nan", "nat", "null"]
+                )
+
                 if tiene_fecha_rec:
                     ocs_recibidas.append(oc)
                 else:
@@ -81,55 +122,104 @@ async def dashboard(
 
             if ocs_recibidas:
                 oc_seleccionada = ocs_recibidas[-1]
-                hay_nueva_enviada = any(oc.get('id', 0) > oc_seleccionada.get('id', 0) for oc in ocs_enviadas)
-                estatus_oc = "Nueva OC enviada" if hay_nueva_enviada else "Despacho Recibido"
-            else:
+
+                hay_nueva_enviada = any(
+                    oc.get("id", 0) > oc_seleccionada.get("id", 0)
+                    for oc in ocs_enviadas
+                )
+
+                estatus_oc = (
+                    "Nueva OC enviada"
+                    if hay_nueva_enviada
+                    else "Despacho Recibido"
+                )
+            elif ocs_enviadas:
                 oc_seleccionada = ocs_enviadas[-1]
                 estatus_oc = "Enviada"
+            else:
+                continue
 
-            f_rec_raw = str(oc_seleccionada.get('fecha_recepcion') or "").strip()
-            tiene_fecha_rec = f_rec_raw != "" and f_rec_raw.lower() not in ['none', 'nan', 'nat', 'null']
-            dias_inv_totales = int(oc_seleccionada.get('dias_inventario') or 15)
+            f_rec_raw = str(
+                oc_seleccionada.get("fecha_recepcion") or ""
+            ).strip()
+
+            tiene_fecha_rec = (
+                f_rec_raw != ""
+                and f_rec_raw.lower()
+                not in ["none", "nan", "nat", "null"]
+            )
+
+            dias_inv_totales = int(
+                oc_seleccionada.get("dias_inventario") or 15
+            )
 
             if tiene_fecha_rec:
                 try:
-                    f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
+                    f_rec = datetime.strptime(
+                        f_rec_raw,
+                        "%Y-%m-%d"
+                    ).date()
+
                     f_rec_str = f_rec.strftime("%d/%m/%Y")
-                    fecha_agotamiento = f_rec + timedelta(days=dias_inv_totales)
-                    dias_restantes = (fecha_agotamiento - hoy).days
-                    
+
+                    fecha_agotamiento = (
+                        f_rec + timedelta(days=dias_inv_totales)
+                    )
+
+                    dias_restantes = (
+                        fecha_agotamiento - hoy
+                    ).days
+
                     if dias_restantes <= 0:
                         estatus_inv = "Reponer inventario"
                         color_inv = "text-red-700 bg-red-100"
-                        dias_mostrar = f"Vencido hace {abs(dias_restantes)}d"
+                        dias_mostrar = (
+                            f"Vencido hace {abs(dias_restantes)}d"
+                        )
+
                     elif dias_restantes <= 2:
                         estatus_inv = "Próximo a Agotar"
                         color_inv = "text-amber-700 bg-amber-100"
-                        dias_mostrar = f"Quedan {dias_restantes}d"
+                        dias_mostrar = (
+                            f"Quedan {dias_restantes}d"
+                        )
+
                     else:
                         estatus_inv = "Stock OK"
                         color_inv = "text-emerald-700 bg-emerald-100"
-                        dias_mostrar = f"Quedan {dias_restantes}d"
+                        dias_mostrar = (
+                            f"Quedan {dias_restantes}d"
+                        )
+
                 except ValueError:
                     f_rec_str = f_rec_raw
                     estatus_inv = "Error de Fecha"
                     color_inv = "text-slate-600 bg-slate-100"
-                    dias_mostrar = f"{dias_inv_totales} totales"
+                    dias_mostrar = (
+                        f"{dias_inv_totales} totales"
+                    )
+
             else:
                 f_rec_str = "-"
                 estatus_inv = "Esperando Recepción"
                 color_inv = "text-blue-700 bg-blue-100"
                 dias_mostrar = "Sin iniciar"
 
-            if estatus_oc in ["Despacho Recibido", "Stock OK"]:
+            if estatus_oc in [
+                "Despacho Recibido",
+                "Stock OK"
+            ]:
                 color_oc = "text-emerald-700 bg-emerald-100"
+
             elif estatus_oc == "Nueva OC enviada":
                 color_oc = "text-blue-700 bg-blue-100"
+
             else:
                 color_oc = "text-slate-700 bg-slate-100"
 
-            proveedores_desglose[prov][tienda] = {
-                "ultima_oc": oc_seleccionada.get('numero_orden'),
+            proveedores_desglose[prov][grupo][tienda] = {
+                "grupo": grupo,
+                "ultima_oc": oc_seleccionada.get("numero_orden"),
                 "fecha_recepcion": f_rec_str,
                 "estatus_oc": estatus_oc,
                 "color_oc": color_oc,

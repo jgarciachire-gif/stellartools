@@ -36,7 +36,7 @@
                     <!-- Renderizado dinámico de badges/etiquetas -->
                     <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
 
-                    <input type="text" id="busqueda_dashboard" placeholder="Buscar por Proveedor, Tienda..."
+                    <input type="text" id="busqueda_dashboard" placeholder="Buscar por Proveedor, Grupo, Tienda..."
                         class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
                 </div>
 
@@ -82,63 +82,128 @@
 
         <div class="divide-y divide-slate-100" id="contenedor_proveedores">
             <!-- 1. Orden alfabético A-Z por nombre de proveedor mediante Jinja2 -->
-            {% for prov_nombre, tiendas in proveedores_desglose|dictsort %}
+            {% for prov_nombre, grupos in proveedores_desglose|dictsort %}
             <details class="group prov-group" data-prov="{{ prov_nombre }}">
                 <summary
                     class="p-4 bg-slate-50/50 hover:bg-slate-100/80 cursor-pointer flex justify-between items-center transition-colors select-none">
                     <div class="flex items-center gap-3">
                         <i
                             class="fa-solid fa-chevron-right text-xs text-slate-400 group-open:rotate-90 transition-transform"></i>
-                        <span class="font-medium text-blue-800 text-base">{{ prov_nombre }}</span>
+                        <span class="font-medium text-blue-800 text-base">
+                            {{ prov_nombre }}
+                        </span>
                     </div>
                 </summary>
-                <div class="p-4 bg-white border-t border-slate-100 overflow-x-auto">
-                    <table class="tabla-dashboard w-full text-left text-xs">
-                        <thead>
-                            <tr class="border-b border-slate-200 text-slate-400 font-semibold">
-                                <th class="py-2 px-3">Tienda Destino</th>
-                                <th class="py-2 px-3">Última OC</th>
-                                <th class="py-2 px-3">Fecha Recepción</th>
-                                <th class="py-2 px-3">Estatus OC</th>
-                                <th class="py-2 px-3 text-center">Días Inventario</th>
-                                <th class="py-2 px-3">Estatus Inventario</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100 font-medium">
-                            {% for tienda_nombre, t_info in tiendas.items() %}
-                            <tr class="hover:bg-slate-50 tienda-row" data-tienda="{{ tienda_nombre }}"
-                                data-estatus-inv="{{ t_info.estatus_inv }}">
-                                <td class="py-3 px-3 font-bold text-slate-800">{{ tienda_nombre }}</td>
 
-                                <!-- 2. Número de orden clickeable para abrir el modal flotante -->
-                                <td class="py-3 px-3 font-semibold font-medium">
-                                    <button type="button"
-                                        onclick="abrirModalOC('{{ t_info.ultima_oc }}', '{{ prov_nombre }}', '{{ tienda_nombre }}', '{{ t_info.dias_inventario }}', '{{ t_info.estatus_inv }}')"
-                                        class="text-blue-600 hover:text-blue-800 hover:underline focus:outline-none transition-colors cursor-pointer"
-                                        title="Ver detalle de {{ t_info.ultima_oc }}">
-                                        {{ t_info.ultima_oc }}
-                                    </button>
-                                </td>
+                <div class="p-4 bg-white border-t border-slate-100">
 
-                                <td class="py-3 px-3 text-slate-600">{{ t_info.fecha_recepcion }}</td>
-                                <td class="py-3 px-3"><span
-                                        class="px-2 py-1 rounded text-xs font-medium {{ t_info.color_oc }}">
-                                        {{ t_info.estatus_oc }}
-                                    </span>
-                                </td>
-                                <td class="py-3 px-3 text-center font-bold text-slate-800">{{ t_info.dias_inventario }}
-                                </td>
-                                <td class="py-3 px-3"><span
-                                        class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">{{
-                                        t_info.estatus_inv }}</span></td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
+                    {% for grupo_nombre, tiendas in grupos|dictsort %}
+
+                    <details class="grupo-group mb-3 border border-slate-200 rounded-xl overflow-hidden"
+                        data-grupo="{{ grupo_nombre }}">
+
+                        <summary
+                            class="grupo-summary px-4 py-3 bg-slate-50 hover:bg-slate-100 cursor-pointer flex items-center gap-3 select-none">
+
+                            <i
+                                class="grupo-chevron fa-solid fa-chevron-right text-[10px] text-slate-400 transition-transform">
+                            </i>
+
+                            <span class="font-semibold text-slate-700">
+                                {{ grupo_nombre }}
+                            </span>
+
+                        </summary>
+
+                        <div class="overflow-x-auto">
+
+                            <table class="tabla-dashboard w-full text-left text-xs">
+
+                                <thead>
+                                    <tr class="border-b border-slate-200 text-slate-400 font-semibold">
+                                        <th class="py-2 px-3">Tienda Destino</th>
+                                        <th class="py-2 px-3">Última OC</th>
+                                        <th class="py-2 px-3">Fecha Recepción</th>
+                                        <th class="py-2 px-3">Estatus OC</th>
+                                        <th class="py-2 px-3 text-center">Días Inventario</th>
+                                        <th class="py-2 px-3">Estatus Inventario</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody class="divide-y divide-slate-100 font-medium">
+
+                                    {% for tienda_nombre, t_info in tiendas.items() %}
+
+                                    <tr class="hover:bg-slate-50 tienda-row" data-tienda="{{ tienda_nombre }}"
+                                        data-estatus-inv="{{ t_info.estatus_inv }}">
+
+                                        <td class="py-3 px-3 font-bold text-slate-800">
+                                            {{ tienda_nombre }}
+                                        </td>
+
+                                        <td class="py-3 px-3 font-semibold">
+
+                                            <button type="button"
+                                                data-ultima-oc="{{ t_info.ultima_oc|tojson|forceescape }}"
+                                                data-prov-nombre="{{ prov_nombre|tojson|forceescape }}"
+                                                data-tienda-nombre="{{ tienda_nombre|tojson|forceescape }}"
+                                                data-dias-inventario="{{ t_info.dias_inventario|tojson|forceescape }}"
+                                                data-estatus-inv="{{ t_info.estatus_inv|tojson|forceescape }}"
+                                                data-grupo-nombre="{{ grupo_nombre|tojson|forceescape }}"
+                                                onclick="abrirModalOC(JSON.parse(this.dataset.ultimaOc), JSON.parse(this.dataset.provNombre), JSON.parse(this.dataset.tiendaNombre), JSON.parse(this.dataset.diasInventario), JSON.parse(this.dataset.estatusInv), JSON.parse(this.dataset.grupoNombre))"
+                                                class="text-blue-600 hover:text-blue-800 hover:underline focus:outline-none transition-colors cursor-pointer"
+                                                title="Ver detalle de {{ t_info.ultima_oc }}">
+
+                                                {{ t_info.ultima_oc }}
+
+                                            </button>
+
+                                        </td>
+
+                                        <td class="py-3 px-3 text-slate-600">
+                                            {{ t_info.fecha_recepcion }}
+                                        </td>
+
+                                        <td class="py-3 px-3">
+                                            <span class="px-2 py-1 rounded text-xs font-medium {{ t_info.color_oc }}">
+                                                {{ t_info.estatus_oc }}
+                                            </span>
+                                        </td>
+
+                                        <td class="py-3 px-3 text-center font-bold text-slate-800">
+                                            {{ t_info.dias_inventario }}
+                                        </td>
+
+                                        <td class="py-3 px-3">
+                                            <span class="px-2.5 py-1 rounded-full font-bold {{ t_info.color_inv }}">
+                                                {{ t_info.estatus_inv }}
+                                            </span>
+                                        </td>
+
+                                    </tr>
+
+                                    {% endfor %}
+
+                                </tbody>
+
+                            </table>
+
+                        </div>
+
+                    </details>
+
+                    {% endfor %}
+
                 </div>
+
             </details>
+
             {% else %}
-            <div class="p-8 text-center text-slate-400">No hay alertas.</div>
+
+            <div class="p-8 text-center text-slate-400">
+                No hay alertas.
+            </div>
+
             {% endfor %}
         </div>
     </div>
@@ -189,44 +254,142 @@
 
     // Función principal de filtrado de Dashboard
     function filtrarDashboard() {
-        const busquedaInput = document.getElementById('busqueda_dashboard');
-        const textoInput = busquedaInput ? busquedaInput.value.toLowerCase().trim() : '';
+        const busquedaInput =
+            document.getElementById('busqueda_dashboard');
 
-        document.querySelectorAll('.prov-group').forEach(group => {
-            let mostrarGrupo = false;
+        const textoInput =
+            busquedaInput
+                ? busquedaInput.value.toLowerCase().trim()
+                : '';
 
-            group.querySelectorAll('.tienda-row').forEach(row => {
-                const tienda = row.getAttribute('data-tienda').toLowerCase();
-                const inv = row.getAttribute('data-estatus-inv').toLowerCase();
-                const prov = group.getAttribute('data-prov').toLowerCase();
-                const contenidoFila = row.textContent.toLowerCase();
+        document.querySelectorAll('.prov-group').forEach(provGroup => {
 
-                // 1. Coincidencia por texto ingresado en el input
-                const matchTexto = textoInput === '' || tienda.includes(textoInput) || prov.includes(textoInput);
+            let mostrarProveedor = false;
 
-                // 2. Coincidencia con todas las etiquetas activas
-                const matchEtiquetas = etiquetasFiltro.every(f => {
-                    const val = f.valor.toLowerCase();
-                    if (f.tipo === 'estatus') {
-                        return inv === val;
+            const prov =
+                (provGroup.getAttribute('data-prov') || '')
+                    .toLowerCase();
+
+            provGroup
+                .querySelectorAll('.grupo-group')
+                .forEach(grupoGroup => {
+
+                    let mostrarGrupo = false;
+
+                    const grupo =
+                        (grupoGroup.getAttribute('data-grupo') || '')
+                            .toLowerCase();
+
+                    grupoGroup
+                        .querySelectorAll('.tienda-row')
+                        .forEach(row => {
+
+                            const tienda =
+                                (row.getAttribute('data-tienda') || '')
+                                    .toLowerCase();
+
+                            const inv =
+                                (row.getAttribute('data-estatus-inv') || '')
+                                    .toLowerCase();
+
+                            const contenidoFila =
+                                row.textContent.toLowerCase();
+
+                            // Búsqueda general:
+                            // Proveedor + Grupo + Tienda + contenido de fila.
+                            const matchTexto =
+                                textoInput === '' ||
+                                prov.includes(textoInput) ||
+                                grupo.includes(textoInput) ||
+                                tienda.includes(textoInput) ||
+                                contenidoFila.includes(textoInput);
+
+                            // Etiquetas activas.
+                            const matchEtiquetas =
+                                etiquetasFiltro.every(f => {
+
+                                    const val =
+                                        f.valor.toLowerCase();
+
+                                    if (f.tipo === 'estatus') {
+                                        return inv === val;
+                                    }
+
+                                    return (
+                                        prov.includes(val) ||
+                                        grupo.includes(val) ||
+                                        tienda.includes(val) ||
+                                        contenidoFila.includes(val)
+                                    );
+                                });
+
+                            if (matchTexto && matchEtiquetas) {
+                                row.style.display = '';
+                                mostrarGrupo = true;
+                            } else {
+                                row.style.display = 'none';
+                            }
+                        });
+
+                    grupoGroup.style.display =
+                        mostrarGrupo ? '' : 'none';
+
+                    if (
+                        mostrarGrupo &&
+                        (
+                            textoInput !== '' ||
+                            etiquetasFiltro.length > 0
+                        )
+                    ) {
+                        grupoGroup.open = true;
                     }
-                    return tienda.includes(val) || prov.includes(val) || contenidoFila.includes(val);
+
+                    if (mostrarGrupo) {
+                        mostrarProveedor = true;
+                    }
                 });
 
-                if (matchTexto && matchEtiquetas) {
-                    row.style.display = '';
-                    mostrarGrupo = true;
-                } else {
-                    row.style.display = 'none';
-                }
-            });
+            provGroup.style.display =
+                mostrarProveedor ? '' : 'none';
 
-            group.style.display = mostrarGrupo ? '' : 'none';
-            if (mostrarGrupo && (textoInput !== '' || etiquetasFiltro.length > 0)) {
-                group.open = true;
+            if (
+                mostrarProveedor &&
+                (
+                    textoInput !== '' ||
+                    etiquetasFiltro.length > 0
+                )
+            ) {
+                provGroup.open = true;
             }
         });
     }
+    // Mantiene sincronizado el estado de los grupos con su proveedor.
+    document.querySelectorAll('.prov-group').forEach(provGroup => {
+
+        provGroup.addEventListener('toggle', () => {
+
+            if (!provGroup.open) {
+                provGroup.querySelectorAll('.grupo-group').forEach(grupoGroup => {
+                    grupoGroup.open = false;
+                });
+            }
+        });
+    });
+
+
+    document.querySelectorAll('.grupo-group').forEach(grupoGroup => {
+
+        const actualizarFlecha = () => {
+            const flecha = grupoGroup.querySelector('.grupo-chevron');
+
+            if (flecha) {
+                flecha.classList.toggle('rotate-90', grupoGroup.open);
+            }
+        };
+
+        grupoGroup.addEventListener('toggle', actualizarFlecha);
+        actualizarFlecha();
+    });
 
     // Event Listeners
     document.addEventListener('DOMContentLoaded', () => {
@@ -314,7 +477,14 @@
     }
 
     // Función asíncrona para consultar el detalle de la OC desde el backend y renderizar la tabla
-    async function abrirModalOC(ultima_oc, proveedor, tienda, dias, estatus) {
+    async function abrirModalOC(
+        ultima_oc,
+        proveedor,
+        tienda,
+        dias,
+        estatus,
+        grupo
+    ) {
         const modal = document.getElementById('modal-detalle-oc');
 
         // Mueve el elemento directamente a la raíz del <body> para ignorar transformaciones o límites de altura de contenedores superiores
@@ -346,32 +516,93 @@
             const response = await fetch(`/ordenes/obtener_detalle/${ultima_oc}`);
             const data = await response.json();
 
-            if (data.status === 'ok' && data.productos && data.productos.length > 0) {
+            if (data.status === 'ok' && data.productos) {
+
+                const productosGrupo = data.productos.filter(dp => {
+                    const grupoProducto =
+                        String(dp.grupo || 'Sin Grupo').trim() || 'Sin Grupo';
+
+                    return grupoProducto === grupo;
+                });
+
+                if (productosGrupo.length === 0) {
+                    contenedor.innerHTML = `
+                        <p class="text-xs text-slate-400 italic py-4 text-center">
+                            No hay productos pertenecientes al grupo "${grupo}" en esta orden.
+                        </p>
+                    `;
+                    return;
+                }
+
                 let filasHtml = '';
                 let totalGeneral = 0;
 
-                data.productos.forEach(dp => {
-                    const codigo = dp.codigo || dp.codigo_producto || dp.producto_id || '-';
-                    const descripcion = dp.descripcion || dp.nombre_producto || 'Sin descripción';
-                    const pre = parseInt(dp.pre ?? dp.unidad_manejo ?? 1);
-                    const emp = parseInt(dp.emp ?? dp.empaques ?? 0);
-                    const cantidad = parseFloat(dp.cantidad) || 0;
-                    const precio = parseFloat(dp.precio_unitario) || 0;
-                    const subtotal = cantidad * precio;
+                productosGrupo.forEach(dp => {
+                    const codigo =
+                        dp.codigo ||
+                        dp.codigo_producto ||
+                        dp.producto_id ||
+                        '-';
+
+                    const descripcion =
+                        dp.descripcion ||
+                        dp.nombre_producto ||
+                        'Sin descripción';
+
+                    const pre = parseInt(
+                        dp.pre ??
+                        dp.unidad_manejo ??
+                        1
+                    );
+
+                    const emp = parseInt(
+                        dp.emp ??
+                        dp.empaques ??
+                        0
+                    );
+
+                    const cantidad =
+                        parseFloat(dp.cantidad) || 0;
+
+                    const precio =
+                        parseFloat(dp.precio_unitario) || 0;
+
+                    const subtotal =
+                        cantidad * precio;
 
                     totalGeneral += subtotal;
 
                     filasHtml += `
-                    <tr class="hover:bg-slate-50">
-                        <td class="p-2 font-semibold text-blue-800">${codigo}</td>
-                        <td class="p-2 text-slate-700 font-medium">${descripcion}</td>
-                        <td class="p-2 text-right font-semibold text-slate-700">${pre}</td>
-                        <td class="p-2 text-right font-semibold text-slate-700">${emp}</td>
-                        <td class="p-2 text-right font-semibold text-slate-800">${parseInt(cantidad)}</td>
-                        <td class="p-2 text-right font-semibold text-slate-800">${formatearMoneda(precio)}</td>
-                        <td class="p-2 text-right font-semibold text-slate-800">${formatearMoneda(subtotal)}</td>
-                    </tr>
-                `;
+                        <tr class="hover:bg-slate-50">
+                            <td class="p-2 font-semibold text-blue-800">
+                                ${codigo}
+                            </td>
+
+                            <td class="p-2 text-slate-700 font-medium">
+                                ${descripcion}
+                            </td>
+
+                            <td class="p-2 text-right font-semibold text-slate-700">
+                                ${pre}
+                            </td>
+
+                            <td class="p-2 text-right font-semibold text-slate-700">
+                                ${emp}
+                            </td>
+
+                            <td class="p-2 text-right font-semibold text-slate-800">
+                                ${parseInt(cantidad)}
+                            </td>
+
+                            <td class="p-2 text-right font-semibold text-slate-800">
+                                ${formatearMoneda(precio)}
+                            </td>
+
+                            <td class="p-2 text-right font-semibold text-slate-800">
+                                ${formatearMoneda(subtotal)}
+                            </td>
+                        </tr>
+                    `;
                 });
 
                 // Inyectar tabla con estructura idéntica a ordenes.html

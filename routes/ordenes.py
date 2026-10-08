@@ -491,7 +491,7 @@ async def obtener_detalle_oc(
                 "id, numero_orden, "
                 "detalles_productos("
                 "codigo, descripcion, cantidad, "
-                "precio_unitario, pre, emp"
+                "precio_unitario, pre, emp, grupo"
                 ")"
             )
             .eq("numero_orden", numero_orden)
@@ -522,6 +522,10 @@ async def obtener_detalle_oc(
                 "descripcion": (
                     dp.get("descripcion")
                     or "Sin descripción"
+                ),
+                "grupo": (
+                    dp.get("grupo")
+                    or "Sin Grupo"
                 ),
                 "pre": (
                     dp.get("pre")
