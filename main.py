@@ -41,8 +41,6 @@ async def service_worker():
         media_type="application/javascript"
     )
 
-from fastapi.responses import FileResponse
-
 @app.on_event("startup")
 async def startup_event():
     # Garantiza la preparación de la instancia asíncrona al levantar FastAPI
@@ -57,7 +55,7 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
         "/registro",
         "/recuperar-password",
         "/reset-password",
-        "/logout"
+        "/logout",
         "/service-worker.js"
     ]
     
