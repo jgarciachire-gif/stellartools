@@ -327,6 +327,114 @@
             </button>
         </div>
     </div>
+
+    <!-- PANEL DE IMPORTACIÓN Y CONSULTA DEL KARDEX HISTÓRICO -->
+    <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-end gap-4">
+
+            <div class="flex-1">
+                <h3 class="text-sm font-bold text-slate-800">
+                    <i class="fa-solid fa-chart-line text-indigo-600 mr-1"></i>
+                    Demanda histórica de ventas
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">
+                    Importa el kardex y consulta la demanda diaria
+                    sin modificar el cálculo actual de sugeridos.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap items-end gap-3">
+                <div>
+                    <label for="kardex-fecha-inicio" class="block text-xs font-semibold text-slate-600 mb-1">
+                        Fecha inicial
+                    </label>
+                    <input type="date" id="kardex-fecha-inicio"
+                        class="border border-slate-300 rounded-lg px-3 py-2 text-xs">
+                </div>
+
+                <div>
+                    <label for="kardex-fecha-fin" class="block text-xs font-semibold text-slate-600 mb-1">
+                        Fecha final
+                    </label>
+                    <input type="date" id="kardex-fecha-fin"
+                        class="border border-slate-300 rounded-lg px-3 py-2 text-xs">
+                </div>
+
+                <input type="file" id="kardex-archivo-csv" accept=".csv,text/csv" class="hidden"
+                    onchange="importarKardexDesdeAnalisis(event)">
+
+                <button type="button" onclick="document.getElementById('kardex-archivo-csv').click()"
+                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-file-import mr-1"></i>
+                    Importar CSV
+                </button>
+
+                <button type="button" id="btn-consultar-kardex" onclick="consultarDemandaKardexDesdeAnalisis()"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-magnifying-glass mr-1"></i>
+                    Consultar demanda
+                </button>
+
+                <!-- Ejecuta una comparación independiente del cálculo actual de sugeridos -->
+                <button type="button" id="btn-comparar-kardex" onclick="compararDemandaKardexDesdeAnalisis()"
+                    class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-chart-column mr-1"></i>
+                    Comparar períodos
+                </button>
+
+            </div>
+        </div>
+
+        <p id="kardex-mensaje" class="text-xs text-slate-500 mt-3" role="status">
+            Selecciona el período y carga los productos en la tabla
+            para consultar sus ventas históricas.
+        </p>
+
+        <div id="kardex-resultados-contenedor" class="hidden mt-4 overflow-x-auto border border-slate-200 rounded-xl">
+            <table class="w-full text-xs text-left">
+                <thead class="bg-slate-900 text-white">
+                    <tr>
+                        <th class="px-3 py-2">Sede</th>
+                        <th class="px-3 py-2">Código</th>
+                        <th class="px-3 py-2 text-right">Unidades vendidas</th>
+                        <th class="px-3 py-2 text-right">Días con ventas</th>
+                        <th class="px-3 py-2 text-right">Demanda diaria</th>
+                        <th class="px-3 py-2 text-right">Días con ventas anteriores</th>
+                        <th class="px-3 py-2 text-right">Días con ventas recientes</th>
+                        <th class="px-3 py-2">Calidad de datos</th>
+                    </tr>
+                </thead>
+                <tbody id="kardex-resultados" class="divide-y divide-slate-100">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+
+    <!-- Resultados comparativos: no modifican los sugeridos actuales -->
+    <div id="kardex-comparacion-contenedor" class="hidden mt-4 overflow-x-auto border border-violet-200 rounded-xl">
+        <p id="kardex-comparacion-periodos" class="px-3 py-2 text-xs text-slate-600 bg-violet-50"></p>
+
+        <table class="w-full text-xs text-left">
+            <thead class="bg-slate-800 text-white">
+                <tr>
+                    <th class="px-3 py-2">Sede</th>
+                    <th class="px-3 py-2">Código</th>
+                    <th class="px-3 py-2 text-right">Unidades anteriores</th>
+                    <th class="px-3 py-2 text-right">Unidades recientes</th>
+                    <th class="px-3 py-2 text-right">Demanda anterior</th>
+                    <th class="px-3 py-2 text-right">Demanda reciente</th>
+                    <th class="px-3 py-2 text-right">Variación unidades</th>
+                    <th class="px-3 py-2 text-right">Días con ventas recientes</th>
+                </tr>
+            </thead>
+            <tbody id="kardex-comparacion-resultados" class="divide-y divide-slate-100"></tbody>
+        </table>
+    </div>
+
+    <!-- FIN PANEL DE KARDEX HISTÓRICO -->
+
+
     <!-- TABLA DE DETALLE DE PRODUCTOS -->
     <div class="bg-white border border-slate-300 rounded-2xl shadow-xs overflow-hidden">
         <div class="overflow-x-auto">
@@ -2252,6 +2360,9 @@ ${nodosProductosXML.join('\n')}
 
             // Carga los datos correspondientes a la nueva tienda.
             cargarEstadoTablaDesdeMemoria(tiendaNueva);
+
+            // Aplica la cobertura de la tienda usando la caché.
+            actualizarCoberturaKardexDesdeAnalisis(true);
         }
 
         function cargarEstadoTablaDesdeMemoria(tienda) {
@@ -2620,9 +2731,12 @@ ${nodosProductosXML.join('\n')}
             ejecutarCalculoSugeridosSync();
         }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            // Solo prepara la vista inicial.
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Prepara la vista inicial sin modificar el cálculo de sugeridos.
             cambiarTiendaPestana('CENTRO');
+
+            // La pestaña puede estar ya activa y no ejecutar su cambio.
+            await actualizarCoberturaKardexDesdeAnalisis(true);
         });
 
         // Set global para rastrear las tiendas elegidas en la ventana modal
@@ -2704,6 +2818,612 @@ ${nodosProductosXML.join('\n')}
         function cerrarModalExportarTiendas() {
             document.getElementById('modal-exportar-tiendas').style.display = 'none'; // Ocultar modal
         }
+
+
+
+        let coberturaKardexCache = null;
+        let promesaCargaCoberturaKardex = null;
+
+        async function actualizarCoberturaKardexDesdeAnalisis(
+            mostrarMensaje = true,
+            forzarConsulta = false
+        ) {
+            const fechaInicio = document.getElementById('kardex-fecha-inicio');
+            const fechaFin = document.getElementById('kardex-fecha-fin');
+
+            if (!fechaInicio || !fechaFin) return;
+
+            const normalizarSede = sede => {
+                const valor = String(sede || '').trim().toUpperCase();
+
+                if (['ALIANZA', 'C. ALIANZA'].includes(valor)) {
+                    return 'CIUDAD ALIANZA';
+                }
+
+                return valor;
+            };
+
+            try {
+                // La consulta se hace una sola vez y se reutiliza al cambiar de tienda.
+                if (forzarConsulta) {
+                    coberturaKardexCache = null;
+                    promesaCargaCoberturaKardex = null;
+                }
+
+                if (!coberturaKardexCache) {
+                    if (!promesaCargaCoberturaKardex) {
+                        promesaCargaCoberturaKardex = (async () => {
+                            const respuesta = await fetch(
+                                '/analisis/cobertura-kardex',
+                                { credentials: 'same-origin' }
+                            );
+
+                            const resultado = await respuesta.json();
+
+                            if (!respuesta.ok || resultado.status !== 'ok') {
+                                throw new Error(
+                                    resultado.detail ||
+                                    'No se pudo consultar la cobertura del Kardex.'
+                                );
+                            }
+
+                            return resultado.data || [];
+                        })();
+                    }
+
+                    try {
+                        coberturaKardexCache =
+                            await promesaCargaCoberturaKardex;
+                    } finally {
+                        promesaCargaCoberturaKardex = null;
+                    }
+                }
+
+                // Leer la tienda DESPUÉS de esperar la consulta evita aplicar
+                // accidentalmente los límites de una pestaña anterior.
+                const sedeActiva = normalizarSede(
+                    window.tiendaActivaPestana || 'CENTRO'
+                );
+
+                const cobertura = coberturaKardexCache.find(
+                    registro =>
+                        normalizarSede(registro.sede) === sedeActiva
+                );
+
+                if (!cobertura?.fecha_minima || !cobertura?.fecha_maxima) {
+                    fechaInicio.value = '';
+                    fechaFin.value = '';
+
+                    fechaInicio.disabled = true;
+                    fechaFin.disabled = true;
+
+                    fechaInicio.removeAttribute('min');
+                    fechaInicio.removeAttribute('max');
+                    fechaFin.removeAttribute('min');
+                    fechaFin.removeAttribute('max');
+
+                    if (mostrarMensaje) {
+                        mostrarMensajeKardex(
+                            `No hay fechas registradas en el Kardex para ${sedeActiva}.`,
+                            true
+                        );
+                    }
+
+                    return;
+                }
+
+                const minimo = cobertura.fecha_minima;
+                const maximo = cobertura.fecha_maxima;
+
+                fechaInicio.disabled = false;
+                fechaFin.disabled = false;
+
+                fechaInicio.min = minimo;
+                fechaInicio.max = maximo;
+                fechaFin.min = minimo;
+                fechaFin.max = maximo;
+
+                // Mantener las fechas si están dentro del rango de la tienda.
+                if (
+                    !fechaInicio.value ||
+                    fechaInicio.value < minimo ||
+                    fechaInicio.value > maximo
+                ) {
+                    fechaInicio.value = minimo;
+                }
+
+                if (
+                    !fechaFin.value ||
+                    fechaFin.value < minimo ||
+                    fechaFin.value > maximo
+                ) {
+                    fechaFin.value = maximo;
+                }
+
+                // Evita que el período quede invertido al cambiar de tienda.
+                if (fechaInicio.value > fechaFin.value) {
+                    fechaFin.value = maximo;
+                }
+
+                if (mostrarMensaje) {
+                    mostrarMensajeKardex(
+                        `Cobertura de ${sedeActiva}: ${minimo} a ${maximo}.`
+                    );
+                }
+
+            } catch (error) {
+                console.error(
+                    'Error al actualizar la cobertura del Kardex:',
+                    error
+                );
+
+                if (mostrarMensaje) {
+                    mostrarMensajeKardex(
+                        error.message ||
+                        'No se pudo actualizar la cobertura del Kardex.',
+                        true
+                    );
+                }
+            }
+        }
+
+
+
+        function mostrarMensajeKardex(mensaje, error = false) {
+            const elemento = document.getElementById('kardex-mensaje');
+            if (!elemento) return;
+
+            elemento.textContent = mensaje;
+            elemento.className = error
+                ? 'text-xs text-rose-600 mt-3'
+                : 'text-xs text-slate-500 mt-3';
+        }
+
+        async function importarKardexDesdeAnalisis(event) {
+            const input = event.target;
+            const archivo = input.files?.[0];
+
+            if (!archivo) return;
+
+            if (!archivo.name.toLowerCase().endsWith('.csv')) {
+                mostrarMensajeKardex('Selecciona un archivo CSV válido.', true);
+                input.value = '';
+                return;
+            }
+
+            const datos = new FormData();
+            datos.append('file', archivo);
+
+            mostrarMensajeKardex('Importando el kardex. Espera un momento...');
+
+            try {
+                const respuesta = await fetch(
+                    '/analisis/cargar-kardex-ventas',
+                    {
+                        method: 'POST',
+                        body: datos,
+                        credentials: 'same-origin'
+                    }
+                );
+
+                const resultado = await respuesta.json();
+
+                if (!respuesta.ok) {
+                    throw new Error(
+                        resultado.detail || 'No se pudo importar el kardex.'
+                    );
+                }
+
+                mostrarMensajeKardex(
+                    `Importación completada. Filas de venta: ${resultado.filas_venta}. ` +
+                    `Registros consolidados: ${resultado.registros_consolidados}. ` +
+                    `Filas ignoradas: ${resultado.filas_ignoradas}.`
+                );
+
+                await actualizarCoberturaKardexDesdeAnalisis(true, true);
+
+            } catch (error) {
+                console.error('Error al importar el kardex:', error);
+                mostrarMensajeKardex(
+                    error.message || 'Error al importar el archivo.',
+                    true
+                );
+            } finally {
+                input.value = '';
+            }
+        }
+
+        async function consultarDemandaKardexDesdeAnalisis() {
+            const fechaInicio = document.getElementById(
+                'kardex-fecha-inicio'
+            )?.value;
+
+            const fechaFin = document.getElementById(
+                'kardex-fecha-fin'
+            )?.value;
+
+            const boton = document.getElementById('btn-consultar-kardex');
+            const tbody = document.getElementById('kardex-resultados');
+            const contenedor = document.getElementById(
+                'kardex-resultados-contenedor'
+            );
+
+            if (!fechaInicio || !fechaFin) {
+                mostrarMensajeKardex(
+                    'Selecciona las dos fechas del período.',
+                    true
+                );
+                return;
+            }
+
+            if (fechaInicio > fechaFin) {
+                mostrarMensajeKardex(
+                    'La fecha inicial no puede ser posterior a la final.',
+                    true
+                );
+                return;
+            }
+
+            const codigos = obtenerCodigosTablaAnalisis();
+
+            if (!codigos.length) {
+                mostrarMensajeKardex(
+                    'Agrega al menos un producto a la tabla de análisis.',
+                    true
+                );
+                return;
+            }
+
+            const parametros = new URLSearchParams({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin
+            });
+
+            codigos.forEach(codigo => parametros.append('codigos', codigo));
+
+            if (boton) boton.disabled = true;
+            mostrarMensajeKardex('Consultando ventas del período...');
+
+            try {
+                const respuesta = await fetch(
+                    `/analisis/demanda-kardex?${parametros.toString()}`,
+                    {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    }
+                );
+
+                const resultado = await respuesta.json();
+
+                if (!respuesta.ok) {
+                    throw new Error(
+                        resultado.detail || 'No se pudo consultar la demanda.'
+                    );
+                }
+
+                const registros = Array.isArray(resultado.data)
+                    ? resultado.data
+                    : [];
+
+                tbody.replaceChildren();
+
+                if (!registros.length) {
+                    contenedor.classList.add('hidden');
+                    mostrarMensajeKardex(
+                        `No se encontraron ventas para los productos de la tabla ` +
+                        `entre ${fechaInicio} y ${fechaFin}.`
+                    );
+                    return;
+                }
+
+                const formatoNumero = valor =>
+                    Number(valor || 0).toLocaleString('es-VE', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 3
+                    });
+
+                registros.forEach(item => {
+                    const fila = document.createElement('tr');
+
+                    const valores = [
+                        String(item.sede || '').trim(),
+                        String(item.codigo || '').trim(),
+                        formatoNumero(item.unidades_vendidas),
+                        formatoNumero(item.dias_con_ventas),
+                        formatoNumero(item.demanda_diaria)
+                    ];
+
+                    valores.forEach((valor, indice) => {
+                        const celda = document.createElement('td');
+                        celda.className = 'px-3 py-2';
+
+                        if (indice >= 2) {
+                            celda.classList.add('text-right', 'tabular-nums');
+                        }
+
+                        celda.textContent = valor;
+                        fila.appendChild(celda);
+                    });
+
+                    tbody.appendChild(fila);
+                });
+
+                contenedor.classList.remove('hidden');
+
+                mostrarMensajeKardex(
+                    `Consulta completada: ${registros.length} combinaciones ` +
+                    `de sede y producto. Período inclusivo: ${fechaInicio} a ${fechaFin}.`
+                );
+
+            } catch (error) {
+                console.error('Error al consultar demanda del kardex:', error);
+                mostrarMensajeKardex(
+                    error.message || 'No se pudo consultar la demanda.',
+                    true
+                );
+            } finally {
+                if (boton) boton.disabled = false;
+            }
+        }
+
+
+
+        async function compararDemandaKardexDesdeAnalisis() {
+            const fechaFin = document.getElementById(
+                'kardex-fecha-fin'
+            )?.value;
+
+            const boton = document.getElementById('btn-comparar-kardex');
+            const contenedor = document.getElementById(
+                'kardex-comparacion-contenedor'
+            );
+            const tbody = document.getElementById(
+                'kardex-comparacion-resultados'
+            );
+            const etiquetaPeriodos = document.getElementById(
+                'kardex-comparacion-periodos'
+            );
+
+            // Valida que se haya seleccionado una fecha final.
+            if (!fechaFin) {
+                mostrarMensajeKardex(
+                    'Selecciona la fecha final para comparar los períodos.',
+                    true
+                );
+                return;
+            }
+
+            const codigos = obtenerCodigosTablaAnalisis();
+
+            if (!codigos.length) {
+                mostrarMensajeKardex(
+                    'Agrega al menos un producto a la tabla de análisis.',
+                    true
+                );
+                return;
+            }
+
+            // Calcula las fechas en UTC para evitar errores de zona horaria.
+            const fechaBase = fechaFin.split('-').map(Number);
+            const finReciente = new Date(Date.UTC(
+                fechaBase[0],
+                fechaBase[1] - 1,
+                fechaBase[2]
+            ));
+
+            const desplazarFecha = (fecha, dias) => {
+                const resultado = new Date(fecha);
+                resultado.setUTCDate(resultado.getUTCDate() + dias);
+                return resultado.toISOString().slice(0, 10);
+            };
+
+            // Mantiene dos períodos consecutivos de 30 días inclusivos.
+            const recienteFin = fechaFin;
+            const recienteInicio = desplazarFecha(finReciente, -29);
+            const anteriorFin = desplazarFecha(finReciente, -30);
+            const anteriorInicio = desplazarFecha(finReciente, -59);
+
+            // Consulta el endpoint existente sin modificar el motor de sugeridos.
+            const consultarPeriodo = async (inicio, fin) => {
+                const parametros = new URLSearchParams({
+                    fecha_inicio: inicio,
+                    fecha_fin: fin
+                });
+
+                codigos.forEach(codigo => {
+                    parametros.append('codigos', codigo);
+                });
+
+                const respuesta = await fetch(
+                    `/analisis/demanda-kardex?${parametros.toString()}`,
+                    {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    }
+                );
+
+                const resultado = await respuesta.json();
+
+                if (!respuesta.ok) {
+                    throw new Error(
+                        resultado.detail || 'No se pudo consultar el kardex.'
+                    );
+                }
+
+                return Array.isArray(resultado.data) ? resultado.data : [];
+            };
+
+            if (boton) boton.disabled = true;
+            if (contenedor) contenedor.classList.add('hidden');
+
+            mostrarMensajeKardex('Comparando los dos períodos de ventas...');
+
+            try {
+                // Ejecuta ambas consultas en paralelo.
+                const [datosAnteriores, datosRecientes] = await Promise.all([
+                    consultarPeriodo(anteriorInicio, anteriorFin),
+                    consultarPeriodo(recienteInicio, recienteFin)
+                ]);
+
+                // Une los datos usando sede normalizada y código de producto.
+                const claveRegistro = item =>
+                    `${String(item.sede || '').trim().toUpperCase()}|` +
+                    `${String(item.codigo || '').trim()}`;
+
+                const mapa = new Map();
+
+                datosAnteriores.forEach(item => {
+                    const clave = claveRegistro(item);
+
+                    mapa.set(clave, {
+                        sede: String(item.sede || '').trim(),
+                        codigo: String(item.codigo || '').trim(),
+                        anterior: item,
+                        reciente: null
+                    });
+                });
+
+                datosRecientes.forEach(item => {
+                    const clave = claveRegistro(item);
+
+                    if (!mapa.has(clave)) {
+                        mapa.set(clave, {
+                            sede: String(item.sede || '').trim(),
+                            codigo: String(item.codigo || '').trim(),
+                            anterior: null,
+                            reciente: item
+                        });
+                    } else {
+                        mapa.get(clave).reciente = item;
+                    }
+                });
+
+                tbody.replaceChildren();
+
+                const formatoNumero = valor =>
+                    Number(valor || 0).toLocaleString('es-VE', {
+                        minimumFractionDigits: 0,
+                        maximumFractionDigits: 3
+                    });
+
+                const crearCelda = (fila, valor, alinearDerecha = false) => {
+                    const celda = document.createElement('td');
+                    celda.className = 'px-3 py-2';
+
+                    if (alinearDerecha) {
+                        celda.classList.add('text-right', 'tabular-nums');
+                    }
+
+                    // Inserta texto de forma segura, sin interpretarlo como HTML.
+                    celda.textContent = valor;
+                    fila.appendChild(celda);
+                };
+
+                mapa.forEach(item => {
+                    const anterior = item.anterior || {};
+                    const reciente = item.reciente || {};
+
+                    const unidadesAnteriores = Number(
+                        anterior.unidades_vendidas || 0
+                    );
+                    const unidadesRecientes = Number(
+                        reciente.unidades_vendidas || 0
+                    );
+
+                    const demandaAnterior = Number(
+                        anterior.demanda_diaria || 0
+                    );
+                    const demandaReciente = Number(
+                        reciente.demanda_diaria || 0
+                    );
+
+                    // Cuenta los días con ventas de cada período.
+                    const diasAnteriores = Number(
+                        anterior.dias_con_ventas || 0
+                    );
+                    const diasRecientes = Number(
+                        reciente.dias_con_ventas || 0
+                    );
+
+                    // Si no hay ventas anteriores, la variación no tiene base fiable.
+                    const tieneBaseAnterior =
+                        Boolean(item.anterior) && unidadesAnteriores > 0;
+
+                    const variacionUnidades = !tieneBaseAnterior
+                        ? 'Sin base'
+                        : `${formatoNumero(
+                            ((unidadesRecientes - unidadesAnteriores)
+                                / unidadesAnteriores) * 100
+                        )} %`;
+
+                    // Menos de 5 días en cualquiera de los períodos genera advertencia.
+                    const datosLimitados =
+                        diasAnteriores < 5 || diasRecientes < 5;
+
+                    // La falta de base anterior se informa por separado de la calidad.
+                    let calidadDatos;
+
+                    if (!tieneBaseAnterior && datosLimitados) {
+                        calidadDatos =
+                            'Sin base de comparación · Datos limitados';
+                    } else if (!tieneBaseAnterior) {
+                        calidadDatos = 'Sin base de comparación';
+                    } else if (datosLimitados) {
+                        calidadDatos = 'Datos limitados';
+                    } else {
+                        calidadDatos = 'Datos suficientes';
+                    }
+
+                    const fila = document.createElement('tr');
+
+                    // Conserva el orden de las columnas de la tabla.
+                    crearCelda(fila, item.sede);
+                    crearCelda(fila, item.codigo);
+                    crearCelda(fila, formatoNumero(unidadesAnteriores), true);
+                    crearCelda(fila, formatoNumero(unidadesRecientes), true);
+                    crearCelda(fila, formatoNumero(demandaAnterior), true);
+                    crearCelda(fila, formatoNumero(demandaReciente), true);
+                    crearCelda(fila, variacionUnidades, true);
+                    crearCelda(fila, formatoNumero(diasAnteriores), true);
+                    crearCelda(fila, formatoNumero(diasRecientes), true);
+                    crearCelda(fila, calidadDatos);
+
+                    tbody.appendChild(fila);
+                });
+
+                // Muestra claramente las fechas comparadas.
+                etiquetaPeriodos.textContent =
+                    `Anterior: ${anteriorInicio} a ${anteriorFin} | ` +
+                    `Reciente: ${recienteInicio} a ${recienteFin}. ` +
+                    'Períodos inclusivos de 30 días; umbral de calidad: 5 días con ventas.';
+
+                if (mapa.size === 0) {
+                    mostrarMensajeKardex(
+                        'No se encontraron ventas para los productos y períodos seleccionados.'
+                    );
+                    return;
+                }
+
+                if (contenedor) contenedor.classList.remove('hidden');
+
+                mostrarMensajeKardex(
+                    `Comparación completada: ${mapa.size} combinaciones de sede y producto.`
+                );
+
+            } catch (error) {
+                console.error('Error al comparar la demanda del kardex:', error);
+
+                mostrarMensajeKardex(
+                    error.message || 'No se pudo comparar la demanda.',
+                    true
+                );
+            } finally {
+                // Reactiva el botón incluso si ocurre un error.
+                if (boton) boton.disabled = false;
+            }
+        }
+
+
     </script>
 
 

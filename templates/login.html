@@ -89,6 +89,12 @@
         <!-- Formulario Restablecer Contraseña (se activa desde el enlace enviado al correo) -->
         {% if reset_mode %}
         <form id="form-reset-pass" action="/reset-password" method="POST" class="space-y-4">
+
+            <!-- Tokens temporales de la sesión de recuperación. -->
+            <input type="hidden" id="reset-access-token" name="access_token">
+
+            <input type="hidden" id="reset-refresh-token" name="refresh_token">
+
             <div class="text-center mb-4">
                 <h2 class="text-lg font-bold text-slate-800">Nueva Contraseña</h2>
                 <p class="text-xs text-slate-500">Ingresa la nueva clave para tu cuenta</p>
@@ -189,19 +195,99 @@
             window.history.replaceState({}, document.title, window.location.pathname);
         }
 
+
         window.addEventListener('DOMContentLoaded', () => {
             const hash = window.location.hash;
-            if (hash && hash.includes('access_token=')) {
-                const params = new URLSearchParams(hash.replace('#', '?'));
-                const token = params.get('access_token');
-                if (token) {
-                    document.cookie = `access_token=${token}; path=/; max-age=3600`;
-                    window.location.href = '/reset-password';
-                    return;
+            const formularioReset = document.getElementById('form-reset-pass');
+            let enlaceConError = false;
+
+            // Lee los tokens que Supabase devuelve en el fragmento de la URL.
+            if (hash) {
+                const datosHash = new URLSearchParams(hash.slice(1));
+
+                const accessToken = datosHash.get('access_token');
+                const refreshToken = datosHash.get('refresh_token');
+                const tipo = datosHash.get('type');
+                const errorAuth = datosHash.get('error');
+
+                // No muestra detalles internos del proveedor de autenticación.
+                if (errorAuth || datosHash.has('error_description')) {
+                    enlaceConError = true;
+
+                    mostrarModalAlerta(
+                        'error',
+                        'Enlace no válido',
+                        'El enlace ha caducado o no es válido. Solicita uno nuevo.'
+                    );
+                } else if (
+                    formularioReset &&
+                    tipo === 'recovery' &&
+                    accessToken &&
+                    refreshToken
+                ) {
+                    // Entrega los tokens al formulario, no a cookies persistentes.
+                    document.getElementById('reset-access-token').value = accessToken;
+                    document.getElementById('reset-refresh-token').value = refreshToken;
+                } else if (formularioReset) {
+                    enlaceConError = true;
+
+                    mostrarModalAlerta(
+                        'error',
+                        'Enlace incompleto',
+                        'Abre el enlace del correo de recuperación o solicita uno nuevo.'
+                    );
                 }
+
+                // Retira los tokens de la barra de direcciones y del historial actual.
+                window.history.replaceState(
+                    {},
+                    document.title,
+                    window.location.pathname + window.location.search
+                );
             }
 
+            if (formularioReset) {
+                const campoAccess = document.getElementById('reset-access-token');
+                const campoRefresh = document.getElementById('reset-refresh-token');
+                const botonEnviar = formularioReset.querySelector(
+                    'button[type="submit"]'
+                );
+
+                // Impide enviar el formulario si no hay una sesión de recuperación.
+                const tieneTokens = Boolean(
+                    campoAccess.value && campoRefresh.value
+                );
+
+                if (!tieneTokens && botonEnviar) {
+                    botonEnviar.disabled = true;
+                    botonEnviar.classList.add('opacity-50', 'cursor-not-allowed');
+
+                    // No duplica la alerta si ya se detectó un enlace inválido.
+                    if (!enlaceConError && !hash) {
+                        mostrarModalAlerta(
+                            'error',
+                            'Falta el enlace de recuperación',
+                            'Abre el enlace que recibiste por correo para continuar.'
+                        );
+                    }
+                }
+
+                formularioReset.addEventListener('submit', event => {
+                    if (!campoAccess.value || !campoRefresh.value) {
+                        event.preventDefault();
+
+                        mostrarModalAlerta(
+                            'error',
+                            'Sesión no válida',
+                            'Solicita un nuevo enlace para cambiar tu contraseña.'
+                        );
+                    }
+                });
+            }
+
+            // Conserva las notificaciones que FastAPI envía por parámetros.
             const params = new URLSearchParams(window.location.search);
+
             if (params.has('msg_tipo')) {
                 mostrarModalAlerta(
                     params.get('msg_tipo'),
@@ -210,6 +296,7 @@
                 );
             }
         });
+
 
         window.addEventListener('pageshow', (event) => {
             if (event.persisted || (performance.navigation && performance.navigation.type === 2)) {

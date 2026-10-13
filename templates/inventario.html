@@ -235,6 +235,109 @@
             {% endfor %}
 
         </div>
+        <!-- ===================================================== -->
+        <!-- PAGINACIÓN -->
+        <!-- ===================================================== -->
+
+        {% if total_paginas > 1 %}
+
+        <div class="border-t border-slate-200 px-4 py-3
+                    flex flex-col sm:flex-row
+                    items-center justify-between
+                    gap-3">
+
+            <!-- Información -->
+            <div class="text-xs text-slate-500">
+                Página
+                <span class="font-semibold text-slate-700">
+                    {{ pagina_actual }}
+                </span>
+                de
+                <span class="font-semibold text-slate-700">
+                    {{ total_paginas }}
+                </span>
+
+                <span class="mx-1">·</span>
+
+                {{ total_inventarios }} documentos
+            </div>
+
+
+            <!-- Controles -->
+            <div class="flex items-center gap-1">
+
+                {% if pagina_actual > 1 %}
+
+                <a href="/inventario?page={{ pagina_actual - 1 }}" class="inline-flex items-center justify-center
+                          w-9 h-9 rounded-lg
+                          border border-slate-200
+                          text-slate-600
+                          hover:bg-slate-50
+                          hover:text-slate-900
+                          transition-colors" title="Página anterior">
+
+                    <i class="fa-solid fa-chevron-left text-xs"></i>
+
+                </a>
+
+                {% else %}
+
+                <span class="inline-flex items-center justify-center
+                           w-9 h-9 rounded-lg
+                           border border-slate-100
+                           text-slate-300
+                           cursor-not-allowed">
+
+                    <i class="fa-solid fa-chevron-left text-xs"></i>
+
+                </span>
+
+                {% endif %}
+
+
+                <!-- Página actual -->
+                <span class="inline-flex items-center justify-center
+                           min-w-9 h-9 px-3 rounded-lg
+                           bg-slate-900
+                           text-white
+                           text-xs font-semibold">
+
+                    {{ pagina_actual }}
+
+                </span>
+
+
+                {% if pagina_actual < total_paginas %} <a href="/inventario?page={{ pagina_actual + 1 }}" class="inline-flex items-center justify-center
+                          w-9 h-9 rounded-lg
+                          border border-slate-200
+                          text-slate-600
+                          hover:bg-slate-50
+                          hover:text-slate-900
+                          transition-colors" title="Página siguiente">
+
+                    <i class="fa-solid fa-chevron-right text-xs"></i>
+
+                    </a>
+
+                    {% else %}
+
+                    <span class="inline-flex items-center justify-center
+                           w-9 h-9 rounded-lg
+                           border border-slate-100
+                           text-slate-300
+                           cursor-not-allowed">
+
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+
+                    </span>
+
+                    {% endif %}
+
+            </div>
+
+        </div>
+
+        {% endif %}
 
         {% else %}
 
@@ -528,12 +631,11 @@
             return;
         }
 
-        /*
-         * Generar una clave única para ESTE intento
-         * de creación.
-         */
+
+        /* Genera una clave UUID v4 válida para crear el inventario. */
         function generarClaveCreacion() {
 
+            // Usar el generador UUID nativo si está disponible.
             if (
                 window.crypto &&
                 typeof window.crypto.randomUUID === 'function'
@@ -541,24 +643,49 @@
                 return window.crypto.randomUUID();
             }
 
-            /*
-             * Compatibilidad de respaldo.
-             */
-            return (
-                Date.now().toString(36) +
-                '-' +
-                Math.random()
-                    .toString(36)
-                    .substring(2)
-            );
+            // Comprobar que el navegador permite generar bytes aleatorios.
+            if (
+                !window.crypto ||
+                typeof window.crypto.getRandomValues !== 'function'
+            ) {
+                return '';
+            }
 
+            // Crear 16 bytes aleatorios para el UUID.
+            const bytes = new Uint8Array(16);
+            window.crypto.getRandomValues(bytes);
+
+            // Establecer la versión 4 y la variante del UUID.
+            bytes[6] = (bytes[6] & 0x0f) | 0x40;
+            bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+            // Convertir los bytes a texto hexadecimal.
+            const hex = Array.from(
+                bytes,
+                byte => byte.toString(16).padStart(2, '0')
+            ).join('');
+
+            // Devolver el UUID con el formato esperado por PostgreSQL.
+            return [
+                hex.slice(0, 8),
+                hex.slice(8, 12),
+                hex.slice(12, 16),
+                hex.slice(16, 20),
+                hex.slice(20)
+            ].join('-');
         }
 
-        /*
-         * Crear la clave cuando se carga el formulario.
-         */
-        campoClave.value =
-            generarClaveCreacion();
+
+
+        /* Generar la clave al cargar el formulario. */
+        campoClave.value = generarClaveCreacion();
+
+        /* No permitir el envío si no se pudo generar una clave válida. */
+        if (!campoClave.value) {
+            boton.disabled = true;
+            boton.title = 'No se pudo generar la clave de creación. Recarga la página.';
+        }
+
 
         formulario.addEventListener(
             'submit',

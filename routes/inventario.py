@@ -12,7 +12,7 @@ from fastapi.responses import (
 
 import config
 from config import templates, obtener_usuario_actual
-
+from uuid import UUID  # Validar y normalizar claves UUID.
 
 router = APIRouter()
 
@@ -62,6 +62,7 @@ def obtener_tienda_provisional(perfil: dict):
 @router.get("/inventario")
 async def vista_inventario(
     request: Request,
+    page: int = 1,
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
@@ -106,16 +107,84 @@ async def vista_inventario(
                 tienda_provisional
             )
 
+        # ====================================================
+        # PAGINACIÓN
+        # ====================================================
+        # Máximo 15 documentos por página.
+        registros_por_pagina = 15
+
+        try:
+            pagina_actual = max(int(page), 1)
+        except (TypeError, ValueError):
+            pagina_actual = 1
+
+        offset = (
+            pagina_actual - 1
+        ) * registros_por_pagina
+
+        limite = (
+            offset + registros_por_pagina - 1
+        )
+
+        
+        # Total de documentos visibles para este usuario.
+        consulta_total = (
+            config.supabase_async
+            .table("inventarios")
+            .select("id")
+        )
+
+        # El conteo debe respetar la tienda asignada.
+        if perfil and es_usuario_provisional(perfil):
+            consulta_total = consulta_total.eq(
+                "tienda",
+                tienda_provisional
+            )
+
+        res_total = await consulta_total.execute()
+
+        total_inventarios = len(
+            res_total.data or []
+        )
+
+        total_paginas = max(
+            1,
+            (
+                total_inventarios
+                + registros_por_pagina
+                - 1
+            ) // registros_por_pagina
+        )
+
+        # Si se solicita una página que ya no existe,
+        # volver a la última página válida.
+        if pagina_actual > total_paginas:
+            pagina_actual = total_paginas
+
+            offset = (
+                pagina_actual - 1
+            ) * registros_por_pagina
+
+            limite = (
+                offset + registros_por_pagina - 1
+            )
+
+        # Obtener únicamente los 15 documentos de la página.
         res = await (
             consulta
             .order(
                 "created_at",
                 desc=True
             )
+            .range(
+                offset,
+                limite
+            )
             .execute()
         )
 
         inventarios = res.data or []
+
 
         return templates.TemplateResponse(
             request=request,
@@ -126,7 +195,10 @@ async def vista_inventario(
                 "es_provisional": (
                     perfil
                     and es_usuario_provisional(perfil)
-                )
+                ),
+                "pagina_actual": pagina_actual,
+                "total_paginas": total_paginas,
+                "total_inventarios": total_inventarios
             }
         )
 
@@ -244,13 +316,49 @@ async def crear_inventario(
             detail="La tienda es obligatoria."
         )
 
-    if not clave_creacion:
+    
+    # Validar que la clave recibida sea un UUID válido.
+    try:
+        clave_creacion = str(
+            UUID(clave_creacion.strip())
+        )
+    except (ValueError, AttributeError, TypeError):
         raise HTTPException(
             status_code=400,
-            detail="No se pudo validar la solicitud de creación."
+            detail="La clave de creación no es válida."
         )
+
     
     try:
+        
+                # Buscar si el usuario ya creó este inventario.
+        res_existente = await (
+            config.supabase_async
+            .table("inventarios")
+            .select("id")
+            .eq("clave_creacion", clave_creacion)
+            .eq("usuario_creador_id", str(user.id))
+            .limit(1)  # Evita usar maybe_single().
+            .execute()
+        )
+
+        # Tratar los resultados como una lista.
+        inventarios_existentes = (
+            res_existente.data or []
+            if res_existente is not None
+            else []
+        )
+
+        # Reutilizar el inventario si ya existe.
+        if inventarios_existentes:
+            return RedirectResponse(
+                url=(
+                    f"/inventario/"
+                    f"{inventarios_existentes[0]['id']}?nuevo=1"
+                ),
+                status_code=303
+            )
+
         # El usuario creador se obtiene del token,
         # nunca del formulario ni de JavaScript.
         payload = {
@@ -296,15 +404,42 @@ async def crear_inventario(
     except HTTPException:
         raise
 
-    except Exception as e:
-        print(
-            f"ERROR EN /inventario/crear: {str(e)}"
-        )
+    
+            # Comprobar si la solicitud anterior creó el inventario.
+        try:
+            res_existente = await (
+                config.supabase_async
+                .table("inventarios")
+                .select("id")
+                .eq("clave_creacion", clave_creacion)
+                .eq("usuario_creador_id", str(user.id))
+                .limit(1)  # Consultar como lista, sin maybe_single().
+                .execute()
+            )
 
-        raise HTTPException(
-            status_code=500,
-            detail="Error al crear el inventario."
-        )
+            # Manejar una respuesta vacía de forma segura.
+            inventarios_existentes = (
+                res_existente.data or []
+                if res_existente is not None
+                else []
+            )
+
+            # Si ya se creó, abrir el documento original.
+            if inventarios_existentes:
+                return RedirectResponse(
+                    url=(
+                        f"/inventario/"
+                        f"{inventarios_existentes[0]['id']}?nuevo=1"
+                    ),
+                    status_code=303
+                )
+
+        except Exception as error_busqueda:
+            print(
+                "ERROR AL VERIFICAR CLAVE DE CREACIÓN: "
+                f"{str(error_busqueda)}"
+            )
+
 
 # ============================================================
 # ABRIR INVENTARIO
@@ -415,19 +550,23 @@ async def vista_inventario_detalle(
             )
             == str(user.id)
         )
+
         return templates.TemplateResponse(
             request=request,
             name="inventario_nuevo.html",
             context={
                 "inventario": inventario,
                 "productos": productos,
-                "es_creador_inventario": es_creador_inventario,
+                "perfil": perfil,
                 "es_provisional": (
                     perfil
                     and es_usuario_provisional(perfil)
-                )
+                ),
+                "es_creador_inventario": es_creador_inventario
             }
         )
+
+
 
     except HTTPException:
         raise
@@ -441,6 +580,117 @@ async def vista_inventario_detalle(
             status_code=500,
             detail="Error al cargar el inventario."
         )
+
+
+# ============================================================
+# REABRIR INVENTARIO COMPLETADO
+# ============================================================
+
+@router.post("/api/inventario/{inventario_id}/reabrir")
+async def reabrir_inventario(
+    request: Request,
+    inventario_id: int,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    # Validar la sesión del usuario.
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "ok": False,
+                "error": "No autorizado."
+            }
+        )
+
+   
+    # Obtener el tipo de usuario desde el perfil actual.
+    perfil = obtener_perfil_inventario(request)
+
+    tipo_usuario = str(
+        perfil.get("tipo_usuario", "")
+        if isinstance(perfil, dict)
+        else ""
+    ).strip().lower()
+
+    # Permitir la reapertura a usuarios normales y administradores.
+    tipos_autorizados = {
+        "normal",
+        "administrador",
+    }
+
+    if tipo_usuario not in tipos_autorizados:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "ok": False,
+                "error": (
+                    "Tu tipo de usuario no tiene permiso "
+                    "para reabrir inventarios completados."
+                )
+            }
+        )
+
+
+    try:
+        # Cambiar el estado solo si sigue completado.
+        resultado = await (
+            config.supabase_async
+            .table("inventarios")
+            .update({
+                "estado": "borrador"
+            })
+            .eq("id", inventario_id)
+            .eq("estado", "completado")
+            .select("id")
+            .execute()
+        )
+
+        inventarios_actualizados = (
+            resultado.data or []
+        )
+
+        # Evitar cambios si el documento no existe
+        # o ya no está completado.
+        if not inventarios_actualizados:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "ok": False,
+                    "error": (
+                        "El inventario no existe o "
+                        "ya no está completado."
+                    )
+                }
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "ok": True,
+                "estado": "borrador"
+            }
+        )
+
+    except Exception as e:
+        print(
+            "ERROR AL REABRIR INVENTARIO: "
+            f"{str(e)}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "No se pudo reabrir el inventario."
+            }
+        )
+
 
 # ============================================================
 # GUARDAR INVENTARIO

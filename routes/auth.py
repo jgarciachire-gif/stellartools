@@ -111,39 +111,144 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
         request.session.clear()
         return res_error
         
+
+# Envía el correo de recuperación de contraseña.
 @router.post("/recuperar-password")
-def enviar_recuperacion(request: Request, email: str = Form(...)):
+def enviar_recuperacion(
+    request: Request,
+    email: str = Form(...)
+):
     try:
-        redirect_to = str(request.url_for("vista_reset_password"))
-        supabase.auth.reset_password_for_email(email, {"redirect_to": redirect_to})
-        return script_alerta_modal(
-            tipo="exito", 
-            titulo="Correo Enviado", 
-            mensaje="Si el correo está registrado, recibirás un enlace para restablecer tu contraseña."
-        )
-    except Exception as e:
-        return script_alerta_modal(
-            tipo="error", 
-            titulo="Error", 
-            mensaje=f"No se pudo procesar la solicitud: {str(e)}"
+        # Usa el dominio configurado para producción, no el host de la petición.
+        base_url = (
+            os.getenv("APP_BASE_URL")
+            or os.getenv("VERCEL_PROJECT_PRODUCTION_URL")
+            or os.getenv("VERCEL_URL")
         )
 
-@router.get("/reset-password")
+        if not base_url:
+            raise RuntimeError(
+                "Falta configurar APP_BASE_URL en el entorno."
+            )
+
+        # Vercel puede entregar el dominio sin https://.
+        if not base_url.startswith(("https://", "http://")):
+            base_url = f"https://{base_url}"
+
+        # Evita una barra doble al construir la URL.
+        redirect_to = f"{base_url.rstrip('/')}/reset-password"
+
+        # Solicita a Supabase el envío del enlace.
+        config.supabase.auth.reset_password_for_email(
+            email.strip(),
+            {"redirect_to": redirect_to}
+        )
+
+        # No revela si el correo existe en el sistema.
+        return script_alerta_modal(
+            tipo="exito",
+            titulo="Solicitud procesada",
+            mensaje=(
+                "Si el correo está registrado, recibirás "
+                "un enlace para restablecer tu contraseña."
+            )
+        )
+
+    except Exception:
+        # No mostrar al usuario detalles internos del servidor.
+        print("ERROR AL SOLICITAR RECUPERACIÓN DE CONTRASEÑA")
+
+        return script_alerta_modal(
+            tipo="error",
+            titulo="No se pudo procesar",
+            mensaje=(
+                "No pudimos enviar la solicitud. "
+                "Inténtalo nuevamente más tarde."
+            )
+        )
+
+
+# Muestra la pantalla para establecer una nueva contraseña.
+@router.get("/reset-password", name="vista_reset_password")
 def vista_reset_password(request: Request):
-    return templates.TemplateResponse(request=request, name="login.html", context={"reset_mode": True})
+    return templates.TemplateResponse(
+        request=request,
+        name="login.html",
+        context={"reset_mode": True}
+    )
 
-# Convertimos la función a async para permitir la ejecución de await
+
+# Actualiza la contraseña usando la sesión del enlace de recuperación.
 @router.post("/reset-password")
-async def procesar_reset_password(access_token: str = Cookie(None), nueva_password: str = Form(...)):
-    # Obtenemos el usuario esperando la corrutina
-    user = await obtener_usuario_actual(access_token)
-    if not user:
-        return script_alerta_modal(tipo="error", titulo="Sesión Expirada", mensaje="El enlace de recuperación ha expirado o es inválido.")
+def procesar_reset_password(
+    access_token: str = Form(...),
+    refresh_token: str = Form(...),
+    nueva_password: str = Form(...)
+):
+    access_token = access_token.strip()
+    refresh_token = refresh_token.strip()
+
+    # Validación básica adicional en el servidor.
+    if not access_token or not refresh_token:
+        return script_alerta_modal(
+            tipo="error",
+            titulo="Enlace inválido",
+            mensaje=(
+                "El enlace no contiene una sesión válida. "
+                "Solicita uno nuevo."
+            )
+        )
+
+    if len(nueva_password) < 6:
+        return script_alerta_modal(
+            tipo="error",
+            titulo="Contraseña demasiado corta",
+            mensaje="La contraseña debe tener al menos 6 caracteres."
+        )
+
     try:
-        supabase.auth.update_user({"password": nueva_password})
-        return script_alerta_modal(tipo="exito", titulo="Contraseña Actualizada", mensaje="Tu clave se ha cambiado con éxito. Puedes iniciar sesión.")
+        # Crea un cliente independiente para esta solicitud.
+        cliente_reset = config.create_client(
+            config.SUPABASE_URL,
+            config.SUPABASE_KEY
+        )
+
+        # Establece la sesión recibida desde el enlace.
+        cliente_reset.auth.set_session(
+            access_token,
+            refresh_token
+        )
+
+        # Supabase valida la sesión antes de actualizar la contraseña.
+        cliente_reset.auth.update_user({
+            "password": nueva_password
+        })
+
+        # Tras el éxito, vuelve al inicio de sesión.
+        return script_alerta_modal(
+            tipo="exito",
+            titulo="Contraseña actualizada",
+            mensaje=(
+                "Tu contraseña se actualizó correctamente. "
+                "Ya puedes iniciar sesión."
+            )
+        )
+
     except Exception as e:
-        return script_alerta_modal(tipo="error", titulo="Error", mensaje=f"Error al actualizar la contraseña: {str(e)}")
+        # Registra el tipo de error sin imprimir tokens ni contraseñas.
+        print(
+            "ERROR AL ACTUALIZAR CONTRASEÑA: "
+            f"{type(e).__name__}"
+        )
+
+        return script_alerta_modal(
+            tipo="error",
+            titulo="No se pudo actualizar",
+            mensaje=(
+                "El enlace puede haber caducado o ser inválido. "
+                "Solicita un nuevo correo de recuperación."
+            )
+        )
 
 # Cierre de sesión y limpieza de rastro en navegador
 @router.get("/logout")

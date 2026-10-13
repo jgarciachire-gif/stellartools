@@ -12,6 +12,126 @@ from models import (
 )  # Modelos de validación para las API
 router = APIRouter()
 
+import asyncio
+import unicodedata
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+
+from fastapi import Query
+
+
+# ============================================================
+# NORMALIZACIÓN DEL KARDEX DE VENTAS
+# ============================================================
+
+def _normalizar_cabecera_kardex(valor):
+    texto = unicodedata.normalize(
+        "NFKD",
+        str(valor or "")
+    )
+
+    texto = "".join(
+        caracter
+        for caracter in texto
+        if not unicodedata.combining(caracter)
+    )
+
+    return (
+        texto.strip()
+        .lower()
+        .replace(" ", "_")
+        .replace("-", "_")
+    )
+
+
+def _normalizar_codigo_kardex(valor):
+    codigo = str(valor or "").strip().upper()
+
+    # Evita códigos numéricos convertidos a texto decimal
+    # por algunos programas de hojas de cálculo.
+    if codigo.endswith(".0") and codigo[:-2].isdigit():
+        codigo = codigo[:-2]
+
+    if not codigo:
+        return ""
+
+    # Completa hasta seis dígitos sin truncar códigos largos.
+    if codigo.isdigit():
+        return codigo.zfill(6)
+
+    return codigo
+
+
+def _parsear_fecha_kardex(valor):
+    texto = str(valor or "").strip()
+
+    formatos = (
+        "%d/%m/%Y",
+        "%d-%m-%Y",
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d/%m/%y",
+        "%Y-%m-%d %H:%M:%S",
+    )
+
+    for formato in formatos:
+        try:
+            return datetime.strptime(
+                texto,
+                formato
+            ).date()
+        except ValueError:
+            continue
+
+    # Admite fechas ISO con hora y zona horaria.
+    try:
+        return datetime.fromisoformat(
+            texto.replace("Z", "+00:00")
+        ).date()
+    except ValueError:
+        return None
+
+
+def _parsear_cantidad_kardex(valor):
+    texto = str(valor or "").strip()
+
+    if not texto:
+        return Decimal("0")
+
+    texto = texto.replace(" ", "")
+
+    # Admite separadores decimales habituales:
+    # 1.234,50 -> 1234.50
+    # 1,234.50 -> 1234.50
+    if "," in texto and "." in texto:
+        if texto.rfind(",") > texto.rfind("."):
+            texto = texto.replace(".", "")
+            texto = texto.replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+
+    elif "," in texto:
+        partes = texto.split(",")
+
+        if len(partes) == 2 and len(partes[1]) != 3:
+            texto = texto.replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+
+    try:
+        cantidad = Decimal(texto)
+    except InvalidOperation:
+        raise ValueError(
+            f"Cantidad no válida: {valor}"
+        )
+
+    if not cantidad.is_finite() or cantidad < 0:
+        raise ValueError(
+            f"Cantidad negativa o no válida: {valor}"
+        )
+
+    return cantidad
+
 @router.get("/analisis-pedido")
 async def vista_analisis_pedido(
     request: Request, 
@@ -505,6 +625,451 @@ async def obtener_ventas_stellar(
         raise HTTPException(
             status_code=500,
             detail=f"Error al consultar ventas: {str(e)}"
+        )
+
+
+# ============================================================
+# IMPORTACIÓN DEL KARDEX HISTÓRICO DE VENTAS
+# ============================================================
+
+@router.post("/analisis/cargar-kardex-ventas")
+async def cargar_kardex_ventas(
+    file: UploadFile = File(...),
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="No autorizado"
+        )
+
+    if not (file.filename or "").lower().endswith(".csv"):
+        raise HTTPException(
+            status_code=400,
+            detail="El archivo debe estar en formato CSV."
+        )
+
+    try:
+        contenido = await file.read()
+
+        if len(contenido) > 50 * 1024 * 1024:
+            raise HTTPException(
+                status_code=413,
+                detail="El archivo supera el límite de 50 MB."
+            )
+
+
+        # Detecta las codificaciones habituales de los CSV exportados.
+        # Prioriza UTF-8 y luego prueba las codificaciones de Windows.
+        texto = None
+
+        for encoding in ("utf-8-sig", "cp1252", "latin-1"):
+            try:
+                texto = contenido.decode(encoding)
+                break
+            except UnicodeDecodeError:
+                continue
+
+        if texto is None:
+            raise HTTPException(
+                status_code=400,
+                detail="No se pudo leer la codificación del archivo CSV."
+            )
+
+
+
+        # El kardex puede utilizar coma o punto y coma.
+        try:
+            dialecto = csv.Sniffer().sniff(
+                texto[:8192],
+                delimiters=";,\t"
+            )
+        except csv.Error:
+            dialecto = csv.excel
+            dialecto.delimiter = ";"
+
+        lector = csv.DictReader(
+            io.StringIO(texto),
+            dialect=dialecto
+        )
+
+        if not lector.fieldnames:
+            raise HTTPException(
+                status_code=400,
+                detail="El CSV no contiene encabezados."
+            )
+
+        # Normaliza los nombres de las columnas.
+        columnas = {
+            _normalizar_cabecera_kardex(nombre): nombre
+            for nombre in lector.fieldnames
+            if nombre
+        }
+
+        def buscar_columna(*alternativas):
+            for alternativa in alternativas:
+                nombre_real = columnas.get(alternativa)
+
+                if nombre_real:
+                    return nombre_real
+
+            return None
+
+        col_sede = buscar_columna(
+            "sede",
+            "tienda"
+        )
+
+        col_codigo = buscar_columna(
+            "codigo",
+            "cod_producto",
+            "codigo_producto"
+        )
+
+        col_documento = buscar_columna(
+            "documento",
+            "nro_documento",
+            "numero_documento"
+        )
+
+        col_movimiento = buscar_columna(
+            "movimiento",
+            "tipo_movimiento"
+        )
+
+        col_descargos = buscar_columna(
+            "descargos",
+            "descargo"
+        )
+
+        col_fecha = buscar_columna(
+            "fecha",
+            "fecha_movimiento",
+            "fecha_documento",
+            "fecha_venta"
+        )
+
+        requeridas = {
+            "Sede/Tienda": col_sede,
+            "Codigo": col_codigo,
+            "Documento": col_documento,
+            "Movimiento": col_movimiento,
+            "Descargos": col_descargos,
+            "Fecha": col_fecha,
+        }
+
+        faltantes = [
+            nombre
+            for nombre, columna in requeridas.items()
+            if not columna
+        ]
+
+        if faltantes:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Faltan columnas necesarias en el kardex: "
+                    + ", ".join(faltantes)
+                )
+            )
+
+        # Consolida líneas repetidas del mismo producto
+        # dentro de la misma transacción y fecha.
+        acumulados = {}
+        filas_venta = 0
+        filas_ignoradas = 0
+
+        for numero_fila, fila in enumerate(
+            lector,
+            start=2
+        ):
+            movimiento = str(
+                fila.get(col_movimiento) or ""
+            ).strip().upper()
+
+            # Solo se admiten ventas.
+            if movimiento != "VEN":
+                filas_ignoradas += 1
+                continue
+
+            sede = str(
+                fila.get(col_sede) or ""
+            ).strip().upper()
+
+            codigo = _normalizar_codigo_kardex(
+                fila.get(col_codigo)
+            )
+
+            documento = str(
+                fila.get(col_documento) or ""
+            ).strip()
+
+            fecha_venta = _parsear_fecha_kardex(
+                fila.get(col_fecha)
+            )
+
+            try:
+                cantidad = _parsear_cantidad_kardex(
+                    fila.get(col_descargos)
+                )
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Fila {numero_fila}: {error}"
+                    )
+                )
+
+            if (
+                not sede
+                or not codigo
+                or not documento
+                or fecha_venta is None
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "Fila "
+                        f"{numero_fila}: falta sede, código, "
+                        "documento o fecha válida."
+                    )
+                )
+
+            # Las filas con cantidad cero no aportan demanda.
+            if cantidad == 0:
+                filas_ignoradas += 1
+                continue
+
+            clave = (
+                sede,
+                fecha_venta.isoformat(),
+                documento,
+                codigo
+            )
+
+            if clave not in acumulados:
+                acumulados[clave] = {
+                    "sede": sede,
+                    "codigo": codigo,
+                    "fecha_venta": fecha_venta.isoformat(),
+                    "documento": documento,
+                    "descargos": cantidad
+                }
+            else:
+                acumulados[clave]["descargos"] += cantidad
+
+            filas_venta += 1
+
+        if not acumulados:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No se encontraron ventas VEN válidas "
+                    "con cantidad positiva."
+                )
+            )
+
+        registros = []
+
+        for registro in acumulados.values():
+            registro["descargos"] = float(
+                registro["descargos"]
+            )
+            registros.append(registro)
+
+        # Se utiliza el cliente administrativo síncrono
+        # fuera del event loop de FastAPI.
+        # El upsert evita duplicados en cargas repetidas.
+        tamanio_lote = 500
+        procesados = 0
+
+        def guardar_lote(lote):
+            return (
+                config.supabase_admin
+                .table("ventas_kardex")
+                .upsert(
+                    lote,
+                    on_conflict=(
+                        "sede,fecha_venta,documento,codigo"
+                    )
+                )
+                .execute()
+            )
+
+        for inicio in range(
+            0,
+            len(registros),
+            tamanio_lote
+        ):
+            lote = registros[
+                inicio:inicio + tamanio_lote
+            ]
+
+            await asyncio.to_thread(
+                guardar_lote,
+                lote
+            )
+
+            procesados += len(lote)
+
+        return {
+            "status": "ok",
+            "filas_venta": filas_venta,
+            "registros_consolidados": procesados,
+            "filas_ignoradas": filas_ignoradas
+        }
+
+    except HTTPException:
+        raise
+
+    except Exception as error:
+        print(
+            "ERROR AL IMPORTAR KARDEX DE VENTAS:",
+            str(error)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "No se pudo importar el kardex. "
+                "Revisa el registro del servidor."
+            )
+        )
+
+
+# ============================================================
+# COBERTURA DE FECHAS DISPONIBLES DEL KARDEX
+# ============================================================
+
+@router.get("/analisis/cobertura-kardex")
+async def obtener_cobertura_kardex(
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="No autorizado"
+        )
+
+    try:
+        def consultar():
+            return config.supabase_admin.rpc(
+                "obtener_cobertura_kardex",
+                {}
+            ).execute()
+
+        respuesta = await asyncio.to_thread(consultar)
+
+        return {
+            "status": "ok",
+            "data": respuesta.data or []
+        }
+
+    except Exception as error:
+        print(
+            "ERROR AL CONSULTAR COBERTURA DEL KARDEX:",
+            str(error)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo consultar la cobertura del kardex."
+        )
+
+
+
+# ============================================================
+# DEMANDA CALCULADA A PARTIR DEL KARDEX
+# ============================================================
+
+@router.get("/analisis/demanda-kardex")
+async def obtener_demanda_kardex(
+    fecha_inicio: date,
+    fecha_fin: date,
+    codigos: Optional[List[str]] = Query(None),
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="No autorizado"
+        )
+
+    if fecha_inicio > fecha_fin:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "La fecha inicial no puede ser posterior "
+                "a la fecha final."
+            )
+        )
+
+    codigos_normalizados = None
+
+    if codigos:
+        codigos_normalizados = list(dict.fromkeys(
+            _normalizar_codigo_kardex(codigo)
+            for codigo in codigos
+            if _normalizar_codigo_kardex(codigo)
+        ))
+
+        if not codigos_normalizados:
+            return {
+                "status": "ok",
+                "data": []
+            }
+
+    try:
+        def consultar():
+            return config.supabase_admin.rpc(
+                "obtener_demanda_kardex",
+                {
+                    "p_fecha_inicio": fecha_inicio.isoformat(),
+                    "p_fecha_fin": fecha_fin.isoformat(),
+                    "p_codigos": codigos_normalizados
+                }
+            ).execute()
+
+        respuesta = await asyncio.to_thread(
+            consultar
+        )
+
+        return {
+            "status": "ok",
+            "fecha_inicio": fecha_inicio.isoformat(),
+            "fecha_fin": fecha_fin.isoformat(),
+            "data": respuesta.data or []
+        }
+
+    except Exception as error:
+        print(
+            "ERROR AL CALCULAR DEMANDA DEL KARDEX:",
+            str(error)
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "No se pudo calcular la demanda del kardex."
+            )
         )
 
 
