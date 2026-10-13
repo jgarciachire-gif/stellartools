@@ -390,18 +390,27 @@
             para consultar sus ventas históricas.
         </p>
 
-        <div id="kardex-resultados-contenedor" class="hidden mt-4 overflow-x-auto border border-slate-200 rounded-xl">
+
+        <!-- Contenedor independiente de resultados de demanda -->
+        <div id="kardex-resultados-contenedor"
+            class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl">
+
+            <!-- Cierra solamente los resultados de consultar demanda -->
+            <button type="button" onclick="cerrarResultadosKardex('kardex-resultados-contenedor')"
+                class="absolute right-2 top-2 z-10 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
+                title="Cerrar resultados de demanda" aria-label="Cerrar resultados de demanda">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+
             <table class="w-full text-xs text-left">
                 <thead class="bg-slate-900 text-white">
                     <tr>
                         <th class="px-3 py-2">Sede</th>
                         <th class="px-3 py-2">Código</th>
+                        <th class="px-3 py-2">Descripción</th>
                         <th class="px-3 py-2 text-right">Unidades vendidas</th>
                         <th class="px-3 py-2 text-right">Días con ventas</th>
                         <th class="px-3 py-2 text-right">Demanda diaria</th>
-                        <th class="px-3 py-2 text-right">Días con ventas anteriores</th>
-                        <th class="px-3 py-2 text-right">Días con ventas recientes</th>
-                        <th class="px-3 py-2">Calidad de datos</th>
                     </tr>
                 </thead>
                 <tbody id="kardex-resultados" class="divide-y divide-slate-100">
@@ -412,7 +421,29 @@
 
 
     <!-- Resultados comparativos: no modifican los sugeridos actuales -->
-    <div id="kardex-comparacion-contenedor" class="hidden mt-4 overflow-x-auto border border-violet-200 rounded-xl">
+    <div id="kardex-comparacion-contenedor"
+        class="hidden relative mt-4 overflow-x-auto border border-violet-200 rounded-xl">
+
+        <!-- Indicador de carga exclusivo del comparativo de períodos -->
+        <div id="cargando-comparacion-periodos"
+            class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90" role="status"
+            aria-live="polite">
+
+            <i class="fa-solid fa-spinner fa-spin text-3xl text-violet-600"></i>
+
+            <span class="text-sm font-semibold text-slate-700">
+                Actualizando comparación de períodos...
+            </span>
+        </div>
+
+        <!-- Cierra solamente los resultados de comparación -->
+        <button type="button" onclick="cerrarResultadosKardex('kardex-comparacion-contenedor')"
+            class="absolute right-2 top-2 z-30 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
+            title="Cerrar comparación de períodos" aria-label="Cerrar comparación de períodos">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+
+
         <p id="kardex-comparacion-periodos" class="px-3 py-2 text-xs text-slate-600 bg-violet-50"></p>
 
         <table class="w-full text-xs text-left">
@@ -420,11 +451,13 @@
                 <tr>
                     <th class="px-3 py-2">Sede</th>
                     <th class="px-3 py-2">Código</th>
+                    <th class="px-3 py-2">Descripción</th>
                     <th class="px-3 py-2 text-right">Unidades anteriores</th>
                     <th class="px-3 py-2 text-right">Unidades recientes</th>
                     <th class="px-3 py-2 text-right">Demanda anterior</th>
                     <th class="px-3 py-2 text-right">Demanda reciente</th>
                     <th class="px-3 py-2 text-right">Variación unidades</th>
+                    <th class="px-3 py-2 text-right">Días con ventas anteriores</th>
                     <th class="px-3 py-2 text-right">Días con ventas recientes</th>
                 </tr>
             </thead>
@@ -490,6 +523,7 @@
                     <!-- Las celdas y filas tipo cuadrícula se insertan dinámicamente -->
                 </tbody>
             </table>
+
         </div>
 
         <!-- BOTÓN AGREGAR LÍNEA Y TOTALIZACIÓN -->
@@ -2358,12 +2392,73 @@ ${nodosProductosXML.join('\n')}
                         }`;
                 });
 
+
             // Carga los datos correspondientes a la nueva tienda.
             cargarEstadoTablaDesdeMemoria(tiendaNueva);
 
             // Aplica la cobertura de la tienda usando la caché.
             actualizarCoberturaKardexDesdeAnalisis(true);
+
+            // Actualiza la demanda histórica y el comparativo para la nueva tienda.
+            actualizarDemandaKardexAlCambiarTienda();
+
         }
+
+
+
+        async function actualizarDemandaKardexAlCambiarTienda() {
+            // Lee las fechas seleccionadas.
+            const fechaInicio = document.getElementById(
+                'kardex-fecha-inicio'
+            )?.value;
+
+            const fechaFin = document.getElementById(
+                'kardex-fecha-fin'
+            )?.value;
+
+            // No actualiza si las fechas no son válidas.
+            if (!fechaInicio || !fechaFin || fechaInicio > fechaFin) {
+                return;
+            }
+
+            // No actualiza si no hay productos en la tabla.
+            if (!obtenerCodigosTablaAnalisis().length) {
+                return;
+            }
+
+            // Detecta cuáles resultados están abiertos.
+            const contenedorDemanda = document.getElementById(
+                'kardex-resultados-contenedor'
+            );
+
+            const contenedorComparacion = document.getElementById(
+                'kardex-comparacion-contenedor'
+            );
+
+            const demandaVisible =
+                contenedorDemanda &&
+                !contenedorDemanda.classList.contains('hidden');
+
+            const comparacionVisible =
+                contenedorComparacion &&
+                !contenedorComparacion.classList.contains('hidden');
+
+            // Actualiza solamente las consultas que el usuario tiene abiertas.
+            const tareas = [];
+
+            if (demandaVisible) {
+                tareas.push(consultarDemandaKardexDesdeAnalisis());
+            }
+
+            if (comparacionVisible) {
+                tareas.push(compararDemandaKardexDesdeAnalisis());
+            }
+
+            // Espera las actualizaciones sin cancelar una por el error de la otra.
+            await Promise.allSettled(tareas);
+        }
+
+
 
         function cargarEstadoTablaDesdeMemoria(tienda) {
             asegurarEstructuraTienda(tienda); // Garantiza objeto inicializado para la tienda
@@ -3033,6 +3128,49 @@ ${nodosProductosXML.join('\n')}
             }
         }
 
+
+        function normalizarSedeKardex(sede) {
+            // Unifica el nombre de Ciudad Alianza.
+            const valor = String(sede || '').trim().toUpperCase();
+
+            return ['ALIANZA', 'C. ALIANZA'].includes(valor)
+                ? 'CIUDAD ALIANZA'
+                : valor;
+        }
+
+        function obtenerDescripcionesProductosKardex() {
+            const descripciones = new Map();
+
+            // Lee los códigos y descripciones visibles en la tabla de análisis.
+            document.querySelectorAll('#filas-tabla-analisis tr').forEach(fila => {
+                const codigo = normalizarCodigoAnalisis(
+                    fila.querySelector('.inp-codigo')?.value || ''
+                );
+
+                const descripcion = String(
+                    fila.querySelector('.inp-desc')?.value || ''
+                ).trim();
+
+                if (codigo) {
+                    descripciones.set(codigo, descripcion || 'Sin descripción');
+                }
+            });
+
+            return descripciones;
+        }
+
+
+        function cerrarResultadosKardex(idContenedor) {
+            // Oculta únicamente el contenedor solicitado.
+            const contenedor = document.getElementById(idContenedor);
+
+            if (contenedor) {
+                contenedor.classList.add('hidden');
+            }
+        }
+
+
+
         async function consultarDemandaKardexDesdeAnalisis() {
             const fechaInicio = document.getElementById(
                 'kardex-fecha-inicio'
@@ -3101,9 +3239,24 @@ ${nodosProductosXML.join('\n')}
                     );
                 }
 
-                const registros = Array.isArray(resultado.data)
+
+                const registrosRespuesta = Array.isArray(resultado.data)
                     ? resultado.data
                     : [];
+
+                // Obtiene la tienda seleccionada actualmente.
+                const sedeSeleccionada = normalizarSedeKardex(
+                    window.tiendaActivaPestana
+                );
+
+                // Descarta las ventas de las demás tiendas.
+                const registros = registrosRespuesta.filter(item =>
+                    normalizarSedeKardex(item.sede) === sedeSeleccionada
+                );
+
+                // Prepara las descripciones de los productos visibles.
+                const descripciones = obtenerDescripcionesProductosKardex();
+
 
                 tbody.replaceChildren();
 
@@ -3125,19 +3278,24 @@ ${nodosProductosXML.join('\n')}
                 registros.forEach(item => {
                     const fila = document.createElement('tr');
 
+
+                    const codigo = normalizarCodigoAnalisis(item.codigo || '');
+
                     const valores = [
                         String(item.sede || '').trim(),
-                        String(item.codigo || '').trim(),
+                        codigo,
+                        descripciones.get(codigo) || 'Sin descripción',
                         formatoNumero(item.unidades_vendidas),
                         formatoNumero(item.dias_con_ventas),
                         formatoNumero(item.demanda_diaria)
                     ];
 
+
                     valores.forEach((valor, indice) => {
                         const celda = document.createElement('td');
                         celda.className = 'px-3 py-2';
 
-                        if (indice >= 2) {
+                        if (indice >= 3) {
                             celda.classList.add('text-right', 'tabular-nums');
                         }
 
@@ -3166,6 +3324,12 @@ ${nodosProductosXML.join('\n')}
             }
         }
 
+
+        function formatearFechaKardex(fecha) {
+            // Convierte AAAA-MM-DD a DD-MM-AAAA sin alterar la fecha.
+            const [anio, mes, dia] = String(fecha).split('-');
+            return `${dia}-${mes}-${anio}`;
+        }
 
 
         async function compararDemandaKardexDesdeAnalisis() {
@@ -3265,6 +3429,22 @@ ${nodosProductosXML.join('\n')}
                     consultarPeriodo(recienteInicio, recienteFin)
                 ]);
 
+                const sedeSeleccionada = normalizarSedeKardex(
+                    window.tiendaActivaPestana
+                );
+
+                // Mantiene solo los resultados de la tienda seleccionada.
+                const datosAnterioresFiltrados = datosAnteriores.filter(item =>
+                    normalizarSedeKardex(item.sede) === sedeSeleccionada
+                );
+
+                const datosRecientesFiltrados = datosRecientes.filter(item =>
+                    normalizarSedeKardex(item.sede) === sedeSeleccionada
+                );
+
+                // Obtiene las descripciones de la tabla de análisis.
+                const descripciones = obtenerDescripcionesProductosKardex();
+
                 // Une los datos usando sede normalizada y código de producto.
                 const claveRegistro = item =>
                     `${String(item.sede || '').trim().toUpperCase()}|` +
@@ -3272,7 +3452,7 @@ ${nodosProductosXML.join('\n')}
 
                 const mapa = new Map();
 
-                datosAnteriores.forEach(item => {
+                datosAnterioresFiltrados.forEach(item => {
                     const clave = claveRegistro(item);
 
                     mapa.set(clave, {
@@ -3283,7 +3463,7 @@ ${nodosProductosXML.join('\n')}
                     });
                 });
 
-                datosRecientes.forEach(item => {
+                datosRecientesFiltrados.forEach(item => {
                     const clave = claveRegistro(item);
 
                     if (!mapa.has(clave)) {
@@ -3379,6 +3559,13 @@ ${nodosProductosXML.join('\n')}
                     // Conserva el orden de las columnas de la tabla.
                     crearCelda(fila, item.sede);
                     crearCelda(fila, item.codigo);
+
+                    // Muestra la descripción del producto correspondiente.
+                    crearCelda(
+                        fila,
+                        descripciones.get(normalizarCodigoAnalisis(item.codigo))
+                        || 'Sin descripción'
+                    );
                     crearCelda(fila, formatoNumero(unidadesAnteriores), true);
                     crearCelda(fila, formatoNumero(unidadesRecientes), true);
                     crearCelda(fila, formatoNumero(demandaAnterior), true);
@@ -3386,16 +3573,17 @@ ${nodosProductosXML.join('\n')}
                     crearCelda(fila, variacionUnidades, true);
                     crearCelda(fila, formatoNumero(diasAnteriores), true);
                     crearCelda(fila, formatoNumero(diasRecientes), true);
-                    crearCelda(fila, calidadDatos);
 
                     tbody.appendChild(fila);
                 });
 
-                // Muestra claramente las fechas comparadas.
+
+                // Muestra las fechas comparadas en formato DD-MM-AAAA.
                 etiquetaPeriodos.textContent =
-                    `Anterior: ${anteriorInicio} a ${anteriorFin} | ` +
-                    `Reciente: ${recienteInicio} a ${recienteFin}. ` +
+                    `Anterior: ${formatearFechaKardex(anteriorInicio)} a ${formatearFechaKardex(anteriorFin)} | ` +
+                    `Reciente: ${formatearFechaKardex(recienteInicio)} a ${formatearFechaKardex(recienteFin)}. ` +
                     'Períodos inclusivos de 30 días; umbral de calidad: 5 días con ventas.';
+
 
                 if (mapa.size === 0) {
                     mostrarMensajeKardex(

@@ -148,7 +148,7 @@
                     type="text"
                     readonly
                     tabindex="-1"
-                    class="inp-desc w-full px-2 py-1.5 bg-slate-50 text-xs font-normal text-slate-600 focus:outline-none cursor-default border-0"
+                    class="inp-desc w-full px-2 py-1.5 text-xs font-normal text-slate-600 focus:bg-white focus:outline-none cursor-default border-0"
                 >
             </td>
 
