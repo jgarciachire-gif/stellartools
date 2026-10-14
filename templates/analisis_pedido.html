@@ -400,6 +400,24 @@
                 class="absolute right-2 top-2 z-10 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
                 title="Cerrar resultados de demanda" aria-label="Cerrar resultados de demanda">
                 <i class="fa-solid fa-xmark"></i>
+
+                <!-- Mensaje exclusivo de la consulta de demanda -->
+                <p id="kardex-demanda-mensaje" class="hidden px-3 py-2 text-xs text-slate-600" role="status"
+                    aria-live="polite">
+                </p>
+
+                <!-- Indicador de carga exclusivo de la consulta de demanda -->
+                <div id="cargando-demanda-kardex"
+                    class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90"
+                    role="status" aria-live="polite">
+
+                    <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600"></i>
+
+                    <span class="text-sm font-semibold text-slate-700">
+                        Consultando ventas de la tienda...
+                    </span>
+                </div>
+
             </button>
 
             <table class="w-full text-xs text-left">
@@ -422,14 +440,14 @@
 
     <!-- Resultados comparativos: no modifican los sugeridos actuales -->
     <div id="kardex-comparacion-contenedor"
-        class="hidden relative mt-4 overflow-x-auto border border-violet-200 rounded-xl">
+        class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl">
 
         <!-- Indicador de carga exclusivo del comparativo de períodos -->
         <div id="cargando-comparacion-periodos"
             class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90" role="status"
             aria-live="polite">
 
-            <i class="fa-solid fa-spinner fa-spin text-3xl text-violet-600"></i>
+            <i class="fa-solid fa-spinner fa-spin text-3xl text-teal-600"></i>
 
             <span class="text-sm font-semibold text-slate-700">
                 Actualizando comparación de períodos...
@@ -443,6 +461,11 @@
             <i class="fa-solid fa-xmark"></i>
         </button>
 
+
+        <!-- Mensaje exclusivo de la comparación de períodos -->
+        <p id="kardex-comparacion-mensaje" class="hidden px-3 py-2 text-xs text-slate-600" role="status"
+            aria-live="polite">
+        </p>
 
         <p id="kardex-comparacion-periodos" class="px-3 py-2 text-xs text-slate-600 bg-violet-50"></p>
 
@@ -3074,6 +3097,27 @@ ${nodosProductosXML.join('\n')}
                 : 'text-xs text-slate-500 mt-3';
         }
 
+
+        function mostrarEstadoPanelKardex(idMensaje, mensaje, error = false) {
+            // Actualiza el mensaje del panel indicado, sin afectar al otro.
+            const elemento = document.getElementById(idMensaje);
+            if (!elemento) return;
+
+            elemento.textContent = mensaje;
+            elemento.classList.remove('hidden', 'text-slate-600', 'text-rose-600');
+            elemento.classList.add(error ? 'text-rose-600' : 'text-slate-600');
+        }
+
+        function alternarCargaPanelKardex(idCarga, mostrar) {
+            // Activa o desactiva únicamente el indicador solicitado.
+            const indicador = document.getElementById(idCarga);
+            if (!indicador) return;
+
+            indicador.classList.toggle('hidden', !mostrar);
+            indicador.classList.toggle('flex', mostrar);
+        }
+
+
         async function importarKardexDesdeAnalisis(event) {
             const input = event.target;
             const archivo = input.files?.[0];
@@ -3219,8 +3263,17 @@ ${nodosProductosXML.join('\n')}
 
             codigos.forEach(codigo => parametros.append('codigos', codigo));
 
+
             if (boton) boton.disabled = true;
-            mostrarMensajeKardex('Consultando ventas del período...');
+
+            // Muestra solamente el panel de demanda y su indicador.
+            contenedor.classList.remove('hidden');
+            mostrarEstadoPanelKardex(
+                'kardex-demanda-mensaje',
+                'Consultando ventas del período...'
+            );
+            alternarCargaPanelKardex('cargando-demanda-kardex', true);
+
 
             try {
                 const respuesta = await fetch(
@@ -3260,14 +3313,16 @@ ${nodosProductosXML.join('\n')}
 
                 tbody.replaceChildren();
 
+
                 if (!registros.length) {
-                    contenedor.classList.add('hidden');
-                    mostrarMensajeKardex(
-                        `No se encontraron ventas para los productos de la tabla ` +
-                        `entre ${fechaInicio} y ${fechaFin}.`
+                    // Mantiene visible el panel para mostrar que no hubo resultados.
+                    mostrarEstadoPanelKardex(
+                        'kardex-demanda-mensaje',
+                        `No se encontraron ventas entre ${fechaInicio} y ${fechaFin}.`
                     );
                     return;
                 }
+
 
                 const formatoNumero = valor =>
                     Number(valor || 0).toLocaleString('es-VE', {
@@ -3308,10 +3363,12 @@ ${nodosProductosXML.join('\n')}
 
                 contenedor.classList.remove('hidden');
 
-                mostrarMensajeKardex(
-                    `Consulta completada: ${registros.length} combinaciones ` +
-                    `de sede y producto. Período inclusivo: ${fechaInicio} a ${fechaFin}.`
+
+                mostrarEstadoPanelKardex(
+                    'kardex-demanda-mensaje',
+                    `Consulta completada: ${registros.length} combinaciones de sede y producto.`
                 );
+
 
             } catch (error) {
                 console.error('Error al consultar demanda del kardex:', error);
@@ -3319,9 +3376,14 @@ ${nodosProductosXML.join('\n')}
                     error.message || 'No se pudo consultar la demanda.',
                     true
                 );
-            } finally {
+            }
+            finally {
+                // Siempre oculta el indicador, incluso si ocurre un error.
+                alternarCargaPanelKardex('cargando-demanda-kardex', false);
+
                 if (boton) boton.disabled = false;
             }
+
         }
 
 
@@ -3417,10 +3479,18 @@ ${nodosProductosXML.join('\n')}
                 return Array.isArray(resultado.data) ? resultado.data : [];
             };
 
-            if (boton) boton.disabled = true;
-            if (contenedor) contenedor.classList.add('hidden');
 
-            mostrarMensajeKardex('Comparando los dos períodos de ventas...');
+            if (boton) boton.disabled = true;
+
+            // Muestra solamente el panel comparativo y su indicador.
+            if (contenedor) contenedor.classList.remove('hidden');
+
+            mostrarEstadoPanelKardex(
+                'kardex-comparacion-mensaje',
+                'Comparando los dos períodos de ventas...'
+            );
+            alternarCargaPanelKardex('cargando-comparacion-periodos', true);
+
 
             try {
                 // Ejecuta ambas consultas en paralelo.
@@ -3605,10 +3675,14 @@ ${nodosProductosXML.join('\n')}
                     error.message || 'No se pudo comparar la demanda.',
                     true
                 );
-            } finally {
-                // Reactiva el botón incluso si ocurre un error.
+            }
+            finally {
+                // Oculta únicamente el indicador del comparativo.
+                alternarCargaPanelKardex('cargando-comparacion-periodos', false);
+
                 if (boton) boton.disabled = false;
             }
+
         }
 
 

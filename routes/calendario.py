@@ -49,7 +49,7 @@ async def listar_eventos_calendario(
 
     client = await config.obtener_supabase_async()
 
-    # Solo recuperamos las columnas necesarias para generar eventos.
+            # Consulta las programaciones que pueden generar eventos en el rango solicitado.
     res = await (
         client
         .table("programacion_reposicion")
@@ -187,8 +187,9 @@ async def crear_programacion_api(
 
     client = await config.obtener_supabase_async()
 
-    # Solo recuperamos las columnas necesarias para generar eventos.
-    res = await (
+
+    # Busca el proveedor seleccionado en la base de datos.
+    proveedor_res = await (
         client
         .table("proveedores")
         .select("id, nombre")
@@ -197,15 +198,16 @@ async def crear_programacion_api(
         .execute()
     )
 
-    # Valida que el proveedor siga existiendo
+    # Comprueba que el proveedor exista.
     if not proveedor_res or not proveedor_res.data:
         return JSONResponse(
             status_code=404,
             content={"error": "El proveedor seleccionado no existe"}
         )
 
-    # Usa el nombre almacenado en la base de datos
+    # Obtiene el nombre oficial del proveedor.
     proveedor_nombre = proveedor_res.data["nombre"]
+
 
     # Normaliza departamento y grupo
     dep_nuevo = str(datos.get("departamento") or "").strip()
@@ -242,8 +244,8 @@ async def crear_programacion_api(
 
     client = await config.obtener_supabase_async()
 
-    # Solo recuperamos las columnas necesarias para generar eventos.
-    res = await (
+        # Busca una programación previa del mismo usuario y proveedor.
+    existente = await (
         client
         .table("programacion_reposicion")
         .select(
@@ -300,9 +302,10 @@ async def crear_programacion_api(
             "nombre_comprador": nombre_comprador
         }
 
-        # Actualiza únicamente el registro encontrado
-        res = (
-            supabase.table("programacion_reposicion")
+        # Actualiza únicamente la programación encontrada.
+        res = await (
+            client
+            .table("programacion_reposicion")
             .update(payload_update)
             .eq("id", existente.data["id"])
             .eq("usuario_id", user_id)
@@ -321,9 +324,10 @@ async def crear_programacion_api(
             "nombre_comprador": nombre_comprador
         }
 
-        # Inserta la nueva programación
-        res = (
-            supabase.table("programacion_reposicion")
+        # Inserta la nueva programación.
+        res = await (
+            client
+            .table("programacion_reposicion")
             .insert(payload_insert)
             .execute()
         )
@@ -345,7 +349,18 @@ async def eliminar_programacion_api(prog_id: int, access_token: str = Cookie(Non
         return JSONResponse(status_code=401, content={"error": "No autorizado"})
 
     # Valida que la eliminación solo afecte registros creados por el usuario activo (usuario_id)
-    res = supabase.table("programacion_reposicion").delete().eq("id", prog_id).eq("usuario_id", user.id).execute()
+        # Obtiene el cliente asíncrono de Supabase.
+    client = await config.obtener_supabase_async()
+
+    # Elimina únicamente la programación del usuario autenticado.
+    res = await (
+        client
+        .table("programacion_reposicion")
+        .delete()
+        .eq("id", prog_id)
+        .eq("usuario_id", user.id)
+        .execute()
+    )
     
     if not res.data:
         return JSONResponse({"error": "No tienes permiso para eliminar este registro o no existe"}, status_code=403)
