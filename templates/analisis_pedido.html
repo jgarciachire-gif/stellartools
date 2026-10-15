@@ -348,7 +348,7 @@
                     <label for="kardex-fecha-inicio" class="block text-xs font-semibold text-slate-600 mb-1">
                         Fecha inicial
                     </label>
-                    <input type="date" id="kardex-fecha-inicio"
+                    <input type="date" id="kardex-fecha-inicio" disabled
                         class="border border-slate-300 rounded-lg px-3 py-2 text-xs">
                 </div>
 
@@ -356,7 +356,7 @@
                     <label for="kardex-fecha-fin" class="block text-xs font-semibold text-slate-600 mb-1">
                         Fecha final
                     </label>
-                    <input type="date" id="kardex-fecha-fin"
+                    <input type="date" id="kardex-fecha-fin" disabled
                         class="border border-slate-300 rounded-lg px-3 py-2 text-xs">
                 </div>
 
@@ -395,30 +395,28 @@
         <div id="kardex-resultados-contenedor"
             class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl">
 
+
             <!-- Cierra solamente los resultados de consultar demanda -->
             <button type="button" onclick="cerrarResultadosKardex('kardex-resultados-contenedor')"
-                class="absolute right-2 top-2 z-10 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
+                class="absolute right-2 top-2 z-30 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
                 title="Cerrar resultados de demanda" aria-label="Cerrar resultados de demanda">
                 <i class="fa-solid fa-xmark"></i>
-
-                <!-- Mensaje exclusivo de la consulta de demanda -->
-                <p id="kardex-demanda-mensaje" class="hidden px-3 py-2 text-xs text-slate-600" role="status"
-                    aria-live="polite">
-                </p>
-
-                <!-- Indicador de carga exclusivo de la consulta de demanda -->
-                <div id="cargando-demanda-kardex"
-                    class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90"
-                    role="status" aria-live="polite">
-
-                    <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600"></i>
-
-                    <span class="text-sm font-semibold text-slate-700">
-                        Consultando ventas de la tienda...
-                    </span>
-                </div>
-
             </button>
+
+            <!-- Mensaje exclusivo de la consulta de demanda -->
+            <p id="kardex-demanda-mensaje" class="hidden px-3 py-2 text-xs text-slate-600" role="status"
+                aria-live="polite">
+            </p>
+
+            <!-- Indicador de carga exclusivo de la consulta de demanda -->
+            <div id="cargando-demanda-kardex"
+                class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90"
+                role="status" aria-live="polite">
+                <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600"></i>
+                <span class="text-sm font-semibold text-slate-700">
+                    Consultando ventas de la tienda...
+                </span>
+            </div>
 
             <table class="w-full text-xs text-left">
                 <thead class="bg-slate-900 text-white">
@@ -2374,7 +2372,7 @@ ${nodosProductosXML.join('\n')}
         });
 
         // Función para cambiar de tienda activa en la barra de pestañas manteniendo los datos
-        function cambiarTiendaPestana(nuevaTienda) {
+        async function cambiarTiendaPestana(nuevaTienda) {
 
             // Normaliza la nueva tienda.
             const tiendaNueva = String(nuevaTienda || '')
@@ -2419,13 +2417,19 @@ ${nodosProductosXML.join('\n')}
             // Carga los datos correspondientes a la nueva tienda.
             cargarEstadoTablaDesdeMemoria(tiendaNueva);
 
-            // Aplica la cobertura de la tienda usando la caché.
-            actualizarCoberturaKardexDesdeAnalisis(true);
+            // Espera a que se actualicen las fechas y el mensaje de cobertura.
+            await actualizarCoberturaKardexDesdeAnalisis(true);
 
-            // Actualiza la demanda histórica y el comparativo para la nueva tienda.
-            actualizarDemandaKardexAlCambiarTienda();
+            // Comprueba que la tienda no haya cambiado durante la espera.
+            if (tiendaNueva !== window.tiendaActivaPestana) {
+                return;
+            }
+
+            // Actualiza la demanda histórica y la comparación con las fechas correctas.
+            await actualizarDemandaKardexAlCambiarTienda();
 
         }
+
 
 
 
@@ -2480,6 +2484,7 @@ ${nodosProductosXML.join('\n')}
             // Espera las actualizaciones sin cancelar una por el error de la otra.
             await Promise.allSettled(tareas);
         }
+
 
 
 
@@ -3041,9 +3046,48 @@ ${nodosProductosXML.join('\n')}
                 fechaFin.min = minimo;
                 fechaFin.max = maximo;
 
-                // Mantener las fechas si están dentro del rango de la tienda.
+
+                // Obtiene la fecha actual en hora local, sin errores de UTC.
+                const formatearFechaLocal = fecha => {
+                    const anio = fecha.getFullYear();
+                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+                    const dia = String(fecha.getDate()).padStart(2, '0');
+                    return `${anio}-${mes}-${dia}`;
+                };
+
+                // Limita cualquier fecha al historial disponible de la tienda.
+                const limitarFecha = fecha =>
+                    fecha < minimo ? minimo :
+                        fecha > maximo ? maximo :
+                            fecha;
+
+                // Solo calcula valores predeterminados cuando hacen falta.
+                if (!fechaInicio.value || !fechaFin.value) {
+                    const hoy = formatearFechaLocal(new Date());
+
+                    // La fecha final no puede superar la última venta registrada.
+                    const fechaFinal = limitarFecha(hoy);
+
+                    // Retrocede siete días desde la fecha final efectiva.
+                    const fechaInicialBase = new Date(`${fechaFinal}T12:00:00`);
+                    fechaInicialBase.setDate(fechaInicialBase.getDate() - 6);
+
+                    const fechaInicial = limitarFecha(
+                        formatearFechaLocal(fechaInicialBase)
+                    );
+
+                    if (!fechaInicio.value) {
+                        fechaInicio.value = fechaInicial;
+                    }
+
+                    if (!fechaFin.value) {
+                        fechaFin.value = fechaFinal;
+                    }
+                }
+
+                // Si una fecha quedó fuera de la cobertura de esta tienda,
+                // ajústala sin permitir un período invertido.
                 if (
-                    !fechaInicio.value ||
                     fechaInicio.value < minimo ||
                     fechaInicio.value > maximo
                 ) {
@@ -3051,23 +3095,24 @@ ${nodosProductosXML.join('\n')}
                 }
 
                 if (
-                    !fechaFin.value ||
                     fechaFin.value < minimo ||
                     fechaFin.value > maximo
                 ) {
                     fechaFin.value = maximo;
                 }
 
-                // Evita que el período quede invertido al cambiar de tienda.
+                // Corrige el período si la fecha inicial supera la final.
                 if (fechaInicio.value > fechaFin.value) {
-                    fechaFin.value = maximo;
-                }
+                    const inicioAjustado = new Date(
+                        `${fechaFin.value}T12:00:00`
+                    );
+                    inicioAjustado.setDate(inicioAjustado.getDate() - 6);
 
-                if (mostrarMensaje) {
-                    mostrarMensajeKardex(
-                        `Cobertura de ${sedeActiva}: ${minimo} a ${maximo}.`
+                    fechaInicio.value = limitarFecha(
+                        formatearFechaLocal(inicioAjustado)
                     );
                 }
+
 
             } catch (error) {
                 console.error(
@@ -3256,6 +3301,9 @@ ${nodosProductosXML.join('\n')}
                 return;
             }
 
+            // Limpia el aviso anterior cuando ya existen productos válidos.
+            mostrarMensajeKardex('', false);
+
             const parametros = new URLSearchParams({
                 fecha_inicio: fechaInicio,
                 fecha_fin: fechaFin
@@ -3326,8 +3374,8 @@ ${nodosProductosXML.join('\n')}
 
                 const formatoNumero = valor =>
                     Number(valor || 0).toLocaleString('es-VE', {
-                        minimumFractionDigits: 0,
-                        maximumFractionDigits: 3
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
                     });
 
                 registros.forEach(item => {
@@ -3372,13 +3420,15 @@ ${nodosProductosXML.join('\n')}
 
             } catch (error) {
                 console.error('Error al consultar demanda del kardex:', error);
-                mostrarMensajeKardex(
+
+                // Informa el error solo en el panel de demanda.
+                mostrarEstadoPanelKardex(
+                    'kardex-demanda-mensaje',
                     error.message || 'No se pudo consultar la demanda.',
                     true
                 );
-            }
-            finally {
-                // Siempre oculta el indicador, incluso si ocurre un error.
+            } finally {
+                // Oculta únicamente el indicador de demanda.
                 alternarCargaPanelKardex('cargando-demanda-kardex', false);
 
                 if (boton) boton.disabled = false;
@@ -3428,6 +3478,9 @@ ${nodosProductosXML.join('\n')}
                 );
                 return;
             }
+
+            // Limpia el aviso anterior cuando ya existen productos válidos.
+            mostrarMensajeKardex('', false);
 
             // Calcula las fechas en UTC para evitar errores de zona horaria.
             const fechaBase = fechaFin.split('-').map(Number);
@@ -3553,7 +3606,7 @@ ${nodosProductosXML.join('\n')}
                 const formatoNumero = valor =>
                     Number(valor || 0).toLocaleString('es-VE', {
                         minimumFractionDigits: 0,
-                        maximumFractionDigits: 3
+                        maximumFractionDigits: 2
                     });
 
                 const crearCelda = (fila, valor, alinearDerecha = false) => {
@@ -3656,7 +3709,9 @@ ${nodosProductosXML.join('\n')}
 
 
                 if (mapa.size === 0) {
-                    mostrarMensajeKardex(
+                    // Mantiene abierto el panel y comunica que no hubo resultados.
+                    mostrarEstadoPanelKardex(
+                        'kardex-comparacion-mensaje',
                         'No se encontraron ventas para los productos y períodos seleccionados.'
                     );
                     return;
@@ -3664,19 +3719,21 @@ ${nodosProductosXML.join('\n')}
 
                 if (contenedor) contenedor.classList.remove('hidden');
 
-                mostrarMensajeKardex(
+                mostrarEstadoPanelKardex(
+                    'kardex-comparacion-mensaje',
                     `Comparación completada: ${mapa.size} combinaciones de sede y producto.`
                 );
 
             } catch (error) {
                 console.error('Error al comparar la demanda del kardex:', error);
 
-                mostrarMensajeKardex(
+                // El error se muestra solo en el panel comparativo.
+                mostrarEstadoPanelKardex(
+                    'kardex-comparacion-mensaje',
                     error.message || 'No se pudo comparar la demanda.',
                     true
                 );
-            }
-            finally {
+            } finally {
                 // Oculta únicamente el indicador del comparativo.
                 alternarCargaPanelKardex('cargando-comparacion-periodos', false);
 
