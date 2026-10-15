@@ -56,6 +56,193 @@ def obtener_tienda_provisional(perfil: dict):
 
 
 # ============================================================
+# API PARA IMPORTAR INVENTARIOS EN ANÁLISIS DE PEDIDO
+# ============================================================
+
+@router.get("/api/analisis/inventarios")
+async def listar_inventarios_para_analisis(
+    request: Request,
+    tienda: str = "",
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    """Lista inventarios completados permitidos para el usuario."""
+
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={"ok": False, "error": "No autorizado."}
+        )
+
+    try:
+        perfil = obtener_perfil_inventario(request)
+        tienda_solicitada = str(tienda or "").strip()
+        es_provisional = (
+            perfil and es_usuario_provisional(perfil)
+        )
+
+        if es_provisional:
+            tienda_asignada = obtener_tienda_provisional(perfil)
+
+            if not tienda_asignada:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": "El usuario provisional no tiene una tienda asignada."
+                    }
+                )
+
+            if (
+                tienda_solicitada
+                and tienda_solicitada.casefold()
+                != tienda_asignada.casefold()
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": "No tienes permiso para consultar esa tienda."
+                    }
+                )
+
+            tienda_solicitada = tienda_asignada
+
+        consulta = (
+            config.supabase_async
+            .table("inventarios")
+            .select(
+                "id, nombre, realizado_por, tienda, "
+                "estado, created_at, updated_at"
+            )
+            .eq("estado", "completado")
+        )
+
+        if tienda_solicitada:
+            consulta = consulta.eq("tienda", tienda_solicitada)
+
+        respuesta = await consulta.order(
+            "updated_at",
+            desc=True
+        ).execute()
+
+        return {
+            "ok": True,
+            "inventarios": respuesta.data or []
+        }
+
+    except Exception as e:
+        print(
+            "ERROR EN /api/analisis/inventarios: "
+            f"{str(e)}"
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "No se pudieron consultar los inventarios."
+            }
+        )
+
+
+@router.get("/api/analisis/inventarios/{inventario_id}")
+async def obtener_detalle_inventario_para_analisis(
+    request: Request,
+    inventario_id: int,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    """Devuelve el detalle de un inventario completado autorizado."""
+
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={"ok": False, "error": "No autorizado."}
+        )
+
+    try:
+        respuesta = await (
+            config.supabase_async
+            .table("inventarios")
+            .select(
+                "id, nombre, realizado_por, tienda, "
+                "estado, created_at, updated_at"
+            )
+            .eq("id", inventario_id)
+            .eq("estado", "completado")
+            .maybe_single()
+            .execute()
+        )
+
+        inventario = respuesta.data
+
+        if not inventario:
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "ok": False,
+                    "error": "El inventario no existe o no está completado."
+                }
+            )
+
+        perfil = obtener_perfil_inventario(request)
+
+        if perfil and es_usuario_provisional(perfil):
+            tienda_asignada = obtener_tienda_provisional(perfil)
+
+            if (
+                not tienda_asignada
+                or str(inventario.get("tienda", "")).strip().casefold()
+                != tienda_asignada.casefold()
+            ):
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": "No tienes permiso para consultar ese inventario."
+                    }
+                )
+
+        respuesta_detalle = await (
+            config.supabase_async
+            .table("inventarios_detalle")
+            .select("codigo, descripcion, cantidad, orden")
+            .eq("inventario_id", inventario_id)
+            .order("orden", desc=False)
+            .execute()
+        )
+
+        return {
+            "ok": True,
+            "inventario": inventario,
+            "productos": respuesta_detalle.data or []
+        }
+
+    except Exception as e:
+        print(
+            "ERROR EN "
+            f"/api/analisis/inventarios/{inventario_id}: {str(e)}"
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "No se pudo consultar el detalle del inventario."
+            }
+        )
+
+
+# ============================================================
 # BIBLIOTECA DE INVENTARIOS
 # ============================================================
 
