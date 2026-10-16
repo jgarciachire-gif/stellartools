@@ -12,7 +12,8 @@ from fastapi.responses import (
 
 import config
 from config import templates, obtener_usuario_actual
-from uuid import UUID  # Validar y normalizar claves UUID.
+from uuid import UUID, uuid4
+
 
 router = APIRouter()
 
@@ -592,7 +593,79 @@ async def crear_inventario(
         raise
 
     
-            # Comprobar si la solicitud anterior creó el inventario.
+
+    try:
+        # Comprobar si la solicitud ya creó el inventario.
+        res_existente = await (
+            config.supabase_async
+            .table("inventarios")
+            .select("id")
+            .eq("clave_creacion", clave_creacion)
+            .eq("usuario_creador_id", str(user.id))
+            .limit(1)
+            .execute()
+        )
+
+        inventarios_existentes = (
+            res_existente.data or []
+            if res_existente is not None
+            else []
+        )
+
+        # Si existe, abrir el documento original.
+        if inventarios_existentes:
+            return RedirectResponse(
+                url=(
+                    f"/inventario/"
+                    f"{inventarios_existentes[0]['id']}?nuevo=1"
+                ),
+                status_code=303
+            )
+
+        # El usuario se obtiene de la sesión validada.
+        payload = {
+            "nombre": nombre,
+            "realizado_por": realizado_por,
+            "tienda": tienda,
+            "estado": "borrador",
+            "usuario_creador_id": str(user.id),
+            "clave_creacion": clave_creacion
+        }
+
+        res = await (
+            config.supabase_async
+            .table("inventarios")
+            .insert(payload)
+            .select("id")
+            .execute()
+        )
+
+        inventarios_creados = res.data or []
+
+        if not inventarios_creados:
+            raise HTTPException(
+                status_code=500,
+                detail="No se pudo crear el inventario."
+            )
+
+        inventario_id_creado = inventarios_creados[0]["id"]
+
+        return RedirectResponse(
+            url=f"/inventario/{inventario_id_creado}?nuevo=1",
+            status_code=303
+        )
+
+    except HTTPException:
+        raise
+
+    except Exception as e:
+        print(
+            "ERROR AL CREAR INVENTARIO: "
+            f"{str(e)}"
+        )
+
+        # Recuperar el documento si la inserción se confirmó,
+        # pero la respuesta de la solicitud falló.
         try:
             res_existente = await (
                 config.supabase_async
@@ -600,18 +673,16 @@ async def crear_inventario(
                 .select("id")
                 .eq("clave_creacion", clave_creacion)
                 .eq("usuario_creador_id", str(user.id))
-                .limit(1)  # Consultar como lista, sin maybe_single().
+                .limit(1)
                 .execute()
             )
 
-            # Manejar una respuesta vacía de forma segura.
             inventarios_existentes = (
                 res_existente.data or []
                 if res_existente is not None
                 else []
             )
 
-            # Si ya se creó, abrir el documento original.
             if inventarios_existentes:
                 return RedirectResponse(
                     url=(
@@ -623,9 +694,502 @@ async def crear_inventario(
 
         except Exception as error_busqueda:
             print(
-                "ERROR AL VERIFICAR CLAVE DE CREACIÓN: "
+                "ERROR AL RECUPERAR INVENTARIO: "
                 f"{str(error_busqueda)}"
             )
+
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo crear el inventario."
+        )
+
+
+# ============================================================
+# VALIDAR PRODUCTOS PARA INVENTARIOS MULTITIENDA
+# ============================================================
+
+@router.post("/api/inventarios/multitienda/validar-productos")
+async def validar_productos_multitienda(
+    request: Request,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    # Validar sesión.
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "ok": False,
+                "error": "No autorizado."
+            }
+        )
+
+
+    perfil = obtener_perfil_inventario(request)
+
+    tipo_usuario = str(
+        (perfil or {}).get("tipo_usuario", "")
+    ).strip().lower()
+
+    
+    if tipo_usuario not in {"normal", "administrador"}:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "ok": False,
+                "error": (
+                    "No tienes permisos para utilizar "
+                    "esta función."
+                )
+            }
+        )
+
+
+
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "El formato de los datos no es válido."
+            }
+        )
+
+    # Evitar errores si el JSON no es un objeto.
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "El formato de los datos no es válido."
+            }
+        )
+
+    codigos_recibidos = payload.get("codigos", [])
+
+
+    if not isinstance(codigos_recibidos, list):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "La lista de códigos no es válida."
+            }
+        )
+
+    # Limitar el tamaño de la solicitud.
+    if len(codigos_recibidos) > 500:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Puedes validar hasta 500 códigos por solicitud."
+            }
+        )
+
+    # Limpiar códigos y eliminar duplicados conservando el orden.
+    codigos = list(dict.fromkeys(
+        str(codigo).strip()
+        for codigo in codigos_recibidos
+        if codigo is not None and str(codigo).strip()
+    ))
+
+    if not codigos:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Introduce al menos un código de producto."
+            }
+        )
+
+    try:
+        respuesta = await (
+            config.supabase_async
+            .table("productos")
+            .select("codigo_st, descripcion")
+            .in_("codigo_st", codigos)
+            .execute()
+        )
+
+        productos_encontrados = respuesta.data or []
+
+        # Comparar como texto para preservar los códigos.
+        productos_por_codigo = {
+            str(producto["codigo_st"]): {
+                "codigo": str(producto["codigo_st"]),
+                "descripcion": producto.get("descripcion") or ""
+            }
+            for producto in productos_encontrados
+        }
+
+        productos_validos = [
+            productos_por_codigo[codigo]
+            for codigo in codigos
+            if codigo in productos_por_codigo
+        ]
+
+        codigos_no_encontrados = [
+            codigo
+            for codigo in codigos
+            if codigo not in productos_por_codigo
+        ]
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "ok": True,
+                "productos": productos_validos,
+                "codigos_no_encontrados": codigos_no_encontrados,
+                "total_validos": len(productos_validos),
+                "total_no_encontrados": len(
+                    codigos_no_encontrados
+                )
+            }
+        )
+
+    except Exception as e:
+        print(
+            "ERROR EN VALIDACIÓN DE PRODUCTOS MULTITIENDA: "
+            f"{str(e)}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": "No se pudieron validar los productos."
+            }
+        )
+
+
+# ============================================================
+# CREAR INVENTARIOS PARA VARIAS TIENDAS
+# ============================================================
+
+@router.post("/api/inventarios/multitienda/crear")
+async def crear_inventarios_multitienda(
+    request: Request,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    # Verificar la sesión autenticada.
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "ok": False,
+                "error": "No autorizado."
+            }
+        )
+
+    perfil = obtener_perfil_inventario(request)
+
+    tipo_usuario = str(
+        (perfil or {}).get("tipo_usuario", "")
+    ).strip().lower()
+
+    
+    if tipo_usuario not in {"normal", "administrador"}:
+        return JSONResponse(
+            status_code=403,
+            content={
+                "ok": False,
+                "error": (
+                    "No tienes permisos para utilizar "
+                    "esta función."
+                )
+            }
+        )
+
+
+    # Leer los datos enviados por el navegador.
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "El formato de los datos no es válido."
+            }
+        )
+
+    if not isinstance(payload, dict):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "El formato de los datos no es válido."
+            }
+        )
+
+    nombre = str(payload.get("nombre", "")).strip()
+    realizado_por = str(
+        payload.get("realizado_por", "")
+    ).strip()
+
+    tiendas = payload.get("tiendas")
+    codigos_recibidos = payload.get("codigos")
+
+    tiendas_permitidas = {
+        "CENTRO",
+        "NAGUANAGUA",
+        "ISABELICA",
+        "CIUDAD ALIANZA",
+        "GARIBALDI",
+        "SAN DIEGO"
+    }
+
+    # Validar nombre y responsable.
+    if not nombre or not realizado_por:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": (
+                    "Indica el nombre del inventario "
+                    "y la persona responsable."
+                )
+            }
+        )
+
+    # Validar tiendas seleccionadas.
+    if (
+        not isinstance(tiendas, list)
+        or not tiendas
+        or len(tiendas) > len(tiendas_permitidas)
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "Selecciona al menos una tienda válida."
+            }
+        )
+
+    tiendas_limpias = [
+        str(tienda).strip().upper()
+        for tienda in tiendas
+        if isinstance(tienda, str)
+    ]
+
+    if (
+        len(tiendas_limpias) != len(tiendas)
+        or len(set(tiendas_limpias)) != len(tiendas_limpias)
+        or any(
+            tienda not in tiendas_permitidas
+            for tienda in tiendas_limpias
+        )
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": (
+                    "Hay tiendas inválidas o repetidas "
+                    "en la selección."
+                )
+            }
+        )
+
+    # Validar la lista de productos.
+    if (
+        not isinstance(codigos_recibidos, list)
+        or not codigos_recibidos
+        or len(codigos_recibidos) > 500
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": (
+                    "Introduce entre 1 y 500 códigos de producto."
+                )
+            }
+        )
+
+    if any(
+        not isinstance(codigo, (str, int))
+        or isinstance(codigo, bool)
+        or not str(codigo).strip()
+        for codigo in codigos_recibidos
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "La lista contiene códigos inválidos."
+            }
+        )
+
+    codigos = list(dict.fromkeys(
+        str(codigo).strip()
+        for codigo in codigos_recibidos
+    ))
+
+    # Limitar los campos de texto.
+    if len(nombre) > 150 or len(realizado_por) > 150:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": (
+                    "El nombre y el responsable "
+                    "no pueden superar 150 caracteres."
+                )
+            }
+        )
+
+    try:
+        # Confirmar que todos los códigos existen.
+        respuesta_productos = await (
+            config.supabase_async
+            .table("productos")
+            .select("codigo_st")
+            .in_("codigo_st", codigos)
+            .execute()
+        )
+
+        codigos_existentes = {
+            str(producto["codigo_st"])
+            for producto in (respuesta_productos.data or [])
+        }
+
+        codigos_invalidos = [
+            codigo
+            for codigo in codigos
+            if codigo not in codigos_existentes
+        ]
+
+        if codigos_invalidos:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": (
+                        "Hay códigos que no existen "
+                        "en el catálogo de productos."
+                    ),
+                    "codigos_no_encontrados": codigos_invalidos
+                }
+            )
+
+        
+        # Recibir claves estables para permitir reintentos seguros.
+        claves_recibidas = payload.get("claves")
+
+        if (
+            not isinstance(claves_recibidas, list)
+            or len(claves_recibidas) != len(tiendas_limpias)
+        ):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": (
+                        "Las claves de operación no son válidas."
+                    )
+                }
+            )
+
+        try:
+            claves = [
+                str(UUID(str(clave)))
+                for clave in claves_recibidas
+            ]
+        except (ValueError, TypeError, AttributeError):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": "Una o más claves UUID son inválidas."
+                }
+            )
+
+        if len(set(claves)) != len(claves):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": "Las claves de operación deben ser únicas."
+                }
+            )
+
+
+        # La función SQL inserta todos los documentos
+        # dentro de una sola transacción.
+        respuesta = config.supabase_admin.rpc(
+            "crear_inventarios_multitienda",
+            {
+                "p_user_id": str(user.id),
+                "p_nombre": nombre,
+                "p_realizado_por": realizado_por,
+                "p_tiendas": tiendas_limpias,
+                "p_codigos": codigos,
+                "p_claves": claves
+            }
+        ).execute()
+
+        resultado = respuesta.data
+
+        if isinstance(resultado, str):
+            import json
+            resultado = json.loads(resultado)
+
+        if isinstance(resultado, dict):
+            resultado = resultado.get("inventarios", resultado)
+
+        if not isinstance(resultado, list):
+            raise ValueError(
+                "La función SQL devolvió un resultado inesperado."
+            )
+
+        # No informar éxito si faltan documentos.
+        if len(resultado) != len(tiendas_limpias):
+            raise ValueError(
+                "La cantidad de inventarios creados no coincide."
+            )
+
+        return JSONResponse(
+            status_code=201,
+            content={
+                "ok": True,
+                "mensaje": (
+                    f"Se crearon {len(resultado)} inventarios."
+                ),
+                "inventarios": resultado
+            }
+        )
+
+    except Exception as e:
+        print(
+            "ERROR AL CREAR INVENTARIOS MULTITIENDA: "
+            f"{str(e)}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": (
+                    "No se pudieron crear los inventarios. "
+                    "Verifica los datos e inténtalo nuevamente."
+                )
+            }
+        )
 
 
 # ============================================================
