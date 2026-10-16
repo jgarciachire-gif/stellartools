@@ -48,6 +48,113 @@
 
     </div>
 
+    <!-- BUSCADOR Y FILTROS -->
+    <form method="GET" action="/inventario" class="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+
+        <!-- Búsqueda general -->
+        <label for="filtro-q" class="mb-2 block text-sm font-semibold text-slate-700">
+            Buscar inventarios
+        </label>
+
+        <div class="flex flex-col sm:flex-row gap-2">
+            <div class="relative flex-1">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2
+                    -translate-y-1/2 text-slate-400"></i>
+
+                <input id="filtro-q" name="q" type="search" maxlength="150" value="{{ filtro_q or '' }}"
+                    placeholder="Nombre de lista, tienda o responsable..." class="w-full rounded-xl border border-slate-300 bg-slate-50
+                        py-2.5 pl-10 pr-3 text-sm outline-none
+                        focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100">
+            </div>
+
+            <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-xl
+                    bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white
+                    hover:bg-slate-800 transition-colors">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                Buscar
+            </button>
+        </div>
+
+        <!-- Filtros adicionales -->
+        <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+            <div>
+                <label for="filtro-tienda" class="mb-1 block text-xs font-semibold text-slate-600">
+                    Tienda
+                </label>
+                <input id="filtro-tienda" name="tienda" type="text" maxlength="150" value="{{ filtro_tienda or '' }}"
+                    placeholder="Nombre exacto de la tienda" {% if es_provisional %}readonly{% endif %} class="w-full rounded-lg border border-slate-300 px-3 py-2
+                        text-sm focus:border-indigo-500 focus:outline-none
+                        {% if es_provisional %}bg-slate-100 text-slate-500{% endif %}">
+            </div>
+
+            <div>
+                <label for="filtro-responsable" class="mb-1 block text-xs font-semibold text-slate-600">
+                    Realizado por
+                </label>
+                <input id="filtro-responsable" name="realizado_por" type="text" maxlength="150"
+                    value="{{ filtro_realizado_por or '' }}" placeholder="Nombre del responsable" class="w-full rounded-lg border border-slate-300 px-3 py-2
+                        text-sm focus:border-indigo-500 focus:outline-none">
+            </div>
+
+            <div>
+                <label for="filtro-estado" class="mb-1 block text-xs font-semibold text-slate-600">
+                    Estado
+                </label>
+                <select id="filtro-estado" name="estado" class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2
+                        text-sm focus:border-indigo-500 focus:outline-none">
+                    <option value="">Todos los estados</option>
+                    <option value="borrador" {% if filtro_estado=='borrador' %}selected{% endif %}>
+                        Borrador
+                    </option>
+                    <option value="completado" {% if filtro_estado=='completado' %}selected{% endif %}>
+                        Completado
+                    </option>
+                </select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label for="filtro-fecha-desde" class="mb-1 block text-xs font-semibold text-slate-600">
+                        Desde
+                    </label>
+                    <input id="filtro-fecha-desde" name="fecha_desde" type="date" value="{{ filtro_fecha_desde or '' }}"
+                        class="w-full min-w-0 rounded-lg border border-slate-300
+                            px-2 py-2 text-xs focus:border-indigo-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <label for="filtro-fecha-hasta" class="mb-1 block text-xs font-semibold text-slate-600">
+                        Hasta
+                    </label>
+                    <input id="filtro-fecha-hasta" name="fecha_hasta" type="date" value="{{ filtro_fecha_hasta or '' }}"
+                        class="w-full min-w-0 rounded-lg border border-slate-300
+                            px-2 py-2 text-xs focus:border-indigo-500 focus:outline-none">
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Acciones de filtros -->
+        <div class="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p class="text-xs text-slate-500">
+                {{ total_inventarios }} resultado(s) encontrados
+            </p>
+
+            <div class="flex items-center gap-2">
+                <a href="/inventario" class="rounded-lg border border-slate-200 px-3 py-2
+                        text-xs font-semibold text-slate-600 hover:bg-slate-50">
+                    Limpiar filtros
+                </a>
+
+                <button type="submit" class="rounded-lg bg-indigo-600 px-3 py-2
+                        text-xs font-semibold text-white hover:bg-indigo-700">
+                    Aplicar filtros
+                </button>
+            </div>
+        </div>
+    </form>
+
 
     <!-- LISTADO -->
     <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -280,7 +387,8 @@
 
                 {% if pagina_actual > 1 %}
 
-                <a href="/inventario?page={{ pagina_actual - 1 }}" class="inline-flex items-center justify-center
+                <a href="/inventario?page={{ pagina_actual - 1 }}&q={{ filtro_q | urlencode }}&tienda={{ filtro_tienda | urlencode }}&realizado_por={{ filtro_realizado_por | urlencode }}&estado={{ filtro_estado | urlencode }}&fecha_desde={{ filtro_fecha_desde | urlencode }}&fecha_hasta={{ filtro_fecha_hasta | urlencode }}"
+                    class="inline-flex items-center justify-center
                           w-9 h-9 rounded-lg
                           border border-slate-200
                           text-slate-600
@@ -319,7 +427,9 @@
                 </span>
 
 
-                {% if pagina_actual < total_paginas %} <a href="/inventario?page={{ pagina_actual + 1 }}" class="inline-flex items-center justify-center
+                {% if pagina_actual < total_paginas %} <a
+                    href="/inventario?page={{ pagina_actual + 1 }}&q={{ filtro_q | urlencode }}&tienda={{ filtro_tienda | urlencode }}&realizado_por={{ filtro_realizado_por | urlencode }}&estado={{ filtro_estado | urlencode }}&fecha_desde={{ filtro_fecha_desde | urlencode }}&fecha_hasta={{ filtro_fecha_hasta | urlencode }}"
+                    class="inline-flex items-center justify-center
                           w-9 h-9 rounded-lg
                           border border-slate-200
                           text-slate-600

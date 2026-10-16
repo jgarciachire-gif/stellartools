@@ -247,20 +247,26 @@ async def obtener_detalle_inventario_para_analisis(
 # BIBLIOTECA DE INVENTARIOS
 # ============================================================
 
+
 @router.get("/inventario")
 async def vista_inventario(
     request: Request,
     page: int = 1,
+    q: str = "",
+    tienda: str = "",
+    realizado_por: str = "",
+    estado: str = "",
+    fecha_desde: str = "",
+    fecha_hasta: str = "",
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
-    # Obtiene el usuario real desde la sesión.
+    # Verifica la sesión del usuario.
     user = await obtener_usuario_actual(
         access_token,
         refresh_token
     )
 
-    # Bloquea el acceso si la sesión no es válida.
     if not user:
         return RedirectResponse(
             url="/login",
@@ -269,72 +275,149 @@ async def vista_inventario(
 
     try:
         perfil = obtener_perfil_inventario(request)
-
-        consulta = (
-            config.supabase_async
-            .table("inventarios")
-            .select(
-                "id, nombre, realizado_por, tienda, "
-                "estado, created_at, updated_at"
-            )
+        es_provisional = (
+            perfil
+            and es_usuario_provisional(perfil)
         )
 
-        # Los usuarios provisionales solo ven
-        # inventarios de su tienda asignada.
-        if perfil and es_usuario_provisional(perfil):
-            tienda_provisional = obtener_tienda_provisional(perfil)
+        # Normaliza los filtros recibidos.
+        q = q.strip()[:150]
+        tienda = tienda.strip()[:150]
+        realizado_por = realizado_por.strip()[:150]
+        estado = estado.strip().lower()
+
+        estados_validos = {
+            "borrador",
+            "completado"
+        }
+
+        if estado not in estados_validos:
+            estado = ""
+
+        # Comprueba que las fechas tengan formato válido.
+        from datetime import date
+
+        if fecha_desde:
+            try:
+                fecha_desde = date.fromisoformat(
+                    fecha_desde
+                ).isoformat()
+            except ValueError:
+                fecha_desde = ""
+
+        if fecha_hasta:
+            try:
+                fecha_hasta = date.fromisoformat(
+                    fecha_hasta
+                ).isoformat()
+            except ValueError:
+                fecha_hasta = ""
+
+        if (
+            fecha_desde
+            and fecha_hasta
+            and fecha_desde > fecha_hasta
+        ):
+            fecha_desde, fecha_hasta = (
+                fecha_hasta,
+                fecha_desde
+            )
+
+        # Los usuarios provisionales solo ven su tienda.
+        tienda_provisional = None
+
+        if es_provisional:
+            tienda_provisional = (
+                obtener_tienda_provisional(perfil)
+            )
 
             if not tienda_provisional:
                 raise HTTPException(
                     status_code=403,
-                    detail="El usuario provisional no tiene una tienda asignada."
+                    detail=(
+                        "El usuario provisional no tiene "
+                        "una tienda asignada."
+                    )
                 )
 
-            consulta = consulta.eq(
-                "tienda",
-                tienda_provisional
-            )
+        # Construye los filtros en el servidor.
+        def aplicar_filtros(consulta):
+            if es_provisional:
+                consulta = consulta.eq(
+                    "tienda",
+                    tienda_provisional
+                )
+            elif tienda:
+                consulta = consulta.eq(
+                    "tienda",
+                    tienda
+                )
 
-        # ====================================================
-        # PAGINACIÓN
-        # ====================================================
-        # Máximo 15 documentos por página.
-        registros_por_pagina = 15
+            if realizado_por:
+                consulta = consulta.ilike(
+                    "realizado_por",
+                    f"%{realizado_por}%"
+                )
 
-        try:
-            pagina_actual = max(int(page), 1)
-        except (TypeError, ValueError):
-            pagina_actual = 1
+            if estado:
+                consulta = consulta.ilike(
+                    "estado",
+                    estado
+                )
 
-        offset = (
-            pagina_actual - 1
-        ) * registros_por_pagina
+            if fecha_desde:
+                consulta = consulta.gte(
+                    "created_at",
+                    f"{fecha_desde}T00:00:00"
+                )
 
-        limite = (
-            offset + registros_por_pagina - 1
-        )
+            
+            if fecha_hasta:
+                from datetime import timedelta
 
-        
-        # Total de documentos visibles para este usuario.
-        consulta_total = (
+                dia_siguiente = (
+                    date.fromisoformat(fecha_hasta)
+                    + timedelta(days=1)
+                )
+
+                consulta = consulta.lt(
+                    "created_at",
+                    f"{dia_siguiente.isoformat()}T00:00:00"
+                )
+
+
+            if q:
+                termino = (
+                    q.replace("%", "")
+                    .replace("_", "")
+                    .replace(",", " ")
+                    .strip()
+                )
+
+                if termino:
+                    consulta = consulta.or_(
+                        "nombre.ilike.%"
+                        + termino
+                        + "%,tienda.ilike.%"
+                        + termino
+                        + "%,realizado_por.ilike.%"
+                        + termino
+                        + "%"
+                    )
+
+            return consulta
+
+        # Cuenta en la base de datos solo los resultados filtrados.
+        consulta_total = aplicar_filtros(
             config.supabase_async
             .table("inventarios")
-            .select("id")
+            .select("id", count="exact", head=True)
         )
-
-        # El conteo debe respetar la tienda asignada.
-        if perfil and es_usuario_provisional(perfil):
-            consulta_total = consulta_total.eq(
-                "tienda",
-                tienda_provisional
-            )
 
         res_total = await consulta_total.execute()
+        total_inventarios = res_total.count or 0
 
-        total_inventarios = len(
-            res_total.data or []
-        )
-
+        registros_por_pagina = 15
         total_paginas = max(
             1,
             (
@@ -344,51 +427,64 @@ async def vista_inventario(
             ) // registros_por_pagina
         )
 
-        # Si se solicita una página que ya no existe,
-        # volver a la última página válida.
-        if pagina_actual > total_paginas:
-            pagina_actual = total_paginas
+        try:
+            pagina_actual = max(int(page), 1)
+        except (TypeError, ValueError):
+            pagina_actual = 1
 
-            offset = (
-                pagina_actual - 1
-            ) * registros_por_pagina
-
-            limite = (
-                offset + registros_por_pagina - 1
-            )
-
-        # Obtener únicamente los 15 documentos de la página.
-        res = await (
-            consulta
-            .order(
-                "created_at",
-                desc=True
-            )
-            .range(
-                offset,
-                limite
-            )
-            .execute()
+        pagina_actual = min(
+            pagina_actual,
+            total_paginas
         )
 
-        inventarios = res.data or []
+        offset = (
+            pagina_actual - 1
+        ) * registros_por_pagina
 
+        limite = (
+            offset
+            + registros_por_pagina
+            - 1
+        )
+
+        # Obtiene solo los resultados de la página solicitada.
+        consulta = aplicar_filtros(
+            config.supabase_async
+            .table("inventarios")
+            .select(
+                "id, nombre, realizado_por, tienda, "
+                "estado, created_at, updated_at"
+            )
+        )
+
+        res = await (
+            consulta
+            .order("created_at", desc=True)
+            .range(offset, limite)
+            .execute()
+        )
 
         return templates.TemplateResponse(
             request=request,
             name="inventario.html",
             context={
-                "inventarios": inventarios,
+                "inventarios": res.data or [],
                 "perfil": perfil,
-                "es_provisional": (
-                    perfil
-                    and es_usuario_provisional(perfil)
-                ),
+                "es_provisional": es_provisional,
                 "pagina_actual": pagina_actual,
                 "total_paginas": total_paginas,
-                "total_inventarios": total_inventarios
+                "total_inventarios": total_inventarios,
+                "filtro_q": q,
+                "filtro_tienda": tienda,
+                "filtro_realizado_por": realizado_por,
+                "filtro_estado": estado,
+                "filtro_fecha_desde": fecha_desde,
+                "filtro_fecha_hasta": fecha_hasta
             }
         )
+
+    except HTTPException:
+        raise
 
     except Exception as e:
         print(
@@ -397,8 +493,11 @@ async def vista_inventario(
 
         raise HTTPException(
             status_code=500,
-            detail="Error al cargar la biblioteca de inventarios."
+            detail=(
+                "Error al cargar la biblioteca de inventarios."
+            )
         )
+
 
 
 # ============================================================
