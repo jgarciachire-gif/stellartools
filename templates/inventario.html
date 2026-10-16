@@ -2,6 +2,18 @@
 
 {% block content %}
 
+<style>
+    /* Ocultar la barra sin desactivar el desplazamiento */
+    .ocultar-scrollbar {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .ocultar-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+</style>
+
 <div class="max-w-7xl mx-auto px-3 sm:px-4 py-4 sm:py-6">
 
     <!-- ENCABEZADO -->
@@ -615,7 +627,7 @@
 <div id="modal-multitienda" class="fixed inset-0 z-[60] hidden items-end sm:items-center justify-center
             bg-slate-900/50 backdrop-blur-sm px-0 sm:px-4">
 
-    <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto
+    <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto ocultar-scrollbar
                 rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl">
 
         <div class="flex items-center justify-between border-b border-slate-200 px-6 py-5">
@@ -970,15 +982,21 @@
             ).map(c => c.value);
         }
 
+
         function obtenerCodigos() {
-            // Los códigos se manejan como texto para preservar ceros iniciales.
+            // Normalizar cada código a 6 dígitos antes de consultar.
             return [...new Set(
                 codigosTexto.value
                     .split(/[\n,;]+/)
                     .map(c => c.trim())
                     .filter(Boolean)
+                    .map(c => /^\d+$/.test(c) && c.length <= 6
+                        ? c.padStart(6, '0')
+                        : c
+                    )
             )];
         }
+
 
         function obtenerDatosFormulario() {
             return {
