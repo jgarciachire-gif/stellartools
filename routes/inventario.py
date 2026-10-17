@@ -2349,3 +2349,246 @@ async def eliminar_inventario(
                     "No se pudo eliminar el inventario."
             }
         )
+    
+# ============================================================
+# ELIMINAR VARIOS INVENTARIOS
+# ============================================================
+
+@router.post("/api/inventarios/eliminar-masivo")
+async def eliminar_inventarios_masivo(
+    request: Request,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    # 1. Validar sesión.
+    user = await obtener_usuario_actual(
+        access_token,
+        refresh_token
+    )
+
+    if not user:
+        return JSONResponse(
+            status_code=401,
+            content={
+                "ok": False,
+                "error": "No autorizado."
+            }
+        )
+
+    # 2. Validar los identificadores recibidos.
+    try:
+        payload = await request.json()
+    except Exception:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": "La solicitud no contiene datos válidos."
+            }
+        )
+
+    ids_recibidos = (
+        payload.get("ids")
+        if isinstance(payload, dict)
+        else None
+    )
+
+    if (
+        not isinstance(ids_recibidos, list)
+        or not ids_recibidos
+        or len(ids_recibidos) > 100
+    ):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "ok": False,
+                "error": (
+                    "Selecciona entre 1 y 100 inventarios."
+                )
+            }
+        )
+
+    # Aceptar IDs enteros o cadenas numéricas positivas.
+    ids = []
+
+    for valor in ids_recibidos:
+        if isinstance(valor, bool):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": "Hay identificadores inválidos."
+                }
+            )
+
+        try:
+            texto_id = str(valor).strip()
+
+            if not texto_id.isdigit() or int(texto_id) <= 0:
+                raise ValueError
+
+            ids.append(int(texto_id))
+
+        except (TypeError, ValueError):
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "ok": False,
+                    "error": "Hay identificadores inválidos."
+                }
+            )
+
+    # Eliminar IDs repetidos.
+    ids = list(dict.fromkeys(ids))
+
+    try:
+        # 3. Consultar todos los inventarios seleccionados.
+        resultado = await (
+            config.supabase_async
+            .table("inventarios")
+            .select(
+                "id, estado, tienda, usuario_creador_id"
+            )
+            .in_("id", ids)
+            .execute()
+        )
+
+        inventarios = resultado.data or []
+        encontrados = {int(inv["id"]) for inv in inventarios}
+
+        if encontrados != set(ids):
+            return JSONResponse(
+                status_code=404,
+                content={
+                    "ok": False,
+                    "error": (
+                        "Uno o más inventarios no existen. "
+                        "No se eliminó ninguno."
+                    )
+                }
+            )
+
+        # 4. Aplicar las restricciones de usuarios provisionales.
+        perfil = obtener_perfil_inventario(request)
+
+        if perfil and es_usuario_provisional(perfil):
+            tienda_provisional = obtener_tienda_provisional(
+                perfil
+            )
+
+            if not tienda_provisional:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "ok": False,
+                        "error": (
+                            "El usuario provisional "
+                            "no tiene una tienda asignada."
+                        )
+                    }
+                )
+
+            for inventario in inventarios:
+                if (
+                    str(inventario.get("tienda", "")).strip()
+                    != tienda_provisional
+                ):
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "ok": False,
+                            "error": (
+                                "No tienes permiso para eliminar "
+                                "uno o más inventarios."
+                            )
+                        }
+                    )
+
+                if (
+                    str(inventario.get("usuario_creador_id"))
+                    != str(user.id)
+                ):
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "ok": False,
+                            "error": (
+                                "Solo puedes eliminar tus "
+                                "propios inventarios."
+                            )
+                        }
+                    )
+
+                if (
+                    str(inventario.get("estado", "")).strip().lower()
+                    != "borrador"
+                ):
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "ok": False,
+                            "error": (
+                                "Los usuarios provisionales "
+                                "solo pueden eliminar borradores."
+                            )
+                        }
+                    )
+
+        # 5. Eliminar solo después de validar todos los registros.
+        eliminacion = await (
+            config.supabase_async
+            .table("inventarios")
+            .delete()
+            .in_("id", ids)
+            .select("id")
+            .execute()
+        )
+
+        ids_eliminados = {
+            int(inv["id"])
+            for inv in (eliminacion.data or [])
+        }
+
+        if ids_eliminados != set(ids):
+            print(
+                "ADVERTENCIA: eliminación múltiple incompleta. "
+                f"Solicitados={ids}; eliminados="
+                f"{sorted(ids_eliminados)}"
+            )
+
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "ok": False,
+                    "error": (
+                        "No se pudo confirmar la eliminación "
+                        "de todos los inventarios."
+                    ),
+                    "eliminados": sorted(ids_eliminados)
+                }
+            )
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "ok": True,
+                "eliminados": sorted(ids_eliminados),
+                "cantidad": len(ids_eliminados)
+            }
+        )
+
+    except Exception as e:
+        print(
+            "ERROR EN /api/inventarios/eliminar-masivo: "
+            f"{str(e)}"
+        )
+
+        return JSONResponse(
+            status_code=500,
+            content={
+                "ok": False,
+                "error": (
+                    "No se pudieron eliminar los inventarios."
+                )
+            }
+        )
