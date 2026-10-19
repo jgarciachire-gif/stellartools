@@ -5585,178 +5585,211 @@
 
                 }
             );
+
+
+
         // =========================================================
         // PEGADO MASIVO DE CÓDIGOS
         // =========================================================
 
-        async function manejarPegadoCodigosInventario(
-            e,
-            inputActual
-        ) {
+        async function manejarPegadoCodigosInventario(e, inputActual) {
 
-            const clipboardData =
-                e.clipboardData ||
-                window.clipboardData;
+            const clipboardData = e.clipboardData || window.clipboardData;
 
-            if (!clipboardData) {
+            if (!clipboardData || !inputActual) {
                 return;
             }
 
-            const pastedData =
-                clipboardData.getData('Text');
+            const textoPegado = clipboardData.getData('text/plain');
 
-            const lineas =
-                String(pastedData || '')
-                    .split(/\r\n|\n|\r/)
-                    .map(linea => linea.trim())
-                    .filter(Boolean);
+            // Detectar pegado de varias filas o columnas de Excel.
+            const esPegadoMasivo = /[\r\n\t]/.test(textoPegado);
 
-            /*
-             * Una sola línea:
-             * dejamos que el comportamiento normal continúe.
-             */
-            if (lineas.length <= 1) {
+            if (!esPegadoMasivo) {
+                // El pegado de un solo código conserva su comportamiento normal.
                 return;
             }
 
             e.preventDefault();
             e.stopPropagation();
 
+            // Normalizar los códigos y conservar su orden original.
+            const codigosPegados = textoPegado
+                .split(/\r\n|\n|\r/)
+                .map(linea => linea.split('\t')[0].trim())
+                .filter(Boolean)
+                .map(codigo => /^\d+$/.test(codigo)
+                    ? codigo.padStart(6, '0')
+                    : codigo
+                );
 
-            // =====================================================
-            // 1. NORMALIZAR Y DEDUPLICAR
-            // =====================================================
-
-            const codigosPegados = [
-                ...new Set(
-                    lineas
-                        .map(codigo => {
-
-                            let codigoLimpio =
-                                String(codigo || '')
-                                    .trim();
-
-                            if (/^\d+$/.test(codigoLimpio)) {
-
-                                codigoLimpio =
-                                    codigoLimpio.padStart(
-                                        6,
-                                        '0'
-                                    );
-
-                            }
-
-                            return codigoLimpio;
-
-                        })
-                        .filter(Boolean)
-                )
-            ];
-
-
-            if (codigosPegados.length === 0) {
+            if (!codigosPegados.length) {
                 return;
             }
 
+            const tbody = document.getElementById('filas-tabla-inventario');
 
-            // =====================================================
-            // 2. CÓDIGOS QUE YA EXISTEN EN EL INVENTARIO
-            // =====================================================
-
-            const codigosExistentes =
-                new Set(
-                    Array.from(
-                        document.querySelectorAll(
-                            '#filas-tabla-inventario .inp-codigo'
-                        )
-                    )
-                        .map(input => {
-
-                            let codigo =
-                                String(
-                                    input.value || ''
-                                ).trim();
-
-                            if (/^\d+$/.test(codigo)) {
-
-                                codigo =
-                                    codigo.padStart(
-                                        6,
-                                        '0'
-                                    );
-
-                            }
-
-                            return codigo;
-
-                        })
-                        .filter(Boolean)
-                );
-
-
-            const codigosPendientes =
-                codigosPegados.filter(
-                    codigo =>
-                        !codigosExistentes.has(codigo)
-                );
-
-
-            if (codigosPendientes.length === 0) {
+            if (!tbody) {
                 return;
             }
 
+            const filaInicial = inputActual.closest('tr');
 
-            // =====================================================
-            // 3. UNA SOLA CONSULTA PARA TODOS LOS CÓDIGOS
-            // =====================================================
+            if (!filaInicial || !tbody.contains(filaInicial)) {
+                return;
+            }
 
-            let productos = [];
+            // Impedir que un pegado concurrente sobrescriba otra operación.
+            if (tbody.dataset.procesandoPegado === 'true') {
+                return;
+            }
+
+            tbody.dataset.procesandoPegado = 'true';
 
             try {
 
-                const response =
-                    await fetch(
-                        '/api/productos/buscar-lote',
-                        {
-                            method: 'POST',
+                // Preparar las filas de destino desde la celda seleccionada.
+                let filaActual = filaInicial;
+                const filasDestino = [];
 
-                            headers: {
-                                'Content-Type':
-                                    'application/json'
-                            },
+                for (let i = 0; i < codigosPegados.length; i++) {
 
-                            body: JSON.stringify({
-                                codigos:
-                                    codigosPendientes
-                            })
-                        }
-                    );
+                    if (!filaActual) {
+                        filaActual = agregarFilaInventario();
+                    }
 
+                    if (!filaActual) {
+                        break;
+                    }
 
-                const resultado =
-                    await response.json();
-
-
-                if (!response.ok) {
-
-                    throw new Error(
-                        resultado?.error ||
-                        'No se pudieron consultar los productos.'
-                    );
-
+                    filasDestino.push(filaActual);
+                    filaActual = filaActual.nextElementSibling;
                 }
 
+                // Si no se pudieron preparar todas las filas, no continuar.
+                if (filasDestino.length !== codigosPegados.length) {
+                    mostrarNotificacionInventario(
+                        'No se pudieron preparar todas las filas del pegado.',
+                        'error'
+                    );
+                    return;
+                }
 
-                productos =
-                    Array.isArray(resultado)
-                        ? resultado
-                        : [];
+                // Identificar duplicados dentro del propio pegado.
+                const codigosUnicos = [...new Set(codigosPegados)];
 
+                // Consultar todos los productos en una sola petición.
+                const response = await fetch('/api/productos/buscar-lote', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        codigos: codigosUnicos
+                    })
+                });
+
+                const resultado = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(
+                        resultado?.error || 'No se pudieron consultar los productos.'
+                    );
+                }
+
+                // Indexar los productos por su código normalizado.
+                const productosMap = new Map();
+
+                for (const producto of Array.isArray(resultado) ? resultado : []) {
+
+                    let codigo = String(
+                        producto.codigo_st || producto.codigo || ''
+                    ).trim();
+
+                    if (/^\d+$/.test(codigo)) {
+                        codigo = codigo.padStart(6, '0');
+                    }
+
+                    if (codigo) {
+                        productosMap.set(codigo, producto);
+                    }
+                }
+
+                // Evitar duplicados con códigos que estén fuera del rango destino.
+                const filasDestinoSet = new Set(filasDestino);
+                const codigosOcupados = new Set();
+
+                tbody.querySelectorAll('tr').forEach(fila => {
+
+                    if (filasDestinoSet.has(fila)) {
+                        return;
+                    }
+
+                    const inputCodigo = fila.querySelector('.inp-codigo');
+                    const codigo = String(inputCodigo?.value || '').trim();
+
+                    if (codigo) {
+                        codigosOcupados.add(
+                            /^\d+$/.test(codigo) ? codigo.padStart(6, '0') : codigo
+                        );
+                    }
+                });
+
+                // Rellenar las filas respetando exactamente el orden pegado.
+                let duplicados = 0;
+
+                codigosPegados.forEach((codigo, indice) => {
+
+                    const fila = filasDestino[indice];
+
+                    const inputCodigo = fila.querySelector('.inp-codigo');
+                    const inputDescripcion = fila.querySelector('.inp-desc');
+
+                    if (!inputCodigo || !inputDescripcion) {
+                        return;
+                    }
+
+                    // No insertar un código que ya exista fuera del rango pegado.
+                    if (codigosOcupados.has(codigo)) {
+                        inputCodigo.value = '';
+                        inputDescripcion.value = '';
+                        fila.dataset.codigo = '';
+                        duplicados++;
+                        return;
+                    }
+
+                    // Normalizar el código en la celda.
+                    inputCodigo.value = codigo;
+                    fila.dataset.codigo = codigo;
+
+                    const producto = productosMap.get(codigo);
+
+                    // Cargar la descripción o indicar que el producto no existe.
+                    inputDescripcion.value = producto
+                        ? String(producto.descripcion || '').trim()
+                        : 'PRODUCTO NO ENCONTRADO';
+
+                    // Evitar duplicados posteriores dentro del mismo pegado.
+                    codigosOcupados.add(codigo);
+                });
+
+                // Sincronizar las vistas y los totales.
+                if (typeof renderizarProductosMovil === 'function') {
+                    renderizarProductosMovil();
+                }
+
+                recalcularTotalEmpaques();
+
+                if (duplicados > 0) {
+                    mostrarNotificacionInventario(
+                        `${duplicados} código(s) duplicado(s) fueron omitidos.`
+                    );
+                }
 
             } catch (error) {
 
                 console.error(
-                    'Error en búsqueda masiva de productos del inventario:',
+                    'Error al pegar códigos en el inventario:',
                     error
                 );
 
@@ -5765,166 +5798,11 @@
                     'error'
                 );
 
-                return;
+            } finally {
+
+                // Liberar el bloqueo aunque ocurra un error.
+                delete tbody.dataset.procesandoPegado;
             }
-
-
-            // =====================================================
-            // 4. MAPEAR PRODUCTOS
-            // =====================================================
-
-            const productosMap =
-                new Map(
-                    productos.map(producto => {
-
-                        let codigo =
-                            String(
-                                producto.codigo_st ||
-                                producto.codigo ||
-                                ''
-                            ).trim();
-
-                        if (/^\d+$/.test(codigo)) {
-
-                            codigo =
-                                codigo.padStart(
-                                    6,
-                                    '0'
-                                );
-
-                        }
-
-                        return [
-                            codigo,
-                            producto
-                        ];
-
-                    })
-                );
-
-
-            // =====================================================
-            // 5. EMPEZAR DESDE LA FILA DONDE SE PEGÓ
-            // =====================================================
-
-            let trActual =
-                inputActual.closest('tr');
-
-
-            // =====================================================
-            // 6. RELLENAR FILAS
-            // =====================================================
-
-            for (
-                const codigo
-                of codigosPendientes
-            ) {
-
-                /*
-                 * Si llegamos al final de las filas,
-                 * creamos una nueva.
-                 */
-                if (!trActual) {
-
-                    trActual =
-                        agregarFilaInventario();
-
-                }
-
-
-                if (!trActual) {
-                    break;
-                }
-
-
-                const inpCodigo =
-                    trActual.querySelector(
-                        '.inp-codigo'
-                    );
-
-                const inpDesc =
-                    trActual.querySelector(
-                        '.inp-desc'
-                    );
-
-
-                if (!inpCodigo || !inpDesc) {
-                    break;
-                }
-
-
-                const producto =
-                    productosMap.get(codigo);
-
-
-                // -------------------------------------------------
-                // CÓDIGO
-                // -------------------------------------------------
-
-                inpCodigo.value =
-                    codigo;
-
-                trActual.dataset.codigo =
-                    codigo;
-
-
-                // -------------------------------------------------
-                // PRODUCTO ENCONTRADO
-                // -------------------------------------------------
-
-                if (producto) {
-
-                    inpDesc.value =
-                        String(
-                            producto.descripcion ||
-                            ''
-                        ).trim();
-
-
-                } else {
-
-                    inpDesc.value =
-                        'PRODUCTO NO ENCONTRADO';
-
-                }
-
-
-                /*
-                 * Avanzar a la siguiente fila.
-                 */
-                trActual =
-                    trActual.nextElementSibling;
-
-
-                /*
-                 * Si no existe siguiente fila,
-                 * la próxima iteración de este mismo
-                 * ciclo la creará automáticamente.
-                 */
-
-            }
-
-
-            // =====================================================
-            // 7. ACTUALIZAR VISTA MÓVIL
-            // =====================================================
-
-            if (
-                typeof renderizarProductosMovil ===
-                'function'
-            ) {
-
-                renderizarProductosMovil();
-
-            }
-
-
-            // =====================================================
-            // 8. RECALCULAR TOTAL
-            // =====================================================
-
-            recalcularTotalEmpaques();
-
         }
 
         function agregarFilaInventario(
@@ -6098,31 +5976,6 @@
                 tr.querySelector(
                     '.inp-codigo'
                 );
-            // ---------------------------------------------------------
-            // PEGADO MASIVO DE CÓDIGOS
-            // ---------------------------------------------------------
-
-            if (inputCodigo) {
-
-                inputCodigo.addEventListener(
-                    'paste',
-                    function (e) {
-
-                        manejarPegadoCodigosInventario(
-                            e,
-                            inputCodigo
-                        );
-
-                    }
-                );
-
-            }
-
-
-
-            // ---------------------------------------------------------
-            // CANTIDAD
-            // ---------------------------------------------------------
 
             // ---------------------------------------------------------
             // CANTIDAD
@@ -6575,6 +6428,32 @@
                     }
 
                 };
+        }
+
+        // =========================================================
+        // PEGADO MASIVO DELEGADO
+        // =========================================================
+
+        const tbodyInventario = document.getElementById(
+            'filas-tabla-inventario'
+        );
+
+        if (tbodyInventario) {
+
+            // Un único listener funciona también con filas creadas dinámicamente.
+            tbodyInventario.addEventListener('paste', function (e) {
+
+                const inputCodigo = e.target.closest('.inp-codigo');
+
+                // Ignorar pegados que no procedan de una celda de código.
+                if (!inputCodigo || !tbodyInventario.contains(inputCodigo)) {
+                    return;
+                }
+
+                // Procesar el pegado desde la celda que recibió el evento.
+                manejarPegadoCodigosInventario(e, inputCodigo);
+
+            });
         }
 
         // =========================================================
