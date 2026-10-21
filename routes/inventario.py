@@ -1383,7 +1383,9 @@ async def vista_inventario_detalle(
             .table("inventarios_detalle")
             .select(
                 "id, inventario_id, codigo, "
-                "descripcion, cantidad, orden"
+                "descripcion, cantidad, "
+                "cantidad_almacen, "
+                "cantidad_piso_ventas, orden"
             )
             .eq("inventario_id", inventario_id)
             .order("orden", desc=False)
@@ -1729,7 +1731,8 @@ async def guardar_inventario(
             config.supabase_async
             .table("inventarios_detalle")
             .select(
-                "codigo, descripcion, orden, cantidad"
+                "codigo, descripcion, orden, cantidad, "
+                "cantidad_almacen, cantidad_piso_ventas"
             )
             .eq(
                 "inventario_id",
@@ -1801,79 +1804,93 @@ async def guardar_inventario(
         codigos_vistos.add(codigo)
 
         # --------------------------------------------
-        # Cantidad
+        # Cantidades por ubicación
         # --------------------------------------------
 
-        cantidad_raw = producto.get(
-            "cantidad",
-            0
+        zonas = producto.get("zonas")
+
+        # Compatibilidad con el formato anterior.
+        if not isinstance(zonas, dict):
+            zonas = {}
+
+        cantidad_almacen_raw = zonas.get(
+            "almacen",
+            producto.get("cantidad_almacen",
+                         producto.get("cantidad", 0))
         )
 
+        cantidad_piso_raw = zonas.get(
+            "piso_ventas",
+            producto.get("cantidad_piso_ventas", 0)
+        )
+
+        def validar_cantidad_ubicacion(valor, ubicacion):
+            # Convierte la cantidad a número.
+            try:
+                cantidad = float(
+                    str(valor).replace(",", ".")
+                )
+            except (ValueError, TypeError):
+                raise ValueError(
+                    f"Cantidad inválida para {codigo} "
+                    f"en {ubicacion}."
+                )
+
+            # Rechaza valores negativos, infinitos y NaN.
+            import math
+
+            if not math.isfinite(cantidad) or cantidad < 0:
+                raise ValueError(
+                    f"La cantidad de {codigo} en "
+                    f"{ubicacion} debe ser un número "
+                    "finito mayor o igual a cero."
+                )
+
+            # Conserva la precisión máxima admitida.
+            cantidad_redondeada = round(cantidad, 3)
+
+            if abs(cantidad - cantidad_redondeada) > 0.0000001:
+                raise ValueError(
+                    f"La cantidad de {codigo} en "
+                    f"{ubicacion} admite máximo 3 decimales."
+                )
+
+            return cantidad_redondeada
+
+        # Valida ambas cantidades independientemente.
         try:
-            cantidad = float(
-                str(cantidad_raw)
-                .replace(",", ".")
+            cantidad_almacen = validar_cantidad_ubicacion(
+                cantidad_almacen_raw,
+                "Almacén"
             )
-        except (
-            ValueError,
-            TypeError
-        ):
+
+            cantidad_piso_ventas = validar_cantidad_ubicacion(
+                cantidad_piso_raw,
+                "Piso de Ventas"
+            )
+
+        except ValueError as error:
             return JSONResponse(
                 status_code=400,
                 content={
                     "ok": False,
-                    "error":
-                        f"Cantidad inválida para {codigo}."
+                    "error": str(error)
                 }
             )
 
-        # No se permiten negativos.
-        if cantidad < 0:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "error":
-                        f"La cantidad de {codigo} "
-                        "no puede ser negativa."
-                }
-            )
-
-        # No se permiten infinitos / NaN.
-        if not cantidad == cantidad:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "error":
-                        f"Cantidad inválida para {codigo}."
-                }
-            )
-
-        # Máximo 3 decimales.
-        cantidad_3 = round(
-            cantidad,
-            3
-        )
-
-        if abs(
-            cantidad - cantidad_3
-        ) > 0.0000001:
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "ok": False,
-                    "error":
-                        f"La cantidad de {codigo} "
-                        "admite máximo 3 decimales."
-                }
-            )
-
+        # Mantiene la cantidad general por compatibilidad.
         productos_limpios.append({
             "codigo": codigo,
             "descripcion": descripcion,
-            "cantidad": cantidad_3
+            "cantidad": cantidad_almacen,
+            "cantidad_almacen": cantidad_almacen,
+            "cantidad_piso_ventas": cantidad_piso_ventas,
+            "zonas": {
+                "almacen": cantidad_almacen,
+                "piso_ventas": cantidad_piso_ventas
+            }
         })
+        
     # --------------------------------------------------------
     # 4.5. PROTEGER LA ESTRUCTURA DEL INVENTARIO
     # --------------------------------------------------------
@@ -1901,15 +1918,19 @@ async def guardar_inventario(
             )
 
         cantidades_por_codigo = {
-            producto["codigo"]: producto["cantidad"]
+            producto["codigo"]: {
+                "cantidad_almacen": producto["cantidad_almacen"],
+                "cantidad_piso_ventas": producto["cantidad_piso_ventas"]
+            }
             for producto in productos_limpios
         }
 
         # Reconstruimos la lista usando la estructura
         # que realmente existe en la base de datos.
         #
-        # De esta manera el navegador tampoco puede
-        # modificar descripción ni orden.
+        # El usuario provisional puede modificar las
+        # cantidades, pero no el código, la descripción
+        # ni el orden de los productos.
 
         productos_limpios = []
 
@@ -1922,6 +1943,18 @@ async def guardar_inventario(
                 )
             ).strip()
 
+            cantidades = cantidades_por_codigo[
+                codigo_original
+            ]
+
+            cantidad_almacen = cantidades[
+                "cantidad_almacen"
+            ]
+
+            cantidad_piso_ventas = cantidades[
+                "cantidad_piso_ventas"
+            ]
+
             productos_limpios.append({
                 "codigo": codigo_original,
                 "descripcion": str(
@@ -1930,9 +1963,13 @@ async def guardar_inventario(
                         ""
                     )
                 ).strip(),
-                "cantidad": cantidades_por_codigo[
-                    codigo_original
-                ]
+                "cantidad": cantidad_almacen,
+                "cantidad_almacen": cantidad_almacen,
+                "cantidad_piso_ventas": cantidad_piso_ventas,
+                "zonas": {
+                    "almacen": cantidad_almacen,
+                    "piso_ventas": cantidad_piso_ventas
+                }
             })
 
     # --------------------------------------------------------

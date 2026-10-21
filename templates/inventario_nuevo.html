@@ -640,6 +640,31 @@
 
     </div>
 
+    <!-- PESTAÑAS DE UBICACIÓN DEL INVENTARIO -->
+    <div class="mt-4 mb-3 w-full max-w-[1000px] mx-auto
+            flex items-center gap-2 overflow-x-auto" id="pestanas-ubicacion-inventario">
+
+        <button type="button" class="btn-pestana-ubicacion px-4 py-2 rounded-xl text-xs
+               font-bold border border-slate-900 bg-slate-900
+               text-white shadow-xs transition whitespace-nowrap" data-ubicacion="almacen"
+            onclick="cambiarUbicacionInventario('almacen')">
+            <i class="fa-solid fa-warehouse mr-1.5"></i>
+            Almacén
+        </button>
+
+        <button type="button" class="btn-pestana-ubicacion px-4 py-2 rounded-xl text-xs
+               font-semibold border border-slate-200
+               bg-slate-50 text-slate-600
+               hover:bg-slate-200 hover:text-slate-900
+               transition whitespace-nowrap" data-ubicacion="piso_ventas"
+            onclick="cambiarUbicacionInventario('piso_ventas')">
+            <i class="fa-solid fa-store mr-1.5"></i>
+            Piso de Ventas
+        </button>
+
+    </div>
+
+
     <!-- ===================================================== -->
     <!-- TABLA DE INVENTARIO -->
     <!-- ===================================================== -->
@@ -691,9 +716,9 @@
                             text-white cursor-pointer select-none
                             hover:bg-slate-800 transition-colors" data-columna-orden-inventario="cantidad"
                             onclick="ordenarInventarioNuevo('cantidad')">
-                            <div class="flex items-center justify-end gap-2">
-                                <span>CANTIDAD</span>
-                            </div>
+                            <span id="etiqueta-cantidad-inventario">
+                                CANTIDAD
+                            </span>
                         </th>
 
                         {% if inventario.estado == 'borrador'
@@ -714,6 +739,8 @@
                     {% for producto in productos %}
 
                     <tr data-detalle-id="{{ producto.id }}" data-codigo="{{ producto.codigo }}"
+                        data-cantidad-almacen="{{ producto.cantidad_almacen if producto.cantidad_almacen is not none else producto.cantidad }}"
+                        data-cantidad-piso-ventas="{{ producto.cantidad_piso_ventas if producto.cantidad_piso_ventas is not none else 0 }}"
                         class="hover:bg-blue-50/40 transition text-xs">
 
                         <!-- CÓDIGO -->
@@ -1944,30 +1971,41 @@
          * Convierte los productos a una estructura
          * estable para poder compararlos.
          */
-        function normalizarProductosInventario(
-            productos
-        ) {
+
+        function normalizarProductosInventario(productos) {
             if (!Array.isArray(productos)) {
                 return [];
             }
 
-            return productos.map(producto => ({
-                codigo:
-                    String(
+            return productos.map(producto => {
+                const cantidadAlmacen = Number(
+                    producto?.cantidad_almacen ??
+                    producto?.zonas?.almacen ??
+                    producto?.cantidad ??
+                    0
+                );
+
+                const cantidadPisoVentas = Number(
+                    producto?.cantidad_piso_ventas ??
+                    producto?.zonas?.piso_ventas ??
+                    0
+                );
+
+                return {
+                    codigo: String(
                         producto?.codigo || ''
                     ).trim(),
 
-                descripcion:
-                    String(
+                    descripcion: String(
                         producto?.descripcion || ''
                     ).trim(),
 
-                cantidad:
-                    Number(
-                        producto?.cantidad || 0
-                    )
-            }));
+                    cantidad_almacen: cantidadAlmacen,
+                    cantidad_piso_ventas: cantidadPisoVentas
+                };
+            });
         }
+
 
 
         /*
@@ -2104,6 +2142,80 @@
             );
 
         }
+
+
+        let ubicacionInventarioActiva = 'almacen';
+
+        function cambiarUbicacionInventario(nuevaUbicacion) {
+            if (
+                nuevaUbicacion !== 'almacen' &&
+                nuevaUbicacion !== 'piso_ventas'
+            ) {
+                return;
+            }
+
+            const filas = obtenerFilasInventario();
+
+            // Guardar primero las cantidades de la ubicación actual.
+            for (const fila of filas) {
+                const input = fila.querySelector('.inp-cantidad');
+
+                if (!input) {
+                    continue;
+                }
+
+                if (ubicacionInventarioActiva === 'almacen') {
+                    fila.dataset.cantidadAlmacen = input.value;
+                } else {
+                    fila.dataset.cantidadPisoVentas = input.value;
+                }
+            }
+
+            // Mostrar las cantidades de la ubicación seleccionada.
+            for (const fila of filas) {
+                const input = fila.querySelector('.inp-cantidad');
+
+                if (!input) {
+                    continue;
+                }
+
+                const cantidad = nuevaUbicacion === 'almacen'
+                    ? fila.dataset.cantidadAlmacen
+                    : fila.dataset.cantidadPisoVentas;
+
+                input.value = String(Number(cantidad ?? 0));
+                input.dataset.valorAnterior = input.value;
+            }
+
+            ubicacionInventarioActiva = nuevaUbicacion;
+            document
+                .querySelectorAll('.btn-pestana-ubicacion')
+                .forEach(boton => {
+
+                    const esActiva =
+                        boton.dataset.ubicacion === nuevaUbicacion;
+
+                    boton.className =
+                        `btn-pestana-ubicacion px-4 py-2 rounded-xl text-xs transition whitespace-nowrap ${esActiva
+                            ? 'font-bold border border-slate-900 bg-slate-900 text-white shadow-xs'
+                            : 'font-semibold border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-200 hover:text-slate-900'
+                        }`;
+                });
+
+            const etiqueta = document.getElementById(
+                'etiqueta-cantidad-inventario'
+            );
+
+            if (etiqueta) {
+                etiqueta.textContent = nuevaUbicacion === 'almacen'
+                    ? 'CANTIDAD'
+                    : 'CANTIDAD';
+            }
+
+            recalcularTotalEmpaques();
+            renderizarProductosMovil();
+        }
+
 
         // =========================================================
         // VISTA MÓVIL — RENDERIZAR PRODUCTOS
@@ -2726,49 +2838,59 @@
         // CONSTRUIR PAYLOAD
         // =========================================================
 
+
         function obtenerProductosInventario() {
-
-            const filas =
-                obtenerFilasInventario();
-
+            const filas = obtenerFilasInventario();
             const productos = [];
 
-            for (
-                const fila of filas
-            ) {
+            for (const fila of filas) {
+                const codigo = fila
+                    .querySelector('.inp-codigo')
+                    ?.value
+                    ?.trim() || '';
 
-                const codigo =
-                    fila
-                        .querySelector(
-                            '.inp-codigo'
-                        )
-                        ?.value
-                        ?.trim() || '';
+                const descripcion = fila
+                    .querySelector('.inp-desc')
+                    ?.value
+                    ?.trim() || '';
 
-                const descripcion =
-                    fila
-                        .querySelector(
-                            '.inp-desc'
-                        )
-                        ?.value
-                        ?.trim() || '';
-
-                const inputCantidad =
-                    fila.querySelector(
-                        '.inp-cantidad'
-                    );
+                const inputCantidad = fila.querySelector(
+                    '.inp-cantidad'
+                );
 
                 if (!codigo) {
                     continue;
                 }
 
-                const cantidad =
+                // Validar la cantidad que está visible.
+                if (!validarCantidadInventario(inputCantidad)) {
+                    throw new Error(
+                        `Cantidad inválida para ${codigo}.`
+                    );
+                }
+
+                // Persistir el valor editado en su ubicación.
+                if (ubicacionInventarioActiva === 'almacen') {
+                    fila.dataset.cantidadAlmacen =
+                        inputCantidad.value;
+                } else {
+                    fila.dataset.cantidadPisoVentas =
+                        inputCantidad.value;
+                }
+
+                const cantidadAlmacen =
                     normalizarCantidadInventario(
-                        inputCantidad?.value
+                        fila.dataset.cantidadAlmacen ?? 0
+                    );
+
+                const cantidadPisoVentas =
+                    normalizarCantidadInventario(
+                        fila.dataset.cantidadPisoVentas ?? 0
                     );
 
                 if (
-                    cantidad === null
+                    cantidadAlmacen === null ||
+                    cantidadPisoVentas === null
                 ) {
                     throw new Error(
                         `Cantidad inválida para ${codigo}.`
@@ -2778,14 +2900,23 @@
                 productos.push({
                     codigo,
                     descripcion,
-                    cantidad
-                });
 
+                    // Compatibilidad con el campo histórico.
+                    cantidad: cantidadAlmacen,
+
+                    cantidad_almacen: cantidadAlmacen,
+                    cantidad_piso_ventas: cantidadPisoVentas,
+
+                    zonas: {
+                        almacen: cantidadAlmacen,
+                        piso_ventas: cantidadPisoVentas
+                    }
+                });
             }
 
             return productos;
-
         }
+
 
         // =========================================================
         // VACIAR LISTA
@@ -5847,6 +5978,12 @@
 
             tr.dataset.codigo =
                 codigoNormalizado;
+
+            tr.dataset.cantidadAlmacen =
+                String(cantidad ?? 0);
+
+            tr.dataset.cantidadPisoVentas =
+                '0';
 
             tr.innerHTML = `
         <td
