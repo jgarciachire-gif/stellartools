@@ -100,23 +100,67 @@ def _parsear_cantidad_kardex(valor):
 
     texto = texto.replace(" ", "")
 
-    # Admite separadores decimales habituales:
-    # 1.234,50 -> 1234.50
-    # 1,234.50 -> 1234.50
-    if "," in texto and "." in texto:
-        if texto.rfind(",") > texto.rfind("."):
-            texto = texto.replace(".", "")
-            texto = texto.replace(",", ".")
-        else:
-            texto = texto.replace(",", "")
+    
+    # Formato del Kardex: punto para miles y coma decimal.
+    # Ejemplos:
+    # 38,025      -> 38.025
+    # 25,56       -> 25.56
+    # 1.234,567   -> 1234.567
+    # 1.234.567   -> 1234567
 
-    elif "," in texto:
-        partes = texto.split(",")
+    if "," in texto:
+        if texto.count(",") != 1:
+            raise ValueError(
+                f"Cantidad no válida: {valor}"
+            )
 
-        if len(partes) == 2 and len(partes[1]) != 3:
-            texto = texto.replace(",", ".")
-        else:
-            texto = texto.replace(",", "")
+        parte_entera, parte_decimal = texto.split(",")
+
+        if not parte_entera or not parte_decimal:
+            raise ValueError(
+                f"Cantidad no válida: {valor}"
+            )
+
+        if "." in parte_entera:
+            grupos = parte_entera.split(".")
+
+            if (
+                not grupos[0].isdigit()
+                or not 1 <= len(grupos[0]) <= 3
+                or any(
+                    not grupo.isdigit() or len(grupo) != 3
+                    for grupo in grupos[1:]
+                )
+            ):
+                raise ValueError(
+                    f"Cantidad no válida: {valor}"
+                )
+
+            parte_entera = "".join(grupos)
+
+        elif not parte_entera.isdigit():
+            raise ValueError(
+                f"Cantidad no válida: {valor}"
+            )
+
+        if not parte_decimal.isdigit():
+            raise ValueError(
+                f"Cantidad no válida: {valor}"
+            )
+
+        texto = f"{parte_entera}.{parte_decimal}"
+
+    elif "." in texto:
+        grupos = texto.split(".")
+
+        if (
+            len(grupos) > 1
+            and all(grupo.isdigit() for grupo in grupos)
+            and all(len(grupo) == 3 for grupo in grupos[1:])
+            and 1 <= len(grupos[0]) <= 3
+        ):
+            texto = "".join(grupos)
+
 
     try:
         cantidad = Decimal(texto)
@@ -1021,6 +1065,13 @@ async def obtener_demanda_kardex(
                 "a la fecha final."
             )
         )
+
+    if not codigos:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes enviar al menos un código de producto."
+        )
+    
 
     codigos_normalizados = None
 
