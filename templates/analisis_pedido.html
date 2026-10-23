@@ -318,13 +318,54 @@
 
         <!-- Días de Cobertura y Botón Calcular Sugerido a la derecha -->
         <div class="flex items-center gap-3 shrink-0 ml-auto">
-            <div class="flex items-center gap-2">
-                <label class="block text-xs font-semibold text-slate-700 whitespace-nowrap">
-                    <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i> Días:
-                </label>
-                <input type="number" id="dias_cobertura" value="7" min="1" step="1"
-                    oninput="if(this.value < 1 && this.value !== '') this.value = 1; recargarSugeridosEnTabla()"
-                    class="w-16 px-2 py-1.5 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+            <!-- Parámetros del motor de sugeridos -->
+            <div class="flex flex-wrap items-end gap-3 shrink-0 ml-auto">
+
+                <!-- Cobertura base -->
+                <div class="flex items-center gap-2">
+                    <label for="dias_cobertura" class="text-xs font-semibold text-slate-700 whitespace-nowrap">
+                        <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i>
+                        Cobertura:
+                    </label>
+
+                    <input type="number" id="dias_cobertura" value="7" min="1" step="1"
+                        oninput="if(this.value < 1 && this.value !== '') this.value = 1; recargarSugeridosEnTabla()"
+                        class="w-16 px-2 py-1.5 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
+                </div>
+
+                <!-- Días adicionales de entrega -->
+                <div class="flex flex-col gap-1">
+                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <input type="checkbox" id="incluir_dias_entrega"
+                            class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            onchange="actualizarVisibilidadDiasExtra(); recargarSugeridosEnTabla()">
+                        <span>Demora de despacho</span>
+                    </label>
+
+                    <div id="contenedor_dias_entrega" class="hidden">
+                        <label for="dias_entrega_extra" class="sr-only">Días adicionales de entrega</label>
+                        <input type="number" id="dias_entrega_extra" value="3" min="0" step="1"
+                            oninput="recargarSugeridosEnTabla()"
+                            class="w-20 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center">
+                    </div>
+                </div>
+
+                <!-- Días de reserva de seguridad -->
+                <div class="flex flex-col gap-1">
+                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-700">
+                        <input type="checkbox" id="incluir_dias_seguridad"
+                            class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            onchange="actualizarVisibilidadDiasExtra(); recargarSugeridosEnTabla()">
+                        <span>Reserva de seguridad</span>
+                    </label>
+
+                    <div id="contenedor_dias_seguridad" class="hidden">
+                        <label for="dias_seguridad_extra" class="sr-only">Días de reserva de seguridad</label>
+                        <input type="number" id="dias_seguridad_extra" value="3" min="0" step="1"
+                            oninput="recargarSugeridosEnTabla()"
+                            class="w-20 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center">
+                    </div>
+                </div>
             </div>
 
             <!-- Botón Calcular Sugerido con animación de Spinner y cambio de estado -->
@@ -2924,54 +2965,378 @@ ${nodosProductosXML.join('\n')}
             }
         }
 
-        // Función síncrona para recalcular instantáneamente en memoria sin esperas de red
-        function ejecutarCalculoSugeridosSync() {
-            // 1. Resguarda los valores escritos en pantalla
-            guardarEstadoTablaEnMemoria(tiendaActivaPestana);
 
-            const diasCobertura = parseFloat(document.getElementById('dias_cobertura')?.value) || 7;
-            const filas = document.querySelectorAll('#filas-tabla-analisis tr');
-            const sedes = ['CENTRO', 'NAGUANAGUA', 'ISABELICA', 'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'];
+        function fechaISOAnalisis(fecha) {
+            const anio = fecha.getFullYear();
+            const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+            const dia = String(fecha.getDate()).padStart(2, '0');
 
-            filas.forEach(tr => {
-                const inpCodigo = tr.querySelector('.inp-codigo');
-                if (!inpCodigo) return;
+            return `${anio}-${mes}-${dia}`;
+        }
 
-                const codigo = normalizarCodigoAnalisis(inpCodigo.value);
-                if (!codigo) return;
-                inpCodigo.value = codigo; // Asegura el formato de 6 dígitos
+        function esSemanaComercialAlta(fecha) {
+            const inicioSemana = (fecha) => {
+                const copia = new Date(
+                    fecha.getFullYear(),
+                    fecha.getMonth(),
+                    fecha.getDate()
+                );
 
-                const pre = parseFloat(tr.querySelector('.inp-pre')?.value) || 1;
+                const desplazamiento = (copia.getDay() + 6) % 7;
+                copia.setDate(copia.getDate() - desplazamiento);
 
-                sedes.forEach(sede => {
-                    asegurarEstructuraTienda(sede);
+                return copia;
+            };
 
-                    // Obtiene datos de la sede guardados en memoria
-                    const datosExistentes = matrizTiendas[sede][codigo] || { invEmp: 0, emp: 0, demandaDiaria: 0 };
-                    const invEmp = parseFloat(datosExistentes.invEmp) || 0;
-                    const invUnidades = invEmp * pre;
-                    const demanda = parseFloat(datosExistentes.demandaDiaria) || 0;
+            const inicioFecha = inicioSemana(fecha);
 
-                    // Cálculo del sugerido: (Demanda Diaria * Días Cobertura) - Inventario Físico
-                    const unidadesRequeridas = (demanda * diasCobertura) - invUnidades;
+            const diaQuince = new Date(
+                fecha.getFullYear(),
+                fecha.getMonth(),
+                15
+            );
 
-                    let empSugerido = 0;
-                    if (unidadesRequeridas > 0 && pre > 0) {
-                        empSugerido = Math.ceil(unidadesRequeridas / pre);
-                    }
+            const ultimoDiaMes = new Date(
+                fecha.getFullYear(),
+                fecha.getMonth() + 1,
+                0
+            );
 
-                    // Actualiza la estimación en la matriz de memoria
+            return (
+                inicioFecha.getTime() === inicioSemana(diaQuince).getTime()
+                || inicioFecha.getTime() === inicioSemana(ultimoDiaMes).getTime()
+            );
+        }
+
+        function numeroDemandaAnalisis(valor) {
+            const numero = Number(
+                String(valor ?? 0).replace(',', '.')
+            );
+
+            return Number.isFinite(numero) && numero > 0
+                ? numero
+                : 0;
+        }
+
+        async function cargarDemandaComercialKardexEnMemoria(codigos = []) {
+            const codigosNormalizados = [
+                ...new Set(
+                    codigos
+                        .map(codigo => normalizarCodigoAnalisis(codigo))
+                        .filter(Boolean)
+                )
+            ];
+
+            if (!codigosNormalizados.length) {
+                throw new Error('No hay códigos válidos para calcular.');
+            }
+
+            // Mes calendario anterior completo.
+            const hoy = new Date();
+
+            const fechaInicio = new Date(
+                hoy.getFullYear(),
+                hoy.getMonth() - 1,
+                1
+            );
+
+            const fechaFin = new Date(
+                hoy.getFullYear(),
+                hoy.getMonth(),
+                0
+            );
+
+            const parametros = new URLSearchParams({
+                fecha_inicio: fechaISOAnalisis(fechaInicio),
+                fecha_fin: fechaISOAnalisis(fechaFin)
+            });
+
+            codigosNormalizados.forEach(codigo => {
+                parametros.append('codigos', codigo);
+            });
+
+            const response = await fetch(
+                `/analisis/demanda-comercial-kardex?${parametros.toString()}`
+            );
+
+            const resultado = await response.json();
+
+            if (!response.ok) {
+                throw new Error(
+                    resultado.detail
+                    || 'No se pudo cargar la demanda comercial del Kardex.'
+                );
+            }
+
+            const sedes = [
+                'CENTRO',
+                'NAGUANAGUA',
+                'ISABELICA',
+                'CIUDAD ALIANZA',
+                'GARIBALDI',
+                'SAN DIEGO'
+            ];
+
+            const normalizarSede = (sede) => {
+                const nombre = String(sede || '').trim().toUpperCase();
+
+                return (
+                    nombre === 'ALIANZA'
+                    || nombre === 'C. ALIANZA'
+                )
+                    ? 'CIUDAD ALIANZA'
+                    : nombre;
+            };
+
+            // Inicializa la información comercial de los códigos consultados.
+            sedes.forEach(sede => {
+                asegurarEstructuraTienda(sede);
+
+                codigosNormalizados.forEach(codigo => {
+                    const actual = matrizTiendas[sede][codigo] || {};
+
                     matrizTiendas[sede][codigo] = {
-                        ...datosExistentes,
-                        invEmp: invEmp,
-                        emp: empSugerido
+                        ...actual,
+                        demandaRegular: 0,
+                        demandaAlta: 0,
+                        demandaPromedioMes: 0,
+                        diasCubiertosKardex: 0,
+                        semanasRegulares: 0,
+                        semanasAlta: 0,
+                        demandaComercialDisponible: false
                     };
                 });
             });
 
-            // 2. Refresca la vista en pantalla con los nuevos cálculos inmediatamente
+            (resultado.data || []).forEach(item => {
+                const sede = normalizarSede(item.sede);
+                const codigo = normalizarCodigoAnalisis(item.codigo);
+
+                if (
+                    !sedes.includes(sede)
+                    || !codigosNormalizados.includes(codigo)
+                ) {
+                    return;
+                }
+
+                const diasCubiertos = Number(item.dias_cubiertos) || 0;
+                const unidadesMes = numeroDemandaAnalisis(item.unidades_mes);
+                const promedioMes = diasCubiertos > 0
+                    ? unidadesMes / diasCubiertos
+                    : 0;
+
+                const semanasRegulares = Number(item.semanas_regulares) || 0;
+                const semanasAlta = Number(item.semanas_alta) || 0;
+
+                // Si la categoría tiene poca muestra, se usa el promedio
+                // observado del mes como respaldo, sin inventar un aumento.
+                const regular = semanasRegulares >= 2
+                    ? numeroDemandaAnalisis(item.demanda_regular)
+                    : promedioMes;
+
+                const alta = semanasAlta >= 1
+                    ? numeroDemandaAnalisis(item.demanda_alta)
+                    : regular;
+
+                const actual = matrizTiendas[sede][codigo] || {};
+
+                matrizTiendas[sede][codigo] = {
+                    ...actual,
+                    demandaRegular: regular,
+                    demandaAlta: alta,
+                    demandaPromedioMes: promedioMes,
+                    diasCubiertosKardex: diasCubiertos,
+                    semanasRegulares,
+                    semanasAlta,
+                    demandaComercialDisponible: diasCubiertos > 0
+                };
+            });
+        }
+
+        function proyectarDemandaComercial(datos, fechaInicio, diasHorizonte) {
+            let unidadesProyectadas = 0;
+
+            for (let i = 0; i < diasHorizonte; i++) {
+                const fecha = new Date(
+                    fechaInicio.getFullYear(),
+                    fechaInicio.getMonth(),
+                    fechaInicio.getDate() + i
+                );
+
+                const regular = numeroDemandaAnalisis(datos.demandaRegular);
+                const alta = numeroDemandaAnalisis(datos.demandaAlta);
+
+                // Solo se aplica la demanda alta si las ventas reales
+                // del producto fueron mayores en esas semanas.
+                const demandaDelDia = (
+                    esSemanaComercialAlta(fecha)
+                    && alta > regular
+                )
+                    ? alta
+                    : regular;
+
+                unidadesProyectadas += demandaDelDia;
+            }
+
+            return unidadesProyectadas;
+        }
+
+
+        function actualizarVisibilidadDiasExtra() {
+            const incluirEntrega = document.getElementById(
+                'incluir_dias_entrega'
+            )?.checked || false;
+
+            const incluirSeguridad = document.getElementById(
+                'incluir_dias_seguridad'
+            )?.checked || false;
+
+            document.getElementById(
+                'contenedor_dias_entrega'
+            )?.classList.toggle('hidden', !incluirEntrega);
+
+            document.getElementById(
+                'contenedor_dias_seguridad'
+            )?.classList.toggle('hidden', !incluirSeguridad);
+        }
+
+        function obtenerDiasExtraAnalisis(idCheckbox, idInput) {
+            const activado = document.getElementById(idCheckbox)?.checked;
+
+            if (!activado) return 0;
+
+            const valor = Number(
+                document.getElementById(idInput)?.value ?? 0
+            );
+
+            return Number.isFinite(valor) ? Math.max(0, valor) : 0;
+        }
+
+
+        function ejecutarCalculoSugeridosSync() {
+            guardarEstadoTablaEnMemoria(tiendaActivaPestana);
+
+            const diasCobertura = Math.max(
+                1,
+                parseInt(
+                    document.getElementById('dias_cobertura')?.value || '7',
+                    10
+                )
+            );
+
+
+            const diasEntrega = obtenerDiasExtraAnalisis(
+                'incluir_dias_entrega',
+                'dias_entrega_extra'
+            );
+
+            const diasSeguridad = obtenerDiasExtraAnalisis(
+                'incluir_dias_seguridad',
+                'dias_seguridad_extra'
+            );
+
+            const diasHorizonte = diasCobertura + diasEntrega;
+
+
+            const fechaHoy = new Date();
+
+            const filas = document.querySelectorAll(
+                '#filas-tabla-analisis tr'
+            );
+
+            const sedes = [
+                'CENTRO',
+                'NAGUANAGUA',
+                'ISABELICA',
+                'CIUDAD ALIANZA',
+                'GARIBALDI',
+                'SAN DIEGO'
+            ];
+
+            filas.forEach(tr => {
+                const inpCodigo = tr.querySelector('.inp-codigo');
+
+                if (!inpCodigo) return;
+
+                const codigo = normalizarCodigoAnalisis(inpCodigo.value);
+
+                if (!codigo) return;
+
+                inpCodigo.value = codigo;
+
+                const preIngresado = parseFloat(
+                    tr.querySelector('.inp-pre')?.value
+                );
+
+                const pre = (
+                    Number.isFinite(preIngresado) && preIngresado > 0
+                )
+                    ? preIngresado
+                    : 1;
+
+                sedes.forEach(sede => {
+                    asegurarEstructuraTienda(sede);
+
+                    const datos = matrizTiendas[sede][codigo] || {
+                        invEmp: 0,
+                        emp: 0
+                    };
+
+                    const invEmp = Math.max(
+                        0,
+                        numeroDemandaAnalisis(datos.invEmp)
+                    );
+
+                    // Inventario de almacén convertido a unidades individuales.
+                    const inventarioUnidades = invEmp * pre;
+
+                    const demandaRegular = numeroDemandaAnalisis(
+                        datos.demandaRegular
+                    );
+
+                    const demandaAlta = numeroDemandaAnalisis(
+                        datos.demandaAlta
+                    );
+
+                    let empaquesSugeridos = 0;
+
+                    if (datos.demandaComercialDisponible) {
+                        const demandaProyectada = proyectarDemandaComercial(
+                            datos,
+                            fechaHoy,
+                            diasHorizonte
+                        );
+
+                        // Reserva de seguridad equivalente a tres días
+                        // de demanda regular.
+                        const stockSeguridad = demandaRegular * diasSeguridad;
+
+                        const necesidadUnidades = Math.max(
+                            0,
+                            demandaProyectada
+                            + stockSeguridad
+                            - inventarioUnidades
+                        );
+
+                        if (pre > 0 && necesidadUnidades > 0) {
+                            empaquesSugeridos = Math.ceil(
+                                necesidadUnidades / pre
+                            );
+                        }
+                    }
+
+                    matrizTiendas[sede][codigo] = {
+                        ...datos,
+                        invEmp,
+                        pre,
+                        emp: empaquesSugeridos
+                    };
+                });
+            });
+
             cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
         }
+
 
         async function calcularSugeridoSedeActual() {
             const btn = document.getElementById(
@@ -2998,8 +3363,8 @@ ${nodosProductosXML.join('\n')}
                 const codigos =
                     obtenerCodigosTablaAnalisis();
 
-                // Solo consulta Supabase si hay códigos nuevos.
-                await cargarVentasStellarEnMemoria(
+                // Carga la demanda comercial del Kardex para el mes anterior.
+                await cargarDemandaComercialKardexEnMemoria(
                     codigos
                 );
 
@@ -3036,6 +3401,7 @@ ${nodosProductosXML.join('\n')}
         // Recalcula los sugeridos instantáneamente al cambiar los días de cobertura
         function recargarSugeridosEnTabla() {
             ejecutarCalculoSugeridosSync();
+            actualizarVisibilidadDiasExtra();
         }
 
         document.addEventListener('DOMContentLoaded', async () => {

@@ -863,90 +863,66 @@
         totalizarAnalisis();
     }
 
+
     function recancularFilaConInventario(elem) {
         const tr = elem.closest('tr');
+        if (!tr) return;
 
-        const codigo =
-            tr.querySelector('.inp-codigo').value.trim();
-
-        const pre =
-            parseFloat(
-                tr.querySelector('.inp-pre').value
-            ) || 1;
-
-        const invEmp =
-            parseFloat(
-                tr.querySelector('.inp-inv-emp').value
-            ) || 0;
-
-        // Obtener demanda diaria guardada en la matriz
-        // para la tienda activa.
-        asegurarEstructuraTienda(
-            window.tiendaActivaPestana
+        const codigo = normalizarCodigoAnalisis(
+            tr.querySelector('.inp-codigo')?.value || ''
         );
 
-        const datosProd =
-            window.matrizTiendas[
-            window.tiendaActivaPestana
-            ][codigo] || {
-                demandaDiaria: 0
-            };
-
-        const demandaDiaria =
-            datosProd.demandaDiaria || 0;
-
-        const diasCobertura =
-            parseFloat(
-                document.getElementById(
-                    'dias_cobertura'
-                ).value
-            ) || 7;
-
-        // Convertir Inventario Físico en Empaques
-        // a Unidades.
-        const invUnidades =
-            invEmp * pre;
-
-        // Unidades Requeridas =
-        // (Demanda Diaria * Días Cobertura)
-        // - Inventario en Unidades.
-        const unidadesRequeridas =
-            (demandaDiaria * diasCobertura)
-            - invUnidades;
-
-        // EMP. Sugerido =
-        // Redondear Arriba(
-        //   Max(0, Unidades Requeridas) / Presentación
-        // )
-        let empSugerido = 0;
-
-        if (
-            unidadesRequeridas > 0 &&
-            pre > 0
-        ) {
-            empSugerido =
-                Math.ceil(
-                    unidadesRequeridas / pre
-                );
+        if (!codigo) {
+            calcularFila(elem);
+            return;
         }
 
-        // Auto-completar EMP con el valor sugerido.
-        tr.querySelector('.inp-emp').value =
-            empSugerido;
+        const preIngresado = parseFloat(
+            tr.querySelector('.inp-pre')?.value
+        );
 
-        // Guardar estado en memoria para no perderlo
-        // al cambiar de pestaña.
-        window.matrizTiendas[
-            window.tiendaActivaPestana
-        ][codigo] = {
-            invEmp: invEmp,
-            emp: empSugerido,
-            demandaDiaria: demandaDiaria
+        const pre = Number.isFinite(preIngresado) && preIngresado > 0
+            ? preIngresado
+            : 1;
+
+        const invIngresado = parseFloat(
+            tr.querySelector('.inp-inv-emp')?.value
+        );
+
+        const invEmp = Number.isFinite(invIngresado)
+            ? Math.max(0, invIngresado)
+            : 0;
+
+        const sede = window.tiendaActivaPestana;
+
+        asegurarEstructuraTienda(sede);
+
+        // Recupera el objeto existente sin perder la demanda comercial
+        // ni otros datos almacenados del producto.
+        const datosPrevios =
+            window.matrizTiendas[sede][codigo] || {};
+
+        window.matrizTiendas[sede][codigo] = {
+            ...datosPrevios,
+            invEmp,
+            pre
         };
 
-        // Calcular Unidades Totales y Subtotal.
+        // Si ya existe demanda comercial del Kardex, recalcula usando
+        // el motor nuevo y conserva los parámetros seleccionados.
+        if (
+            datosPrevios.demandaComercialDisponible
+            && typeof ejecutarCalculoSugeridosSync === 'function'
+        ) {
+            ejecutarCalculoSugeridosSync();
+            return;
+        }
+
+        // Si todavía no se ha calculado la demanda comercial,
+        // conserva el sugerido actual en lugar de sustituirlo por cero.
         calcularFila(elem);
     }
+
 
     function ajustarPorUnidades(elem) {
 

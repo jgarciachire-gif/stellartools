@@ -1,15 +1,23 @@
 import csv
-import io 
+import io
 from typing import List, Optional  # Anotaciones de tipos
-from fastapi import APIRouter, File, UploadFile, Request, Cookie, HTTPException  # Componentes FastAPI
+from fastapi import (
+    APIRouter,
+    File,
+    UploadFile,
+    Request,
+    Cookie,
+    HTTPException,
+)  # Componentes FastAPI
 from fastapi.responses import RedirectResponse
 import config
 from config import templates, obtener_usuario_actual  # Dependencias globales
 from models import (
     ProductoModificado,
     CodigosVentasRequest,
-    GuardarAnalisisRequest
+    GuardarAnalisisRequest,
 )  # Modelos de validación para las API
+
 router = APIRouter()
 
 import asyncio
@@ -19,29 +27,19 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import Query
 
-
 # ============================================================
 # NORMALIZACIÓN DEL KARDEX DE VENTAS
 # ============================================================
 
+
 def _normalizar_cabecera_kardex(valor):
-    texto = unicodedata.normalize(
-        "NFKD",
-        str(valor or "")
-    )
+    texto = unicodedata.normalize("NFKD", str(valor or ""))
 
     texto = "".join(
-        caracter
-        for caracter in texto
-        if not unicodedata.combining(caracter)
+        caracter for caracter in texto if not unicodedata.combining(caracter)
     )
 
-    return (
-        texto.strip()
-        .lower()
-        .replace(" ", "_")
-        .replace("-", "_")
-    )
+    return texto.strip().lower().replace(" ", "_").replace("-", "_")
 
 
 def _normalizar_codigo_kardex(valor):
@@ -76,18 +74,13 @@ def _parsear_fecha_kardex(valor):
 
     for formato in formatos:
         try:
-            return datetime.strptime(
-                texto,
-                formato
-            ).date()
+            return datetime.strptime(texto, formato).date()
         except ValueError:
             continue
 
     # Admite fechas ISO con hora y zona horaria.
     try:
-        return datetime.fromisoformat(
-            texto.replace("Z", "+00:00")
-        ).date()
+        return datetime.fromisoformat(texto.replace("Z", "+00:00")).date()
     except ValueError:
         return None
 
@@ -100,7 +93,6 @@ def _parsear_cantidad_kardex(valor):
 
     texto = texto.replace(" ", "")
 
-    
     # Formato del Kardex: punto para miles y coma decimal.
     # Ejemplos:
     # 38,025      -> 38.025
@@ -110,16 +102,12 @@ def _parsear_cantidad_kardex(valor):
 
     if "," in texto:
         if texto.count(",") != 1:
-            raise ValueError(
-                f"Cantidad no válida: {valor}"
-            )
+            raise ValueError(f"Cantidad no válida: {valor}")
 
         parte_entera, parte_decimal = texto.split(",")
 
         if not parte_entera or not parte_decimal:
-            raise ValueError(
-                f"Cantidad no válida: {valor}"
-            )
+            raise ValueError(f"Cantidad no válida: {valor}")
 
         if "." in parte_entera:
             grupos = parte_entera.split(".")
@@ -127,26 +115,17 @@ def _parsear_cantidad_kardex(valor):
             if (
                 not grupos[0].isdigit()
                 or not 1 <= len(grupos[0]) <= 3
-                or any(
-                    not grupo.isdigit() or len(grupo) != 3
-                    for grupo in grupos[1:]
-                )
+                or any(not grupo.isdigit() or len(grupo) != 3 for grupo in grupos[1:])
             ):
-                raise ValueError(
-                    f"Cantidad no válida: {valor}"
-                )
+                raise ValueError(f"Cantidad no válida: {valor}")
 
             parte_entera = "".join(grupos)
 
         elif not parte_entera.isdigit():
-            raise ValueError(
-                f"Cantidad no válida: {valor}"
-            )
+            raise ValueError(f"Cantidad no válida: {valor}")
 
         if not parte_decimal.isdigit():
-            raise ValueError(
-                f"Cantidad no válida: {valor}"
-            )
+            raise ValueError(f"Cantidad no válida: {valor}")
 
         texto = f"{parte_entera}.{parte_decimal}"
 
@@ -161,54 +140,51 @@ def _parsear_cantidad_kardex(valor):
         ):
             texto = "".join(grupos)
 
-
     try:
         cantidad = Decimal(texto)
     except InvalidOperation:
-        raise ValueError(
-            f"Cantidad no válida: {valor}"
-        )
+        raise ValueError(f"Cantidad no válida: {valor}")
 
     if not cantidad.is_finite() or cantidad < 0:
-        raise ValueError(
-            f"Cantidad negativa o no válida: {valor}"
-        )
+        raise ValueError(f"Cantidad negativa o no válida: {valor}")
 
     return cantidad
 
+
 @router.get("/analisis-pedido")
 async def vista_analisis_pedido(
-    request: Request, 
+    request: Request,
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res_prov = await config.supabase_async.table("proveedores") \
-        .select("id, nombre") \
-        .order("nombre") \
+    res_prov = (
+        await config.supabase_async.table("proveedores")
+        .select("id, nombre")
+        .order("nombre")
         .execute()
-        
+    )
+
     proveedores = res_prov.data if res_prov and res_prov.data else []
 
-    return templates.TemplateResponse(request=request, name="analisis_pedido.html", context={
-        "proveedores": proveedores
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="analisis_pedido.html",
+        context={"proveedores": proveedores},
+    )
 
 
 @router.get("/api/clasificacion")
 async def api_obtener_clasificacion(
     proveedor_id: Optional[int] = None,
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # Verifica que exista una sesión válida.
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     if not user:
         return []
@@ -219,10 +195,7 @@ async def api_obtener_clasificacion(
     if proveedor_id:
 
         res = await config.supabase_async.rpc(
-            "obtener_clasificacion_proveedor",
-            {
-                "p_proveedor_id": proveedor_id
-            }
+            "obtener_clasificacion_proveedor", {"p_proveedor_id": proveedor_id}
         ).execute()
 
         return res.data or []
@@ -233,12 +206,8 @@ async def api_obtener_clasificacion(
     # Se utiliza cuando Inventario no tiene proveedor
     # seleccionado. Solo se cargan los campos necesarios
     # para construir los filtros.
-    query = (
-        config.supabase_async
-        .table("productos")
-        .select(
-            "departamento, grupo, subgrupo, marca"
-        )
+    query = config.supabase_async.table("productos").select(
+        "departamento, grupo, subgrupo, marca"
     )
 
     registros = []
@@ -249,10 +218,7 @@ async def api_obtener_clasificacion(
     # Recorremos los productos por bloques.
     while True:
 
-        res = await query.range(
-            inicio,
-            inicio + bloque - 1
-        ).execute()
+        res = await query.range(inicio, inicio + bloque - 1).execute()
 
         datos = res.data or []
 
@@ -277,7 +243,7 @@ async def api_obtener_clasificacion(
             item.get("departamento") or "",
             item.get("grupo") or "",
             item.get("subgrupo") or "",
-            item.get("marca") or ""
+            item.get("marca") or "",
         )
 
         if clave in vistos:
@@ -288,6 +254,7 @@ async def api_obtener_clasificacion(
 
     return unicos
 
+
 @router.get("/api/productos/importar-analisis")
 async def api_importar_productos_analisis(
     proveedor_id: Optional[int] = None,
@@ -296,7 +263,7 @@ async def api_importar_productos_analisis(
     subgrupo: Optional[str] = "",
     marca: Optional[str] = "",
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # Valida al usuario antes de consultar productos.
     user = await obtener_usuario_actual(access_token, refresh_token)
@@ -315,13 +282,7 @@ async def api_importar_productos_analisis(
     # Esto evita que un clic accidental intente cargar toda
     # la base de productos.
     hay_filtro_clasificacion = any(
-        valor and valor.strip()
-        for valor in (
-            departamento,
-            grupo,
-            subgrupo,
-            marca
-        )
+        valor and valor.strip() for valor in (departamento, grupo, subgrupo, marca)
     )
 
     if not proveedor_id and not hay_filtro_clasificacion:
@@ -331,22 +292,14 @@ async def api_importar_productos_analisis(
     # CONSULTA DE PRODUCTOS
     # =========================================================
 
-    query = (
-        config.supabase_async
-        .table("productos")
-        .select(
-            "codigo_st, descripcion, "
-            "unidad_manejo, precio"
-        )
+    query = config.supabase_async.table("productos").select(
+        "codigo_st, descripcion, " "unidad_manejo, precio"
     )
 
     # Si existe proveedor, mantenemos exactamente
     # el comportamiento anterior.
     if proveedor_id:
-        query = query.eq(
-            "proveedor_id",
-            proveedor_id
-        )
+        query = query.eq("proveedor_id", proveedor_id)
 
     # Aplica el filtro de departamento cuando exista.
     if departamento and departamento.strip():
@@ -370,10 +323,7 @@ async def api_importar_productos_analisis(
 
     # Mantiene soporte para más de 1000 registros.
     while True:
-        res = await query.range(
-            inicio,
-            inicio + bloque - 1
-        ).execute()
+        res = await query.range(inicio, inicio + bloque - 1).execute()
 
         datos = res.data or []
 
@@ -397,34 +347,29 @@ async def api_importar_productos_analisis(
             "codigo": p.get("codigo_st") or "",
             "descripcion": p.get("descripcion") or "",
             "unidad_manejo": p.get("unidad_manejo") or "1",
-            "precio": float(p.get("precio") or 0.0)
+            "precio": float(p.get("precio") or 0.0),
         }
         for p in productos
     ]
+
 
 # Actualiza en una sola operación los productos modificados desde Análisis.
 @router.post("/api/productos/actualizar-analisis")
 async def actualizar_productos_desde_analisis(
     productos: List[ProductoModificado],
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # Valida la sesión antes de modificar datos.
     user = await obtener_usuario_actual(access_token, refresh_token)
 
     # Bloquea usuarios no autenticados.
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     # Evita una llamada innecesaria cuando no existen cambios.
     if not productos:
-        return {
-            "status": "success",
-            "mensaje": "Sin cambios que procesar"
-        }
+        return {"status": "success", "mensaje": "Sin cambios que procesar"}
 
     try:
         # Usa un diccionario para evitar códigos duplicados.
@@ -441,10 +386,8 @@ async def actualizar_productos_desde_analisis(
             # Conserva el último cambio recibido para ese código.
             productos_unicos[codigo] = {
                 "codigo": codigo,
-                "unidad_manejo": str(
-                    producto.unidad_manejo or 1
-                ),
-                "precio": float(producto.precio or 0)
+                "unidad_manejo": str(producto.unidad_manejo or 1),
+                "precio": float(producto.precio or 0),
             }
 
         # Convierte el diccionario nuevamente a lista.
@@ -454,15 +397,12 @@ async def actualizar_productos_desde_analisis(
         if len(payload_rpc) > 2000:
             raise HTTPException(
                 status_code=400,
-                detail="No se permiten más de 2000 productos por actualización."
+                detail="No se permiten más de 2000 productos por actualización.",
             )
 
         # Actualiza todos los registros dentro de PostgreSQL.
         res = await config.supabase_async.rpc(
-            "actualizar_productos_analisis",
-            {
-                "p_productos": payload_rpc
-            }
+            "actualizar_productos_analisis", {"p_productos": payload_rpc}
         ).execute()
 
         # PostgreSQL devuelve la cantidad de registros actualizados.
@@ -471,7 +411,7 @@ async def actualizar_productos_desde_analisis(
         return {
             "status": "success",
             "actualizados": actualizados,
-            "mensaje": f"{actualizados} productos actualizados correctamente"
+            "mensaje": f"{actualizados} productos actualizados correctamente",
         }
 
     except HTTPException:
@@ -480,14 +420,9 @@ async def actualizar_productos_desde_analisis(
 
     except Exception as e:
         # Registra el error para depuración local/Vercel.
-        print(
-            f"ERROR EN /api/productos/actualizar-analisis: {str(e)}"
-        )
+        print(f"ERROR EN /api/productos/actualizar-analisis: {str(e)}")
 
-        raise HTTPException(
-            status_code=500,
-            detail="Error al actualizar productos."
-        )
+        raise HTTPException(status_code=500, detail="Error al actualizar productos.")
 
 
 # ============================================================
@@ -497,29 +432,20 @@ async def actualizar_productos_desde_analisis(
 async def cargar_ventas_csv(
     file: UploadFile = File(...),
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # Valida sesión antes de escribir ventas.
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     # Bloquea usuarios no autenticados.
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     # Valida el nombre del archivo.
     nombre = (file.filename or "").lower()
 
     if not nombre.endswith(".csv"):
-        raise HTTPException(
-            status_code=400,
-            detail="El archivo debe ser formato .csv"
-        )
+        raise HTTPException(status_code=400, detail="El archivo debe ser formato .csv")
 
     try:
         # Lee el archivo una sola vez.
@@ -528,14 +454,11 @@ async def cargar_ventas_csv(
         # Protege el endpoint frente a archivos excesivamente grandes.
         if len(content) > 15 * 1024 * 1024:
             raise HTTPException(
-                status_code=413,
-                detail="El archivo CSV supera el límite de 15 MB."
+                status_code=413, detail="El archivo CSV supera el límite de 15 MB."
             )
 
         # Abre CSV respetando UTF-8 con BOM.
-        stream = io.StringIO(
-            content.decode("utf-8-sig")
-        )
+        stream = io.StringIO(content.decode("utf-8-sig"))
 
         # Crea el lector de filas.
         reader = csv.DictReader(stream)
@@ -544,11 +467,7 @@ async def cargar_ventas_csv(
 
         # Procesa cada fila del CSV.
         for row in reader:
-            row_clean = {
-                k.strip().lower(): v.strip()
-                for k, v in row.items()
-                if k
-            }
+            row_clean = {k.strip().lower(): v.strip() for k, v in row.items() if k}
 
             # Normaliza sede y código.
             sede = row_clean.get("sede", "").upper()
@@ -572,34 +491,24 @@ async def cargar_ventas_csv(
                 except ValueError:
                     demanda_val = 0.0
 
-                registros.append({
-                    "sede": sede,
-                    "codigo": codigo,
-                    "demanda_diaria": demanda_val
-                })
+                registros.append(
+                    {"sede": sede, "codigo": codigo, "demanda_diaria": demanda_val}
+                )
 
         # Valida el contenido antes de tocar la BD.
         if not registros:
             raise HTTPException(
-                status_code=400,
-                detail="No se encontraron registros válidos en el CSV"
+                status_code=400, detail="No se encontraron registros válidos en el CSV"
             )
 
         # Realiza un único UPSERT masivo.
         await (
-            config.supabase_async
-            .table("ventas_stellar")
-            .upsert(
-                registros,
-                on_conflict="sede,codigo"
-            )
+            config.supabase_async.table("ventas_stellar")
+            .upsert(registros, on_conflict="sede,codigo")
             .execute()
         )
 
-        return {
-            "status": "ok",
-            "procesados": len(registros)
-        }
+        return {"status": "ok", "procesados": len(registros)}
 
     except HTTPException:
         # Mantiene los códigos 400/413 originales.
@@ -607,10 +516,7 @@ async def cargar_ventas_csv(
 
     except Exception as e:
         # Devuelve un error controlado al frontend.
-        raise HTTPException(
-            status_code=500,
-            detail=f"Error procesando CSV: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=f"Error procesando CSV: {str(e)}")
 
 
 # ============================================================
@@ -620,55 +526,41 @@ async def cargar_ventas_csv(
 async def obtener_ventas_stellar(
     payload: CodigosVentasRequest,
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # Valida al usuario antes de consultar ventas.
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     # Bloquea consultas anónimas.
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     # Normaliza y elimina códigos duplicados.
-    codigos = list(dict.fromkeys(
-        str(codigo).strip()
-        for codigo in payload.codigos
-        if str(codigo).strip()
-    ))
+    codigos = list(
+        dict.fromkeys(
+            str(codigo).strip() for codigo in payload.codigos if str(codigo).strip()
+        )
+    )
 
     # Si no hay códigos, evita una consulta a Supabase.
     if not codigos:
-        return {
-            "status": "ok",
-            "data": []
-        }
+        return {"status": "ok", "data": []}
 
     try:
         # Consulta únicamente ventas de los productos visibles.
         res = await (
-            config.supabase_async
-            .table("ventas_stellar")
+            config.supabase_async.table("ventas_stellar")
             .select("sede, codigo, demanda_diaria")
             .in_("codigo", codigos)
             .execute()
         )
 
-        return {
-            "status": "ok",
-            "data": res.data or []
-        }
+        return {"status": "ok", "data": res.data or []}
 
     except Exception as e:
         # Devuelve un error controlado.
         raise HTTPException(
-            status_code=500,
-            detail=f"Error al consultar ventas: {str(e)}"
+            status_code=500, detail=f"Error al consultar ventas: {str(e)}"
         )
 
 
@@ -676,27 +568,21 @@ async def obtener_ventas_stellar(
 # IMPORTACIÓN DEL KARDEX HISTÓRICO DE VENTAS
 # ============================================================
 
+
 @router.post("/analisis/cargar-kardex-ventas")
 async def cargar_kardex_ventas(
     file: UploadFile = File(...),
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     if not (file.filename or "").lower().endswith(".csv"):
         raise HTTPException(
-            status_code=400,
-            detail="El archivo debe estar en formato CSV."
+            status_code=400, detail="El archivo debe estar en formato CSV."
         )
 
     try:
@@ -704,10 +590,8 @@ async def cargar_kardex_ventas(
 
         if len(contenido) > 50 * 1024 * 1024:
             raise HTTPException(
-                status_code=413,
-                detail="El archivo supera el límite de 50 MB."
+                status_code=413, detail="El archivo supera el límite de 50 MB."
             )
-
 
         # Detecta las codificaciones habituales de los CSV exportados.
         # Prioriza UTF-8 y luego prueba las codificaciones de Windows.
@@ -723,30 +607,21 @@ async def cargar_kardex_ventas(
         if texto is None:
             raise HTTPException(
                 status_code=400,
-                detail="No se pudo leer la codificación del archivo CSV."
+                detail="No se pudo leer la codificación del archivo CSV.",
             )
-
-
 
         # El kardex puede utilizar coma o punto y coma.
         try:
-            dialecto = csv.Sniffer().sniff(
-                texto[:8192],
-                delimiters=";,\t"
-            )
+            dialecto = csv.Sniffer().sniff(texto[:8192], delimiters=";,\t")
         except csv.Error:
             dialecto = csv.excel
             dialecto.delimiter = ";"
 
-        lector = csv.DictReader(
-            io.StringIO(texto),
-            dialect=dialecto
-        )
+        lector = csv.DictReader(io.StringIO(texto), dialect=dialecto)
 
         if not lector.fieldnames:
             raise HTTPException(
-                status_code=400,
-                detail="El CSV no contiene encabezados."
+                status_code=400, detail="El CSV no contiene encabezados."
             )
 
         # Normaliza los nombres de las columnas.
@@ -765,38 +640,18 @@ async def cargar_kardex_ventas(
 
             return None
 
-        col_sede = buscar_columna(
-            "sede",
-            "tienda"
-        )
+        col_sede = buscar_columna("sede", "tienda")
 
-        col_codigo = buscar_columna(
-            "codigo",
-            "cod_producto",
-            "codigo_producto"
-        )
+        col_codigo = buscar_columna("codigo", "cod_producto", "codigo_producto")
 
-        col_documento = buscar_columna(
-            "documento",
-            "nro_documento",
-            "numero_documento"
-        )
+        col_documento = buscar_columna("documento", "nro_documento", "numero_documento")
 
-        col_movimiento = buscar_columna(
-            "movimiento",
-            "tipo_movimiento"
-        )
+        col_movimiento = buscar_columna("movimiento", "tipo_movimiento")
 
-        col_descargos = buscar_columna(
-            "descargos",
-            "descargo"
-        )
+        col_descargos = buscar_columna("descargos", "descargo")
 
         col_fecha = buscar_columna(
-            "fecha",
-            "fecha_movimiento",
-            "fecha_documento",
-            "fecha_venta"
+            "fecha", "fecha_movimiento", "fecha_documento", "fecha_venta"
         )
 
         requeridas = {
@@ -808,19 +663,14 @@ async def cargar_kardex_ventas(
             "Fecha": col_fecha,
         }
 
-        faltantes = [
-            nombre
-            for nombre, columna in requeridas.items()
-            if not columna
-        ]
+        faltantes = [nombre for nombre, columna in requeridas.items() if not columna]
 
         if faltantes:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "Faltan columnas necesarias en el kardex: "
-                    + ", ".join(faltantes)
-                )
+                    "Faltan columnas necesarias en el kardex: " + ", ".join(faltantes)
+                ),
             )
 
         # Consolida líneas repetidas del mismo producto
@@ -829,60 +679,37 @@ async def cargar_kardex_ventas(
         filas_venta = 0
         filas_ignoradas = 0
 
-        for numero_fila, fila in enumerate(
-            lector,
-            start=2
-        ):
-            movimiento = str(
-                fila.get(col_movimiento) or ""
-            ).strip().upper()
+        for numero_fila, fila in enumerate(lector, start=2):
+            movimiento = str(fila.get(col_movimiento) or "").strip().upper()
 
             # Solo se admiten ventas.
             if movimiento != "VEN":
                 filas_ignoradas += 1
                 continue
 
-            sede = str(
-                fila.get(col_sede) or ""
-            ).strip().upper()
+            sede = str(fila.get(col_sede) or "").strip().upper()
 
-            codigo = _normalizar_codigo_kardex(
-                fila.get(col_codigo)
-            )
+            codigo = _normalizar_codigo_kardex(fila.get(col_codigo))
 
-            documento = str(
-                fila.get(col_documento) or ""
-            ).strip()
+            documento = str(fila.get(col_documento) or "").strip()
 
-            fecha_venta = _parsear_fecha_kardex(
-                fila.get(col_fecha)
-            )
+            fecha_venta = _parsear_fecha_kardex(fila.get(col_fecha))
 
             try:
-                cantidad = _parsear_cantidad_kardex(
-                    fila.get(col_descargos)
-                )
+                cantidad = _parsear_cantidad_kardex(fila.get(col_descargos))
             except ValueError as error:
                 raise HTTPException(
-                    status_code=400,
-                    detail=(
-                        f"Fila {numero_fila}: {error}"
-                    )
+                    status_code=400, detail=(f"Fila {numero_fila}: {error}")
                 )
 
-            if (
-                not sede
-                or not codigo
-                or not documento
-                or fecha_venta is None
-            ):
+            if not sede or not codigo or not documento or fecha_venta is None:
                 raise HTTPException(
                     status_code=400,
                     detail=(
                         "Fila "
                         f"{numero_fila}: falta sede, código, "
                         "documento o fecha válida."
-                    )
+                    ),
                 )
 
             # Las filas con cantidad cero no aportan demanda.
@@ -890,12 +717,7 @@ async def cargar_kardex_ventas(
                 filas_ignoradas += 1
                 continue
 
-            clave = (
-                sede,
-                fecha_venta.isoformat(),
-                documento,
-                codigo
-            )
+            clave = (sede, fecha_venta.isoformat(), documento, codigo)
 
             if clave not in acumulados:
                 acumulados[clave] = {
@@ -903,7 +725,7 @@ async def cargar_kardex_ventas(
                     "codigo": codigo,
                     "fecha_venta": fecha_venta.isoformat(),
                     "documento": documento,
-                    "descargos": cantidad
+                    "descargos": cantidad,
                 }
             else:
                 acumulados[clave]["descargos"] += cantidad
@@ -914,17 +736,14 @@ async def cargar_kardex_ventas(
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "No se encontraron ventas VEN válidas "
-                    "con cantidad positiva."
-                )
+                    "No se encontraron ventas VEN válidas " "con cantidad positiva."
+                ),
             )
 
         registros = []
 
         for registro in acumulados.values():
-            registro["descargos"] = float(
-                registro["descargos"]
-            )
+            registro["descargos"] = float(registro["descargos"])
             registros.append(registro)
 
         # Se utiliza el cliente administrativo síncrono
@@ -935,30 +754,15 @@ async def cargar_kardex_ventas(
 
         def guardar_lote(lote):
             return (
-                config.supabase_admin
-                .table("ventas_kardex")
-                .upsert(
-                    lote,
-                    on_conflict=(
-                        "sede,fecha_venta,documento,codigo"
-                    )
-                )
+                config.supabase_admin.table("ventas_kardex")
+                .upsert(lote, on_conflict=("sede,fecha_venta,documento,codigo"))
                 .execute()
             )
 
-        for inicio in range(
-            0,
-            len(registros),
-            tamanio_lote
-        ):
-            lote = registros[
-                inicio:inicio + tamanio_lote
-            ]
+        for inicio in range(0, len(registros), tamanio_lote):
+            lote = registros[inicio : inicio + tamanio_lote]
 
-            await asyncio.to_thread(
-                guardar_lote,
-                lote
-            )
+            await asyncio.to_thread(guardar_lote, lote)
 
             procesados += len(lote)
 
@@ -966,24 +770,20 @@ async def cargar_kardex_ventas(
             "status": "ok",
             "filas_venta": filas_venta,
             "registros_consolidados": procesados,
-            "filas_ignoradas": filas_ignoradas
+            "filas_ignoradas": filas_ignoradas,
         }
 
     except HTTPException:
         raise
 
     except Exception as error:
-        print(
-            "ERROR AL IMPORTAR KARDEX DE VENTAS:",
-            str(error)
-        )
+        print("ERROR AL IMPORTAR KARDEX DE VENTAS:", str(error))
 
         raise HTTPException(
             status_code=500,
             detail=(
-                "No se pudo importar el kardex. "
-                "Revisa el registro del servidor."
-            )
+                "No se pudo importar el kardex. " "Revisa el registro del servidor."
+            ),
         )
 
 
@@ -991,52 +791,37 @@ async def cargar_kardex_ventas(
 # COBERTURA DE FECHAS DISPONIBLES DEL KARDEX
 # ============================================================
 
+
 @router.get("/analisis/cobertura-kardex")
 async def obtener_cobertura_kardex(
-    access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    access_token: str = Cookie(None), refresh_token: str = Cookie(None)
 ):
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     try:
+
         def consultar():
-            return config.supabase_admin.rpc(
-                "obtener_cobertura_kardex",
-                {}
-            ).execute()
+            return config.supabase_admin.rpc("obtener_cobertura_kardex", {}).execute()
 
         respuesta = await asyncio.to_thread(consultar)
 
-        return {
-            "status": "ok",
-            "data": respuesta.data or []
-        }
+        return {"status": "ok", "data": respuesta.data or []}
 
     except Exception as error:
-        print(
-            "ERROR AL CONSULTAR COBERTURA DEL KARDEX:",
-            str(error)
-        )
+        print("ERROR AL CONSULTAR COBERTURA DEL KARDEX:", str(error))
 
         raise HTTPException(
-            status_code=500,
-            detail="No se pudo consultar la cobertura del kardex."
+            status_code=500, detail="No se pudo consultar la cobertura del kardex."
         )
-
 
 
 # ============================================================
 # DEMANDA CALCULADA A PARTIR DEL KARDEX
 # ============================================================
+
 
 @router.get("/analisis/demanda-kardex")
 async def obtener_demanda_kardex(
@@ -1044,83 +829,131 @@ async def obtener_demanda_kardex(
     fecha_fin: date,
     codigos: Optional[List[str]] = Query(None),
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     if fecha_inicio > fecha_fin:
         raise HTTPException(
             status_code=400,
-            detail=(
-                "La fecha inicial no puede ser posterior "
-                "a la fecha final."
-            )
+            detail=("La fecha inicial no puede ser posterior " "a la fecha final."),
         )
 
     if not codigos:
         raise HTTPException(
-            status_code=400,
-            detail="Debes enviar al menos un código de producto."
+            status_code=400, detail="Debes enviar al menos un código de producto."
         )
-    
 
     codigos_normalizados = None
 
     if codigos:
-        codigos_normalizados = list(dict.fromkeys(
-            _normalizar_codigo_kardex(codigo)
-            for codigo in codigos
-            if _normalizar_codigo_kardex(codigo)
-        ))
+        codigos_normalizados = list(
+            dict.fromkeys(
+                _normalizar_codigo_kardex(codigo)
+                for codigo in codigos
+                if _normalizar_codigo_kardex(codigo)
+            )
+        )
 
         if not codigos_normalizados:
-            return {
-                "status": "ok",
-                "data": []
-            }
+            return {"status": "ok", "data": []}
 
     try:
+
         def consultar():
             return config.supabase_admin.rpc(
                 "obtener_demanda_kardex",
                 {
                     "p_fecha_inicio": fecha_inicio.isoformat(),
                     "p_fecha_fin": fecha_fin.isoformat(),
-                    "p_codigos": codigos_normalizados
-                }
+                    "p_codigos": codigos_normalizados,
+                },
             ).execute()
 
-        respuesta = await asyncio.to_thread(
-            consultar
-        )
+        respuesta = await asyncio.to_thread(consultar)
 
         return {
             "status": "ok",
             "fecha_inicio": fecha_inicio.isoformat(),
             "fecha_fin": fecha_fin.isoformat(),
-            "data": respuesta.data or []
+            "data": respuesta.data or [],
         }
 
     except Exception as error:
-        print(
-            "ERROR AL CALCULAR DEMANDA DEL KARDEX:",
-            str(error)
+        print("ERROR AL CALCULAR DEMANDA DEL KARDEX:", str(error))
+
+        raise HTTPException(
+            status_code=500, detail=("No se pudo calcular la demanda del kardex.")
         )
+
+
+# ============================================================
+# DEMANDA COMERCIAL DEL KARDEX PARA EL MOTOR DE SUGERIDOS
+# ============================================================
+
+
+@router.get("/analisis/demanda-comercial-kardex")
+async def consultar_demanda_comercial_kardex(
+    fecha_inicio: date,
+    fecha_fin: date,
+    codigos: Optional[List[str]] = Query(None),
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None),
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    if fecha_inicio > fecha_fin:
+        raise HTTPException(status_code=400, detail="Rango de fechas inválido.")
+
+    if not codigos:
+        raise HTTPException(
+            status_code=400, detail="Debes enviar códigos de productos."
+        )
+
+    codigos_normalizados = list(
+        dict.fromkeys(
+            _normalizar_codigo_kardex(codigo)
+            for codigo in codigos
+            if _normalizar_codigo_kardex(codigo)
+        )
+    )
+
+    if not codigos_normalizados:
+        return {"status": "ok", "data": []}
+
+    try:
+
+        def consultar():
+            return config.supabase_admin.rpc(
+                "obtener_demanda_comercial_kardex",
+                {
+                    "p_fecha_inicio": fecha_inicio.isoformat(),
+                    "p_fecha_fin": fecha_fin.isoformat(),
+                    "p_codigos": codigos_normalizados,
+                },
+            ).execute()
+
+        respuesta = await asyncio.to_thread(consultar)
+
+        return {
+            "status": "ok",
+            "fecha_inicio": fecha_inicio.isoformat(),
+            "fecha_fin": fecha_fin.isoformat(),
+            "data": respuesta.data or [],
+        }
+
+    except Exception as error:
+        print("ERROR AL CONSULTAR DEMANDA COMERCIAL KARDEX:", str(error))
 
         raise HTTPException(
             status_code=500,
-            detail=(
-                "No se pudo calcular la demanda del kardex."
-            )
+            detail="No se pudo calcular la demanda comercial del Kardex.",
         )
 
 
@@ -1131,33 +964,21 @@ async def obtener_demanda_kardex(
 async def guardar_analisis_pedido(
     payload: GuardarAnalisisRequest,
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # Obtiene el usuario real desde la cookie.
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     # No acepta el usuario desde JavaScript.
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     # Evita guardar pedidos vacíos.
     if not payload.detalles:
-        raise HTTPException(
-            status_code=400,
-            detail="No existen detalles para guardar."
-        )
+        raise HTTPException(status_code=400, detail="No existen detalles para guardar.")
 
     # Convierte los modelos Pydantic al formato JSON esperado por PostgreSQL.
-    detalles = [
-        detalle.model_dump()
-        for detalle in payload.detalles
-    ]
+    detalles = [detalle.model_dump() for detalle in payload.detalles]
 
     try:
         # Ejecuta todo el guardado dentro de una función PostgreSQL.
@@ -1167,28 +988,20 @@ async def guardar_analisis_pedido(
                 "p_usuario_id": str(user.id),
                 "p_proveedor_id": payload.proveedor_id,
                 "p_dias_cobertura": payload.dias_cobertura,
-                "p_detalles": detalles
-            }
+                "p_detalles": detalles,
+            },
         ).execute()
 
         # Recupera la respuesta de la función.
         resultado = res.data or {}
 
-        return {
-            "status": "ok",
-            "analisis_id": resultado.get("analisis_id")
-        }
+        return {"status": "ok", "analisis_id": resultado.get("analisis_id")}
 
     except Exception as e:
         # Registra el error internamente.
-        print(
-            f"ERROR EN /analisis/guardar-pedido: {str(e)}"
-        )
+        print(f"ERROR EN /analisis/guardar-pedido: {str(e)}")
 
-        raise HTTPException(
-            status_code=500,
-            detail="Error al guardar el análisis."
-        )
+        raise HTTPException(status_code=500, detail="Error al guardar el análisis.")
 
 
 # ============================================================
@@ -1196,30 +1009,20 @@ async def guardar_analisis_pedido(
 # ============================================================
 @router.get("/analisis/ultimo-pedido")
 async def obtener_ultimo_pedido(
-    access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    access_token: str = Cookie(None), refresh_token: str = Cookie(None)
 ):
     # Obtiene el usuario real desde la sesión.
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    user = await obtener_usuario_actual(access_token, refresh_token)
 
     # Bloquea usuarios no autenticados.
     if not user:
-        raise HTTPException(
-            status_code=401,
-            detail="No autorizado"
-        )
+        raise HTTPException(status_code=401, detail="No autorizado")
 
     try:
         # Consulta únicamente la última cabecera del usuario.
         res_analisis = await (
-            config.supabase_async
-            .table("analisis_pedidos")
-            .select(
-                "id, proveedor_id, dias_cobertura, updated_at, proveedores(nombre)"
-            )
+            config.supabase_async.table("analisis_pedidos")
+            .select("id, proveedor_id, dias_cobertura, updated_at, proveedores(nombre)")
             .eq("usuario_id", str(user.id))
             .order("updated_at", desc=True)
             .limit(1)
@@ -1228,10 +1031,7 @@ async def obtener_ultimo_pedido(
 
         # Si no existe ningún pedido, termina aquí.
         if not res_analisis.data:
-            return {
-                "status": "ok",
-                "encontrado": False
-            }
+            return {"status": "ok", "encontrado": False}
 
         # Convierte la primera fila en diccionario independiente.
         analisis = dict(res_analisis.data[0])
@@ -1245,11 +1045,8 @@ async def obtener_ultimo_pedido(
 
         # Consulta todos los detalles en un solo viaje.
         res_detalles = await (
-            config.supabase_async
-            .table("analisis_pedidos_detalle")
-            .select(
-                "sede, codigo, sugerido, pedido_final"
-            )
+            config.supabase_async.table("analisis_pedidos_detalle")
+            .select("sede, codigo, sugerido, pedido_final")
             .eq("analisis_id", analisis["id"])
             .execute()
         )
@@ -1258,22 +1055,21 @@ async def obtener_ultimo_pedido(
         detalles = res_detalles.data or []
 
         # Extrae códigos únicos para la consulta de productos.
-        codigos = list(dict.fromkeys(
-            str(item.get("codigo")).strip()
-            for item in detalles
-            if item.get("codigo")
-        ))
+        codigos = list(
+            dict.fromkeys(
+                str(item.get("codigo")).strip()
+                for item in detalles
+                if item.get("codigo")
+            )
+        )
 
         productos = []
 
         # Consulta productos solamente si existen códigos.
         if codigos:
             res_productos = await (
-                config.supabase_async
-                .table("productos")
-                .select(
-                    "codigo_st, descripcion, precio, unidad_manejo"
-                )
+                config.supabase_async.table("productos")
+                .select("codigo_st, descripcion, precio, unidad_manejo")
                 .in_("codigo_st", codigos)
                 .execute()
             )
@@ -1287,16 +1083,11 @@ async def obtener_ultimo_pedido(
             "analisis": analisis,
             "proveedor": proveedor,
             "detalles": detalles,
-            "productos": productos
+            "productos": productos,
         }
 
     except Exception as e:
         # Registra error para depuración.
-        print(
-            f"ERROR EN /analisis/ultimo-pedido: {str(e)}"
-        )
+        print(f"ERROR EN /analisis/ultimo-pedido: {str(e)}")
 
-        raise HTTPException(
-            status_code=500,
-            detail="Error al cargar el último pedido."
-        )
+        raise HTTPException(status_code=500, detail="Error al cargar el último pedido.")
