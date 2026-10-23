@@ -377,6 +377,99 @@
         </div>
     </div>
 
+
+    <!-- COMPARACIÓN EXPERIMENTAL DE DEMANDA -->
+    <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div>
+                <h3 class="text-sm font-bold text-slate-800">
+                    <i class="fa-solid fa-chart-column text-indigo-600 mr-1"></i>
+                    Comparación de demanda comercial
+                </h3>
+                <p class="text-xs text-slate-500 mt-1">
+                    Consulta experimental. No modifica los pedidos sugeridos.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <input type="text" id="codigos-comparacion-kardex" placeholder="Códigos: 013537, 017219"
+                    class="px-3 py-2 border border-slate-300 rounded-lg text-xs w-56">
+
+                <button type="button" id="btn-comparar-demanda-kardex" onclick="compararDemandaComercialVistaPrevia()"
+                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50">
+                    Comparar demanda
+                </button>
+            </div>
+        </div>
+
+        <p id="estado-comparacion-kardex" class="text-xs text-slate-500 mt-3">
+            Introduce hasta 12 códigos. Si dejas el campo vacío,
+            se utilizarán los productos de la tabla.
+        </p>
+
+        <div id="panel-comparacion-kardex" class="hidden mt-3 overflow-x-auto">
+            <table class="min-w-full text-xs border-collapse">
+                <thead class="bg-slate-100 text-slate-700">
+                    <tr>
+                        <th class="p-2 text-left">Código</th>
+                        <th class="p-2 text-left">Clasificación</th>
+                        <th class="p-2 text-right">Regular actual</th>
+                        <th class="p-2 text-right">Regular observado*</th>
+                        <th class="p-2 text-right">Regular ajustado</th>
+                        <th class="p-2 text-right">Alta actual</th>
+                        <th class="p-2 text-right">Alta observada*</th>
+                        <th class="p-2 text-right">Alta ajustada</th>
+                        <th class="p-2 text-right">Días excluidos</th>
+                        <th class="p-2 text-left">Episodio multisede</th>
+                        <th class="p-2 text-center">Alerta BD</th>
+                        <th class="p-2 text-left">Evaluación</th>
+
+
+                    </tr>
+                </thead>
+                <tbody id="filas-comparacion-kardex"></tbody>
+            </table>
+
+            <!-- Simulación independiente del motor de pedidos -->
+            <div class="flex flex-wrap items-center gap-3 mt-4">
+                <button type="button" onclick="simularImpactoCompraKardex()"
+                    class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-calculator mr-1"></i>
+                    Simular impacto en bultos
+                </button>
+
+                <span id="mensaje-impacto-compra" class="text-xs text-slate-500">
+                    Utiliza el inventario y PRE de los productos de la tabla.
+                </span>
+            </div>
+
+            <div id="contenedor-impacto-compra" class="hidden mt-3 overflow-x-auto border border-slate-200 rounded-xl">
+
+                <table class="min-w-full text-xs">
+                    <thead class="bg-slate-100 text-slate-700">
+                        <tr>
+                            <th class="p-3 text-left">Código / diagnóstico</th>
+                            <th class="p-3 text-left">Evaluación</th>
+                            <th class="p-3 text-right">Sugerido actual</th>
+                            <th class="p-3 text-right">Observado nuevo calendario</th>
+                            <th class="p-3 text-right">Sugerido ajustado</th>
+                            <th class="p-3 text-right">Diferencia</th>
+                        </tr>
+                    </thead>
+                    <tbody id="filas-impacto-compra"></tbody>
+                </table>
+            </div>
+
+
+            <p class="text-[11px] text-slate-500 mt-2">
+                * Observado: sin ajuste por interrupciones, pero con
+                calendario domingo-sábado. Actual: lunes-domingo.
+                Todos los valores de demanda se expresan en unidades/día.
+            </p>
+        </div>
+    </section>
+
+
     <!-- PANEL DE IMPORTACIÓN Y CONSULTA DEL KARDEX HISTÓRICO -->
     <div class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
         <div class="flex flex-col lg:flex-row lg:items-end gap-4">
@@ -429,6 +522,12 @@
                     class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold">
                     <i class="fa-solid fa-chart-column mr-1"></i>
                     Comparar períodos
+                </button>
+                <!-- Descarga los resultados visibles de Consultar demanda. -->
+                <button type="button" id="btn-exportar-demanda-xml" onclick="exportarDemandaKardexXML()"
+                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold">
+                    <i class="fa-solid fa-file-export mr-1"></i>
+                    Exportar demanda XML
                 </button>
 
             </div>
@@ -2621,6 +2720,30 @@ ${nodosProductosXML.join('\n')}
             // Cambia la tienda activa.
             window.tiendaActivaPestana = tiendaNueva;
 
+            // Oculta la comparación anterior al cambiar de sede.
+            document.getElementById(
+                'panel-comparacion-kardex'
+            )?.classList.add('hidden');
+
+
+            window.ultimaComparacionKardex = null;
+
+            document.getElementById(
+                'contenedor-impacto-compra'
+            )?.classList.add('hidden');
+
+
+            const estadoComparacion = document.getElementById(
+                'estado-comparacion-kardex'
+            );
+
+            if (estadoComparacion) {
+                estadoComparacion.textContent =
+                    'La sede cambió. Pulsa Comparar demanda ' +
+                    'para consultar los resultados de esta tienda.';
+            }
+
+
             // Actualiza visualmente las pestañas.
             document
                 .querySelectorAll('.btn-pestana-tienda')
@@ -3017,6 +3140,839 @@ ${nodosProductosXML.join('\n')}
                 ? numero
                 : 0;
         }
+
+
+        function esSemanaAltaDomingoSimulacion(fecha) {
+            const inicioDomingo = f => {
+                const d = new Date(
+                    f.getFullYear(), f.getMonth(), f.getDate()
+                );
+                d.setDate(d.getDate() - d.getDay());
+                return d.getTime();
+            };
+
+            const quince = new Date(
+                fecha.getFullYear(), fecha.getMonth(), 15
+            );
+
+            const ultimo = new Date(
+                fecha.getFullYear(), fecha.getMonth() + 1, 0
+            );
+
+            return (
+                inicioDomingo(fecha) === inicioDomingo(quince) ||
+                inicioDomingo(fecha) === inicioDomingo(ultimo)
+            );
+        }
+
+
+        function simularImpactoCompraKardex() {
+            const datos = window.ultimaComparacionKardex;
+            const mensaje = document.getElementById('mensaje-impacto-compra');
+            const contenedor = document.getElementById('contenedor-impacto-compra');
+            const tbody = document.getElementById('filas-impacto-compra');
+
+            const sedeActual = String(
+                window.tiendaActivaPestana || ''
+            ).trim().toUpperCase();
+
+            if (!datos || datos.sede !== sedeActual) {
+                mensaje.textContent =
+                    'Consulta nuevamente la demanda para la sede seleccionada.';
+                contenedor.classList.add('hidden');
+                return;
+            }
+
+            const cobertura = Number.parseInt(
+                document.getElementById('dias_cobertura')?.value,
+                10
+            );
+
+            if (!Number.isInteger(cobertura) || cobertura < 1) {
+                mensaje.textContent = 'Introduce una cobertura válida.';
+                return;
+            }
+
+            const diasEntrega = obtenerDiasExtraAnalisis(
+                'incluir_dias_entrega', 'dias_entrega_extra'
+            );
+
+            const diasSeguridad = obtenerDiasExtraAnalisis(
+                'incluir_dias_seguridad', 'dias_seguridad_extra'
+            );
+
+            const horizonte = cobertura + diasEntrega;
+            const hoy = new Date();
+
+            const mapa = elementos => new Map(
+                elementos
+                    .filter(x => String(x.sede).trim().toUpperCase() === sedeActual)
+                    .map(x => [normalizarCodigoAnalisis(x.codigo), x])
+            );
+
+            const actuales = mapa(datos.actual);
+            const ajustadas = mapa(datos.ajustada);
+            const episodios = mapa(datos.episodios);
+
+            const filas = Array.from(
+                document.querySelectorAll('#filas-tabla-analisis tr')
+            );
+
+            const convertir = valor =>
+                Number(String(valor ?? '').trim().replace(',', '.'));
+
+            const perfil = (item, ajustado) => {
+                if (!item) {
+                    return { demandaRegular: 0, demandaAlta: 0 };
+                }
+
+                const promedio = ajustado
+                    ? numeroDemandaAnalisis(item.demanda_promedio_ajustada)
+                    : (
+                        Number(item.dias_cubiertos) > 0
+                            ? numeroDemandaAnalisis(item.unidades_mes) /
+                            Number(item.dias_cubiertos)
+                            : 0
+                    );
+
+                const regular = Number(item.semanas_regulares) >= 2
+                    ? numeroDemandaAnalisis(item.demanda_regular)
+                    : promedio;
+
+                const alta = Number(item.semanas_alta) >= 1
+                    ? numeroDemandaAnalisis(item.demanda_alta)
+                    : regular;
+
+                return {
+                    demandaRegular: regular,
+                    demandaAlta: alta
+                };
+            };
+
+            const proyectarAjustada = datosDemanda => {
+                let unidades = 0;
+
+                for (let i = 0; i < horizonte; i++) {
+                    const fecha = new Date(
+                        hoy.getFullYear(),
+                        hoy.getMonth(),
+                        hoy.getDate() + i
+                    );
+
+                    const regular = datosDemanda.demandaRegular;
+                    const alta = datosDemanda.demandaAlta;
+
+                    unidades += (
+                        esSemanaAltaDomingoSimulacion(fecha) &&
+                        alta > regular
+                    ) ? alta : regular;
+                }
+
+                return unidades;
+            };
+
+            const empaques = (unidadesProyectadas, demandaRegular, pre, inventario) => {
+                const seguridad = demandaRegular * diasSeguridad;
+
+                const necesidad = Math.max(
+                    0,
+                    unidadesProyectadas + seguridad - inventario * pre
+                );
+
+                return necesidad > 0
+                    ? Math.ceil(necesidad / pre)
+                    : 0;
+            };
+
+            const formato = new Intl.NumberFormat('es-VE');
+            tbody.replaceChildren();
+
+            let calculados = 0;
+            let omitidos = 0;
+
+            datos.codigos.forEach(codigo => {
+                const tr = filas.find(fila =>
+                    normalizarCodigoAnalisis(
+                        fila.querySelector('.inp-codigo')?.value
+                    ) === codigo
+                );
+
+                const actual = actuales.get(codigo);
+                const ajustada = ajustadas.get(codigo);
+                const episodio = episodios.get(codigo);
+
+                // Sin fila o datos validados, no inventar inventario.
+                if (!tr || !actual || !ajustada) {
+                    omitidos++;
+                    return;
+                }
+
+                const textoPre = tr.querySelector('.inp-pre')?.value;
+                const textoInventario = tr.querySelector('.inp-inv-emp')?.value;
+
+                if (
+                    textoPre == null || String(textoPre).trim() === '' ||
+                    textoInventario == null ||
+                    String(textoInventario).trim() === ''
+                ) {
+                    omitidos++;
+                    return;
+                }
+
+                const pre = convertir(textoPre);
+                const inventario = convertir(textoInventario);
+
+                if (
+                    !Number.isFinite(pre) || pre <= 0 ||
+                    !Number.isFinite(inventario) || inventario < 0
+                ) {
+                    omitidos++;
+                    return;
+                }
+
+                const base = perfil(actual, false);
+                const propuesta = perfil(ajustada, true);
+
+
+                const promedioObservado = numeroDemandaAnalisis(
+                    ajustada.demanda_promedio_observada
+                );
+
+                const regularObservado = Number(ajustada.semanas_regulares) >= 2
+                    ? numeroDemandaAnalisis(ajustada.demanda_regular_observada)
+                    : promedioObservado;
+
+                const baseNuevoCalendario = {
+                    demandaRegular: regularObservado,
+                    demandaAlta: Number(ajustada.semanas_alta) >= 1
+                        ? numeroDemandaAnalisis(ajustada.demanda_alta_observada)
+                        : regularObservado
+                };
+
+
+                const unidadesActuales = proyectarDemandaComercial(
+                    base, hoy, horizonte
+                );
+
+
+                const unidadesObservadasNuevoCalendario =
+                    proyectarAjustada(baseNuevoCalendario);
+
+
+                const unidadesAjustadas = proyectarAjustada(propuesta);
+
+                const sugeridoActual = empaques(
+                    unidadesActuales, base.demandaRegular, pre, inventario
+                );
+
+                const sugeridoAjustado = empaques(
+                    unidadesAjustadas, propuesta.demandaRegular, pre, inventario
+                );
+
+
+                const sugeridoNuevoCalendario = empaques(
+                    unidadesObservadasNuevoCalendario,
+                    baseNuevoCalendario.demandaRegular,
+                    pre,
+                    inventario
+                );
+
+                const diferencia = sugeridoAjustado - sugeridoActual;
+
+                const efectoCalendario = sugeridoNuevoCalendario - sugeridoActual;
+                const efectoCorreccion = sugeridoAjustado - sugeridoNuevoCalendario;
+                const evaluacion = evaluarEstadoDemandaKardex(
+                    ajustada,
+                    episodio
+                );
+
+                const avisos = [];
+
+                if (ajustada?.requiere_revision) {
+                    avisos.push('Revisar disponibilidad o surtido');
+                }
+
+                if (episodio?.episodio_multi_sede) {
+                    avisos.push('Episodio multisede detectado');
+                }
+
+                if (
+                    ajustada?.clasificacion === 'interrupcion_recuperada' &&
+                    Number(ajustada.demanda_promedio_observada) > 0 &&
+                    Number(ajustada.demanda_promedio_ajustada) >
+                    Number(ajustada.demanda_promedio_observada) * 1.30
+                ) {
+                    avisos.push('Ajuste superior al 30 %: validar');
+                }
+
+                if (!avisos.length) {
+                    avisos.push(
+                        'Diferencia puede incluir cambio de calendario'
+                    );
+                }
+
+                const fila = document.createElement('tr');
+
+                fila.className = evaluacion.nivel === 'revision'
+                    ? 'bg-amber-50 border-b border-slate-200'
+                    : 'border-b border-slate-200';
+
+
+
+                const valores = [
+                    codigo,
+                    evaluacion.estado,
+                    formato.format(sugeridoActual),
+                    formato.format(sugeridoNuevoCalendario),
+                    formato.format(sugeridoAjustado),
+                    `${diferencia > 0 ? '+' : ''}${formato.format(diferencia)}`
+                ];
+
+
+                valores.forEach((valor, indice) => {
+                    const celda = document.createElement('td');
+                    celda.className = indice <= 1
+                        ? 'p-3 text-left'
+                        : 'p-3 text-right font-semibold';
+
+                    celda.textContent = valor;
+
+
+                    if (indice === 1) {
+                        celda.title = evaluacion.motivo;
+
+                        if (evaluacion.nivel === 'revision') {
+                            celda.classList.add('text-amber-800');
+                        }
+                    }
+
+
+                    if (indice === 0) {
+                        const detalle = document.createElement('div');
+                        detalle.className = 'text-[11px] text-slate-500 mt-1';
+
+                        const conSigno = valor =>
+                            `${valor > 0 ? '+' : ''}${formato.format(valor)}`;
+
+                        detalle.textContent =
+                            avisos.join(' · ') +
+                            ` · Efecto calendario: ${conSigno(efectoCalendario)}` +
+                            ` bultos · Efecto corrección: ${conSigno(efectoCorreccion)} bultos`;
+
+                        celda.appendChild(detalle);
+                    }
+
+                    fila.appendChild(celda);
+                });
+
+                tbody.appendChild(fila);
+                calculados++;
+            });
+
+            mensaje.textContent =
+                `${calculados} productos simulados, ${omitidos} omitidos. ` +
+                `Cobertura ${cobertura} días, entrega ${diasEntrega}, ` +
+                `seguridad ${diasSeguridad}. No se modificó ningún pedido.`;
+
+            contenedor.classList.toggle('hidden', calculados === 0);
+        }
+
+
+        function evaluarEstadoDemandaKardex(ajustada, episodio) {
+            const revision = motivo => ({
+                estado: 'Revisión obligatoria',
+                nivel: 'revision',
+                motivo
+            });
+
+            if (!ajustada) {
+                return revision('No existe diagnóstico de demanda ajustada.');
+            }
+
+            const tipo = String(ajustada.clasificacion || '').trim();
+
+            const observada = Number(
+                ajustada.demanda_promedio_observada
+            );
+
+            const corregida = Number(
+                ajustada.demanda_promedio_ajustada
+            );
+
+            const diasExcluidos = Number(ajustada.dias_excluidos);
+
+            if (
+                ![observada, corregida, diasExcluidos].every(Number.isFinite) ||
+                observada < 0 ||
+                corregida < 0 ||
+                diasExcluidos < 0
+            ) {
+                return revision('El diagnóstico contiene valores inválidos.');
+            }
+
+            if (
+                ajustada.requiere_revision === true ||
+                [
+                    'interrupcion_vigente',
+                    'interrupcion_sin_recuperacion',
+                    'historial_insuficiente',
+                    'revisar_patron',
+                    'actividad_reciente'
+                ].includes(tipo)
+            ) {
+                return revision(
+                    'El historial o el comportamiento del producto ' +
+                    'requiere validación del comprador.'
+                );
+            }
+
+            if (tipo === 'interrupcion_recuperada') {
+                if (observada <= 0 || diasExcluidos < 3) {
+                    return revision(
+                        'No existe una base suficiente para aceptar el ajuste.'
+                    );
+                }
+
+                const incremento = (corregida - observada) / observada;
+
+                if (incremento < 0) {
+                    return revision(
+                        'La corrección reduce inesperadamente la demanda.'
+                    );
+                }
+
+
+                const regularObservada = Number(
+                    ajustada.demanda_regular_observada
+                );
+
+                const regularCorregida = Number(
+                    ajustada.demanda_regular
+                );
+
+                const altaObservada = Number(
+                    ajustada.demanda_alta_observada
+                );
+
+                const altaCorregida = Number(
+                    ajustada.demanda_alta
+                );
+
+                const semanasRegulares = Number(
+                    ajustada.semanas_regulares
+                );
+
+                const semanasAlta = Number(
+                    ajustada.semanas_alta
+                );
+
+                const valoresComerciales = [
+                    regularObservada,
+                    regularCorregida,
+                    altaObservada,
+                    altaCorregida,
+                    semanasRegulares,
+                    semanasAlta
+                ];
+
+                if (
+                    !valoresComerciales.every(Number.isFinite) ||
+                    valoresComerciales.some(valor => valor < 0)
+                ) {
+                    return revision(
+                        'Existen valores comerciales inválidos.'
+                    );
+                }
+
+                // Aplicar los mismos respaldos de muestra que usa el motor.
+                const baseRegular = semanasRegulares >= 2
+                    ? regularObservada
+                    : observada;
+
+                const nuevaRegular = semanasRegulares >= 2
+                    ? regularCorregida
+                    : corregida;
+
+                const baseAlta = semanasAlta >= 1
+                    ? altaObservada
+                    : baseRegular;
+
+                const nuevaAlta = semanasAlta >= 1
+                    ? altaCorregida
+                    : nuevaRegular;
+
+                // Examinar individualmente los tres componentes.
+                const perfiles = [
+                    ['promedio', observada, corregida],
+                    ['regular', baseRegular, nuevaRegular],
+                    ['alta', baseAlta, nuevaAlta]
+                ];
+
+                const excesos = perfiles.filter(([, base, nuevo]) => {
+                    if (base === 0) return nuevo > 0;
+
+                    return ((nuevo - base) / base) > 0.3000001;
+                });
+
+                if (excesos.length > 0) {
+                    const detalles = excesos.map(([nombre, base, nuevo]) => {
+                        if (base === 0) {
+                            return `${nombre} (base cero)`;
+                        }
+
+                        const porcentaje = ((nuevo - base) / base) * 100;
+
+                        return `${nombre} (${porcentaje.toFixed(2)} %)`;
+                    });
+
+                    return revision(
+                        'El ajuste supera el límite del 30 % en: ' +
+                        detalles.join(', ') + '.'
+                    );
+                }
+
+
+                if (
+                    episodio?.episodio_multi_sede === true &&
+                    Number(episodio.dias_sin_ventas_sede) >= 3
+                ) {
+                    return revision(
+                        'La interrupción local coincide con un episodio ' +
+                        'de varias sedes. Revisar abastecimiento.'
+                    );
+                }
+
+                return {
+                    estado: 'Corrección candidata',
+                    nivel: 'candidata',
+                    motivo:
+                        `Interrupción recuperada. Ajuste del ` +
+                        `${(incremento * 100).toFixed(2)} %. ` +
+                        `Debe validarse antes de utilizarse en compras.`
+                };
+            }
+
+            if (
+                tipo === 'frecuente' ||
+                tipo === 'intermitencia_persistente'
+            ) {
+                return {
+                    estado: 'Normal',
+                    nivel: 'normal',
+                    motivo: episodio?.episodio_multi_sede
+                        ? 'Sin corrección local. Existe un episodio ' +
+                        'global para seguimiento.'
+                        : 'No se requiere corrección automática.'
+                };
+            }
+
+            return revision(
+                'Clasificación no contemplada en las reglas de aceptación.'
+            );
+        }
+
+
+        function evaluarImpactoPedidoKardex(
+            evaluacion,
+            sugeridoActual,
+            sugeridoAjustado,
+            motorValido
+        ) {
+            const revision = motivo => ({
+                estado: 'Revisión obligatoria',
+                nivel: 'revision',
+                motivo
+            });
+
+            // Nunca validar una propuesta si el motor principal
+            // no coincide con el escenario actual de la simulación.
+            if (!motorValido) {
+                return revision(
+                    'El sugerido principal no coincide con la simulación ' +
+                    'o todavía no fue calculado. Recalcula el sugerido.'
+                );
+            }
+
+            // No cambiar una clasificación previamente bloqueada.
+            if (evaluacion.nivel !== 'candidata') {
+                return evaluacion;
+            }
+
+            if (
+                ![sugeridoActual, sugeridoAjustado].every(
+                    Number.isSafeInteger
+                ) ||
+                sugeridoActual < 0 ||
+                sugeridoAjustado < 0
+            ) {
+                return revision('Cantidades de bultos inválidas.');
+            }
+
+            if (sugeridoAjustado < sugeridoActual) {
+                return revision(
+                    'La propuesta reduce la compra respecto al motor vigente.'
+                );
+            }
+
+            if (sugeridoActual === 0 && sugeridoAjustado > 0) {
+                return revision(
+                    'El motor vigente sugiere cero bultos, ' +
+                    'pero el ajuste propone una compra.'
+                );
+            }
+
+            if (
+                sugeridoActual > 0 &&
+                (sugeridoAjustado - sugeridoActual) / sugeridoActual
+                > 0.3000001
+            ) {
+                return revision(
+                    'La compra ajustada aumenta más del 30 % ' +
+                    'respecto al sugerido vigente.'
+                );
+            }
+
+            return evaluacion;
+        }
+
+
+        async function compararDemandaComercialVistaPrevia() {
+            const boton = document.getElementById('btn-comparar-demanda-kardex');
+            const estado = document.getElementById('estado-comparacion-kardex');
+            const panel = document.getElementById('panel-comparacion-kardex');
+            const tbody = document.getElementById('filas-comparacion-kardex');
+            const entrada = document.getElementById(
+                'codigos-comparacion-kardex'
+            ).value.trim();
+
+            const fuente = entrada
+                ? entrada.split(/[,;\s]+/)
+                : obtenerCodigosTablaAnalisis();
+
+            const codigos = [
+                ...new Set(
+                    fuente.map(normalizarCodigoAnalisis).filter(Boolean)
+                )
+            ];
+
+            if (!codigos.length) {
+                estado.textContent = 'No hay productos para comparar.';
+                return;
+            }
+
+            if (codigos.length > 12) {
+                estado.textContent =
+                    'Introduce un máximo de 12 códigos para esta prueba.';
+                return;
+            }
+
+
+            boton.disabled = true;
+            estado.textContent = 'Consultando demanda comercial...';
+            panel.classList.add('hidden');
+
+            // Invalida simulaciones anteriores.
+            window.ultimaComparacionKardex = null;
+
+            document.getElementById(
+                'contenedor-impacto-compra'
+            )?.classList.add('hidden');
+
+
+            try {
+                const hoy = new Date();
+                const inicio = new Date(
+                    hoy.getFullYear(), hoy.getMonth() - 1, 1
+                );
+                const fin = new Date(
+                    hoy.getFullYear(), hoy.getMonth(), 0
+                );
+
+                const parametros = new URLSearchParams({
+                    fecha_inicio: fechaISOAnalisis(inicio),
+                    fecha_fin: fechaISOAnalisis(fin)
+                });
+
+                codigos.forEach(codigo => {
+                    parametros.append('codigos', codigo);
+                });
+
+                const respuesta = await fetch(
+                    `/analisis/comparar-demanda-comercial-kardex?${parametros}`
+                );
+
+                const resultado = await respuesta.json();
+
+                if (!respuesta.ok) {
+                    throw new Error(
+                        resultado.detail || 'Error al comparar la demanda.'
+                    );
+                }
+
+                const sede = String(
+                    window.tiendaActivaPestana || 'CENTRO'
+                ).trim().toUpperCase();
+
+                const filtrarSede = item =>
+                    String(item.sede || '').trim().toUpperCase() === sede;
+
+                const actuales = new Map(
+                    (resultado.data_actual || [])
+                        .filter(filtrarSede)
+                        .map(item => [normalizarCodigoAnalisis(item.codigo), item])
+                );
+
+                const ajustadas = new Map(
+                    (resultado.data_ajustada || [])
+                        .filter(filtrarSede)
+                        .map(item => [normalizarCodigoAnalisis(item.codigo), item])
+                );
+
+
+                const episodiosMultiSede = new Map(
+                    (resultado.data_episodios_multi_sede || [])
+                        .filter(filtrarSede)
+                        .map(item => [
+                            normalizarCodigoAnalisis(item.codigo),
+                            item
+                        ])
+                );
+
+
+                const formato = new Intl.NumberFormat('es-VE', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                });
+
+                const numero = valor => {
+                    if (valor === null || valor === undefined) return '—';
+                    const n = Number(valor);
+                    return Number.isFinite(n) ? formato.format(n) : '—';
+                };
+
+                tbody.replaceChildren();
+
+                codigos.forEach(codigo => {
+                    const actual = actuales.get(codigo);
+                    const ajustada = ajustadas.get(codigo);
+
+
+                    const episodio = episodiosMultiSede.get(codigo);
+
+                    const textoEpisodio = !episodio
+                        ? 'Sin datos'
+                        : episodio.episodio_multi_sede
+                            ? (
+                                `${episodio.fecha_inicio_episodio} a ` +
+                                `${episodio.fecha_fin_episodio} · ` +
+                                `${episodio.dias_episodio} días · ` +
+                                `pico ${episodio.sedes_afectadas_pico} sedes · ` +
+                                `${episodio.dias_sin_ventas_sede} días en esta sede`
+                            )
+                            : 'No';
+
+
+                    let evaluacion = evaluarEstadoDemandaKardex(
+                        ajustada,
+                        episodio
+                    );
+
+                    // Verificar la cantidad realmente visible en la tabla principal.
+                    const principalTexto = tr.querySelector('.inp-emp')?.value;
+
+                    const principalCalculado = (
+                        principalTexto == null ||
+                        String(principalTexto).trim() === ''
+                    )
+                        ? NaN
+                        : Number(principalTexto);
+
+                    const datosMotor = window.matrizTiendas?.[sedeActual]?.[codigo];
+
+                    const motorValido = (
+                        datosMotor?.demandaComercialDisponible === true &&
+                        Number.isSafeInteger(principalCalculado) &&
+                        principalCalculado === sugeridoActual
+                    );
+
+                    evaluacion = evaluarImpactoPedidoKardex(
+                        evaluacion,
+                        sugeridoActual,
+                        sugeridoAjustado,
+                        motorValido
+                    );
+
+
+
+                    const valores = [
+                        codigo,
+                        ajustada?.clasificacion || 'Sin datos',
+                        numero(actual?.demanda_regular),
+                        numero(ajustada?.demanda_regular_observada),
+                        numero(ajustada?.demanda_regular),
+                        numero(actual?.demanda_alta),
+                        numero(ajustada?.demanda_alta_observada),
+                        numero(ajustada?.demanda_alta),
+                        ajustada ? String(ajustada.dias_excluidos ?? 0) : '—',
+                        textoEpisodio,
+                        ajustada?.requiere_revision ? 'Revisar' : '—',
+                        evaluacion.estado
+
+
+                    ];
+
+                    const fila = document.createElement('tr');
+                    fila.className = ajustada?.requiere_revision
+                        ? 'bg-amber-50 border-b border-slate-200'
+                        : 'border-b border-slate-200';
+
+                    valores.forEach((valor, indice) => {
+                        const celda = document.createElement('td');
+                        celda.className = indice < 2 || indice === 9 || indice === 11
+                            ? 'p-2 text-left whitespace-nowrap'
+                            : 'p-2 text-right whitespace-nowrap';
+
+                        celda.textContent = valor;
+
+                        if (indice === 11) {
+                            celda.title = evaluacion.motivo;
+                            celda.classList.add('font-semibold');
+
+                            if (evaluacion.nivel === 'revision') {
+                                celda.classList.add('text-amber-800');
+                            }
+                        }
+
+                        fila.appendChild(celda);
+                    });
+
+                    tbody.appendChild(fila);
+                });
+
+
+                window.ultimaComparacionKardex = {
+                    sede,
+                    codigos,
+                    actual: resultado.data_actual || [],
+                    ajustada: resultado.data_ajustada || [],
+                    episodios: resultado.data_episodios_multi_sede || []
+                };
+
+
+                estado.textContent =
+                    `${codigos.length} productos consultados · ${sede} · ` +
+                    `${fechaISOAnalisis(inicio)} a ${fechaISOAnalisis(fin)}.`;
+
+                panel.classList.remove('hidden');
+
+            } catch (error) {
+                console.error('Error al comparar demanda:', error);
+                estado.textContent = error.message;
+            } finally {
+                boton.disabled = false;
+            }
+        }
+
 
         async function cargarDemandaComercialKardexEnMemoria(codigos = []) {
             const codigosNormalizados = [
@@ -3805,6 +4761,294 @@ ${nodosProductosXML.join('\n')}
 
             if (contenedor) {
                 contenedor.classList.add('hidden');
+            }
+        }
+
+        async function exportarDemandaKardexXML() {
+            // Evita exportar durante otra consulta de demanda.
+            if (document.getElementById('btn-consultar-kardex')?.disabled) {
+                alert('Espera a que termine la consulta de demanda.');
+                return;
+            }
+
+            const boton = document.getElementById('btn-exportar-demanda-xml');
+
+            // Evita descargas duplicadas por varios clics.
+            if (!boton || boton.disabled) return;
+
+            const fechaInicio = document.getElementById(
+                'kardex-fecha-inicio'
+            )?.value;
+
+            const fechaFin = document.getElementById(
+                'kardex-fecha-fin'
+            )?.value;
+
+            if (!fechaInicio || !fechaFin || fechaInicio > fechaFin) {
+                alert('Selecciona un período válido para consultar la demanda.');
+                return;
+            }
+
+            // Consulta solamente los productos presentes en la tabla principal.
+            const codigos = [...new Set(obtenerCodigosTablaAnalisis())];
+
+            if (!codigos.length) {
+                alert('Agrega al menos un producto a la tabla de análisis.');
+                return;
+            }
+
+            const parametros = new URLSearchParams({
+                fecha_inicio: fechaInicio,
+                fecha_fin: fechaFin
+            });
+
+            codigos.forEach(codigo => parametros.append('codigos', codigo));
+
+            // Captura las descripciones antes de iniciar la consulta.
+            const descripciones = obtenerDescripcionesProductosKardex();
+            const contenidoOriginal = boton.innerHTML;
+            let filas = [];
+
+            boton.disabled = true;
+            boton.innerHTML = `
+        <i class="fa-solid fa-spinner fa-spin mr-1"></i>
+        Consultando todas las tiendas...
+    `;
+
+            try {
+                // Sin filtro de sede: solicita la demanda de todas las tiendas.
+                const respuesta = await fetch(
+                    `/analisis/demanda-kardex?${parametros.toString()}`,
+                    {
+                        method: 'GET',
+                        credentials: 'same-origin'
+                    }
+                );
+
+                const resultado = await respuesta.json();
+
+                if (!respuesta.ok) {
+                    throw new Error(
+                        typeof resultado.detail === 'string'
+                            ? resultado.detail
+                            : 'No se pudo consultar la demanda de todas las tiendas.'
+                    );
+                }
+
+                if (!Array.isArray(resultado.data)) {
+                    throw new Error('La respuesta de demanda tiene un formato inesperado.');
+                }
+
+                const codigosSolicitados = new Set(
+                    codigos.map(codigo => normalizarCodigoAnalisis(codigo))
+                );
+
+                const registros = resultado.data
+                    .filter(item => codigosSolicitados.has(
+                        normalizarCodigoAnalisis(item.codigo || '')
+                    ))
+                    .sort((a, b) => {
+                        // Agrupa por tienda y ordena por código dentro de cada tienda.
+                        const sedeA = normalizarSedeKardex(a.sede);
+                        const sedeB = normalizarSedeKardex(b.sede);
+
+                        return sedeA.localeCompare(sedeB, 'es')
+                            || String(a.codigo).localeCompare(String(b.codigo), 'es');
+                    });
+
+                if (!registros.length) {
+                    alert('No se encontraron ventas para los productos y el período seleccionado.');
+                    return;
+                }
+
+                const formatoNumero = valor => {
+                    const numero = Number(valor ?? 0);
+
+                    if (!Number.isFinite(numero)) {
+                        throw new Error('La consulta devolvió una cantidad no válida.');
+                    }
+
+                    return numero.toLocaleString('es-VE', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                    });
+                };
+
+                // Prepara filas para el exportador existente sin modificar la pantalla.
+                filas = registros.map(item => {
+                    const codigo = normalizarCodigoAnalisis(item.codigo || '');
+                    const fila = document.createElement('tr');
+
+                    const valores = [
+                        String(item.sede || '').trim(),
+                        codigo,
+                        descripciones.get(codigo) || 'Sin descripción',
+                        formatoNumero(item.unidades_vendidas),
+                        formatoNumero(item.dias_con_ventas),
+                        formatoNumero(item.demanda_diaria)
+                    ];
+
+                    valores.forEach(valor => {
+                        const celda = document.createElement('td');
+                        celda.textContent = valor;
+                        fila.appendChild(celda);
+                    });
+
+                    return fila;
+                });
+            } catch (error) {
+                console.error('Error al consultar demanda para exportar:', error);
+                alert(error.message || 'No se pudo consultar la demanda.');
+                return;
+            } finally {
+                boton.disabled = false;
+                boton.innerHTML = contenidoOriginal;
+            }
+
+            // Continúa aquí el bloque existente: const encabezados = [
+
+            const encabezados = [
+                'Sede',
+                'Código',
+                'Descripción',
+                'Unidades vendidas',
+                'Días con ventas',
+                'Demanda diaria'
+            ];
+
+            // Protege los textos y elimina caracteres incompatibles con XML.
+            const escaparXML = valor => String(valor)
+                .replace(
+                    /[^\u0009\u000A\u000D\u0020-\uD7FF\uE000-\uFFFD\u{10000}-\u{10FFFF}]/gu,
+                    ''
+                )
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&apos;');
+
+            // Convierte el formato visible 1.234,56 a un número de Excel.
+            const convertirNumero = texto => {
+                const numero = Number(
+                    texto.trim()
+                        .replace(/\s/g, '')
+                        .replace(/\./g, '')
+                        .replace(',', '.')
+                );
+
+                if (!Number.isFinite(numero)) {
+                    throw new Error(`Cantidad no válida: ${texto}`);
+                }
+
+                return numero;
+            };
+
+            try {
+                const cabecera = `
+            <Row ss:Height="30">
+                ${encabezados.map(titulo => `
+                    <Cell ss:StyleID="Cabecera">
+                        <Data ss:Type="String">${escaparXML(titulo)}</Data>
+                    </Cell>
+                `).join('')}
+            </Row>
+        `;
+
+                const datos = filas.map(fila => `
+            <Row>
+                ${[...fila.cells].map((celda, indice) => {
+                    const texto = celda.textContent.trim();
+
+                    // Sede, código y descripción permanecen como texto.
+                    if (indice < 3) {
+                        return `
+                            <Cell ss:StyleID="Texto">
+                                <Data ss:Type="String">${escaparXML(texto)}</Data>
+                            </Cell>
+                        `;
+                    }
+
+                    // Las cantidades se exportan como números utilizables.
+                    const estilo = indice === 4 ? 'Entero' : 'Decimal';
+
+                    return `
+                        <Cell ss:StyleID="${estilo}">
+                            <Data ss:Type="Number">${convertirNumero(texto)}</Data>
+                        </Cell>
+                    `;
+                }).join('')}
+            </Row>
+        `).join('');
+
+                // SpreadsheetML: formato XML de hoja de cálculo de Excel.
+                const contenido = `<?xml version="1.0" encoding="UTF-8"?>
+<?mso-application progid="Excel.Sheet"?>
+<Workbook
+    xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+    xmlns:x="urn:schemas-microsoft-com:office:excel">
+    <Styles>
+        <Style ss:ID="Default" ss:Name="Normal">
+            <Alignment ss:Vertical="Center"/>
+            <Font ss:FontName="Calibri" ss:Size="11"/>
+        </Style>
+        <Style ss:ID="Cabecera">
+            <Alignment ss:Vertical="Center" ss:WrapText="1"/>
+            <Font ss:FontName="Calibri" ss:Size="11"
+                ss:Bold="1" ss:Color="#FFFFFF"/>
+            <Interior ss:Color="#0F172A" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="Texto">
+            <NumberFormat ss:Format="@"/>
+        </Style>
+        <Style ss:ID="Decimal">
+            <NumberFormat ss:Format="#,##0.00"/>
+        </Style>
+        <Style ss:ID="Entero">
+            <NumberFormat ss:Format="0"/>
+        </Style>
+    </Styles>
+    <Worksheet ss:Name="Consultar demanda">
+        <Table ss:ExpandedColumnCount="6"
+            ss:ExpandedRowCount="${filas.length + 1}">
+            <Column ss:Width="105"/>
+            <Column ss:Width="75"/>
+            <Column ss:Width="360"/>
+            <Column ss:Width="125"/>
+            <Column ss:Width="105"/>
+            <Column ss:Width="115"/>
+            ${cabecera}
+            ${datos}
+        </Table>
+        <x:WorksheetOptions>
+            <x:FreezePanes/>
+            <x:FrozenNoSplit/>
+            <x:SplitHorizontal>1</x:SplitHorizontal>
+            <x:TopRowBottomPane>1</x:TopRowBottomPane>
+            <x:ActivePane>2</x:ActivePane>
+        </x:WorksheetOptions>
+    </Worksheet>
+</Workbook>`;
+
+                const archivo = new Blob([contenido], {
+                    type: 'application/xml;charset=utf-8'
+                });
+
+                const url = URL.createObjectURL(archivo);
+                const enlace = document.createElement('a');
+
+                enlace.href = url;
+                // Identifica el alcance y el período del documento.
+                enlace.download = `demanda_todas_las_tiendas_${fechaInicio}_${fechaFin}.xml`;
+                document.body.appendChild(enlace);
+                enlace.click();
+                enlace.remove();
+
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+            } catch (error) {
+                console.error('Error al exportar demanda:', error);
+                alert(error.message || 'No se pudo exportar la demanda.');
             }
         }
 

@@ -958,6 +958,128 @@ async def consultar_demanda_comercial_kardex(
 
 
 # ============================================================
+# COMPARACIÓN DE DEMANDA COMERCIAL ACTUAL Y AJUSTADA
+# No modifica las cantidades sugeridas.
+# ============================================================
+
+@router.get("/analisis/comparar-demanda-comercial-kardex")
+async def comparar_demanda_comercial_kardex(
+    fecha_inicio: date,
+    fecha_fin: date,
+    codigos: Optional[List[str]] = Query(None),
+    fecha_observacion: Optional[date] = None,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None),
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    hoy = date.today()
+    observacion = fecha_observacion or hoy
+
+    if (
+        fecha_inicio > fecha_fin
+        or (fecha_fin - fecha_inicio).days > 30
+        or fecha_fin > hoy
+        or observacion < fecha_fin
+        or observacion > hoy
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Fechas inválidas. Utiliza un período de hasta 31 días.",
+        )
+
+    codigos_normalizados = list(
+        dict.fromkeys(
+            _normalizar_codigo_kardex(codigo)
+            for codigo in (codigos or [])
+            if _normalizar_codigo_kardex(codigo)
+        )
+    )
+
+    if not codigos_normalizados:
+        raise HTTPException(
+            status_code=400,
+            detail="Debes enviar al menos un código de producto.",
+        )
+
+    if len(codigos_normalizados) > 12:
+        raise HTTPException(
+            status_code=400,
+            detail="La comparación admite hasta 12 productos por consulta.",
+        )
+
+    parametros = {
+        "p_fecha_inicio": fecha_inicio.isoformat(),
+        "p_fecha_fin": fecha_fin.isoformat(),
+        "p_codigos": codigos_normalizados,
+    }
+
+    try:
+        def consultar():
+            actual = config.supabase_admin.rpc(
+                "obtener_demanda_comercial_kardex",
+                parametros,
+            ).execute()
+
+            ajustada = config.supabase_admin.rpc(
+                "obtener_demanda_comercial_ajustada_kardex",
+                {
+                    **parametros,
+                    "p_fecha_observacion": observacion.isoformat(),
+                },
+            ).execute()
+
+            
+            episodios = config.supabase_admin.rpc(
+                "detectar_episodios_multisede_kardex",
+                parametros,
+            ).execute()
+
+            return (
+                actual.data or [],
+                ajustada.data or [],
+                episodios.data or [],
+            )
+
+
+        
+        (
+            datos_actual,
+            datos_ajustada,
+            datos_episodios,
+        ) = await asyncio.to_thread(consultar)
+
+
+        return {
+            "status": "ok",
+            "modo": "solo_comparacion",
+            "fecha_inicio": fecha_inicio.isoformat(),
+            "fecha_fin": fecha_fin.isoformat(),
+            "fecha_observacion": observacion.isoformat(),
+            "calendario_actual": "lunes-domingo",
+            "calendario_ajustado": "domingo-sabado",
+            "data_actual": datos_actual,
+            "data_ajustada": datos_ajustada,
+            "data_episodios_multi_sede": datos_episodios,
+
+        }
+
+    except Exception as error:
+        print(
+            "ERROR AL COMPARAR DEMANDA COMERCIAL KARDEX:",
+            str(error),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo comparar la demanda comercial del Kardex.",
+        )
+
+
+
+# ============================================================
 # GUARDADO TRANSACCIONAL DEL ANÁLISIS
 # ============================================================
 @router.post("/analisis/guardar-pedido")
