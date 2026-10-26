@@ -22,7 +22,8 @@ router = APIRouter()
 
 import asyncio
 import unicodedata
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo  # Fecha actual de Venezuela.
 from decimal import Decimal, InvalidOperation
 
 from fastapi import Query
@@ -875,6 +876,121 @@ async def consultar_meses_kardex(
             detail="No se pudieron consultar los meses del Kardex."
         )
 
+# ============================================================
+# TOOLTIP DE VENTAS: CUATRO SEMANAS COMPLETAS
+# ============================================================
+
+MESES_TOOLTIP = (
+    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
+    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+)
+
+
+def preparar_semanas_tooltip(filas):
+    semanas = []
+
+    for numero, fila in enumerate(filas, start=1):
+        inicio = date.fromisoformat(fila["fecha_inicio"])
+
+        # El jueves identifica el mes con más días en esa semana.
+        mes = (inicio + timedelta(days=3)).month
+
+        semanas.append({
+            "etiqueta": f"{MESES_TOOLTIP[mes - 1]} {numero}",
+            "inicio": fila["fecha_inicio"],
+            "fin": fila["fecha_fin"],
+            "unidades": float(fila["unidades_vendidas"]),
+            "puesto": 0,
+        })
+
+    # En empate gana la semana más reciente.
+    mejores = sorted(
+        range(len(semanas)),
+        key=lambda i: (
+            Decimal(str(filas[i]["unidades_vendidas"])),
+            semanas[i]["inicio"],
+        ),
+        reverse=True,
+    )[:2]
+
+    for puesto, indice in enumerate(mejores, start=1):
+        # Una semana sin ventas no recibe indicador.
+        if semanas[indice]["unidades"] > 0:
+            semanas[indice]["puesto"] = puesto
+
+    demanda = sum(
+        (
+            Decimal(str(filas[i]["unidades_vendidas"]))
+            for i in mejores
+        ),
+        Decimal("0"),
+    ) / Decimal("14")
+
+    return semanas, float(demanda)
+
+
+@router.get("/analisis/ventas-semanales-tooltip")
+async def obtener_ventas_semanales_tooltip(
+    codigo: str = Query(..., min_length=1, max_length=100),
+    sede: str = Query(..., min_length=1, max_length=100),
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None),
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    codigo = _normalizar_codigo_kardex(codigo)
+    sede = sede.strip().upper()
+
+    if sede in ("ALIANZA", "C. ALIANZA"):
+        sede = "CIUDAD ALIANZA"
+
+    if not codigo or not sede:
+        raise HTTPException(
+            status_code=400,
+            detail="Código y sede obligatorios.",
+        )
+
+    # Excluye siempre la semana que está en curso.
+    hoy = datetime.now(ZoneInfo("America/Caracas")).date()
+    lunes = hoy - timedelta(days=hoy.weekday())
+
+    try:
+        def consultar():
+            return config.supabase_admin.rpc(
+                "obtener_ventas_semanales_tooltip",
+                {
+                    "p_codigo": codigo,
+                    "p_sede": sede,
+                    "p_lunes_actual": lunes.isoformat(),
+                },
+            ).execute()
+
+        respuesta = await asyncio.to_thread(consultar)
+        filas = respuesta.data or []
+
+        if len(filas) != 4:
+            raise ValueError(
+                "La consulta semanal debe devolver cuatro intervalos."
+            )
+
+        semanas, demanda = preparar_semanas_tooltip(filas)
+
+        return {
+            "status": "ok",
+            "semanas": semanas,
+            "demanda_diaria": demanda,
+        }
+
+    except Exception as error:
+        print("ERROR EN TOOLTIP DE VENTAS:", str(error))
+
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudieron consultar las ventas.",
+        )
 
 # ============================================================
 # DEMANDA CALCULADA A PARTIR DEL KARDEX

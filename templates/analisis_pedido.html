@@ -4799,6 +4799,11 @@ ${nodosProductosXML.join('\n')}
                     `Filas ignoradas: ${resultado.filas_ignoradas}.`
                 );
 
+                // Actualiza el tooltip después de importar nuevas ventas.
+                document.dispatchEvent(
+                    new Event('kardex-ventas-actualizado')
+                );
+
                 await actualizarCoberturaKardexDesdeAnalisis(true, true);
 
             } catch (error) {

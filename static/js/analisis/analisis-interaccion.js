@@ -157,6 +157,330 @@
     let datosCopiarSeleccion = null;
     let isArrastrando = false;
     let estaEditando = false;
+    // ============================================================
+    // TOOLTIP DE VENTAS
+    // ============================================================
+
+    const cacheTooltipVentas = new Map();
+    let tooltipVentas = null;
+    let sesionTooltipVentas = null;
+
+    function contextoTooltipVentas() {
+        const td = celdaActiva;
+
+        // Solo admite una celda EMP. seleccionada, fuera de edición.
+        if (
+            !td?.isConnected ||
+            !td.closest('#filas-tabla-analisis') ||
+            !td.querySelector('.inp-emp') ||
+            estaEditando ||
+            celdasSeleccionadasAnalisis.length !== 1 ||
+            !td.getClientRects().length
+        ) {
+            return null;
+        }
+
+        let codigo = String(
+            td.closest('tr').querySelector('.inp-codigo')?.value || ''
+        ).trim().toUpperCase();
+
+        if (/^\d+\.0$/.test(codigo)) codigo = codigo.slice(0, -2);
+        if (/^\d+$/.test(codigo)) codigo = codigo.padStart(6, '0');
+
+        let sede = String(
+            window.tiendaActivaPestana || ''
+        ).trim().toUpperCase();
+
+        if (['ALIANZA', 'C. ALIANZA'].includes(sede)) {
+            sede = 'CIUDAD ALIANZA';
+        }
+
+        return codigo && sede ? { td, codigo, sede } : null;
+    }
+
+    function ocultarTooltipVentas() {
+        clearTimeout(sesionTooltipVentas?.temporizador);
+        sesionTooltipVentas = null;
+        tooltipVentas?.classList.add('hidden');
+    }
+
+    function sesionVentasVigente(sesion) {
+        const actual = contextoTooltipVentas();
+
+        return sesionTooltipVentas === sesion &&
+            actual?.td === sesion.td &&
+            actual?.codigo === sesion.codigo &&
+            actual?.sede === sesion.sede;
+    }
+
+    function mostrarCuadroVentas() {
+        if (!tooltipVentas) {
+            tooltipVentas = document.createElement('div');
+
+            // Misma estética que TOOLTIP DE CAMBIOS.
+            tooltipVentas.className =
+                'fixed z-[10001] hidden ' +
+                'bg-slate-900 text-white ' +
+                'text-xs rounded-lg shadow-xl ' +
+                'px-3 py-2 pointer-events-none';
+
+            tooltipVentas.setAttribute('role', 'tooltip');
+            tooltipVentas.style.maxWidth = 'calc(100vw - 24px)';
+
+            document.body.appendChild(tooltipVentas);
+        }
+
+        tooltipVentas.replaceChildren();
+        tooltipVentas.classList.remove('hidden');
+
+        return tooltipVentas;
+    }
+
+    function posicionarCuadroVentas(td) {
+        const celda = td.getBoundingClientRect();
+        const cuadro = tooltipVentas.getBoundingClientRect();
+
+        const izquierda = Math.min(
+            celda.right + 12,
+            window.innerWidth - cuadro.width - 12
+        );
+
+        const arriba = Math.min(
+            celda.top,
+            window.innerHeight - cuadro.height - 12
+        );
+
+        tooltipVentas.style.left = `${Math.max(12, izquierda)}px`;
+        tooltipVentas.style.top = `${Math.max(12, arriba)}px`;
+    }
+
+    function cargarVentasTooltip(contexto) {
+        // Separa la caché por tienda, producto y fecha de Venezuela.
+        const dia = new Intl.DateTimeFormat('en-CA', {
+            timeZone: 'America/Caracas'
+        }).format(new Date());
+
+        const clave = JSON.stringify([
+            contexto.sede, contexto.codigo, dia
+        ]);
+
+        const guardado = cacheTooltipVentas.get(clave);
+
+        if (guardado && guardado.vence > Date.now()) {
+            return guardado.promesa;
+        }
+
+        const entrada = {
+            vence: Date.now() + 5 * 60 * 1000
+        };
+
+        const parametros = new URLSearchParams({
+            codigo: contexto.codigo,
+            sede: contexto.sede
+        });
+
+        entrada.promesa = fetch(
+            `/analisis/ventas-semanales-tooltip?${parametros}`,
+            {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                signal: AbortSignal.timeout(10000)
+            }
+        ).then(async respuesta => {
+            if (!respuesta.ok) {
+                throw new Error('No se pudieron consultar las ventas.');
+            }
+
+            const datos = await respuesta.json();
+
+            if (
+                !Array.isArray(datos.semanas) ||
+                datos.semanas.length !== 4 ||
+                !Number.isFinite(datos.demanda_diaria)
+            ) {
+                throw new Error('Respuesta semanal inválida.');
+            }
+
+            return datos;
+
+        }).catch(error => {
+            // Permite reintentar cuando una consulta falla.
+            if (cacheTooltipVentas.get(clave) === entrada) {
+                cacheTooltipVentas.delete(clave);
+            }
+
+            throw error;
+        });
+
+        // Limita la memoria utilizada.
+        if (cacheTooltipVentas.size >= 256) {
+            cacheTooltipVentas.delete(
+                cacheTooltipVentas.keys().next().value
+            );
+        }
+
+        // Comparte también las solicitudes que todavía están en curso.
+        cacheTooltipVentas.set(clave, entrada);
+
+        return entrada.promesa;
+    }
+
+    async function abrirTooltipVentas(sesion) {
+        if (!sesionVentasVigente(sesion)) return;
+
+        mostrarCuadroVentas().textContent = 'Consultando ventas…';
+        posicionarCuadroVentas(sesion.td);
+
+        try {
+            const datos = await cargarVentasTooltip(sesion);
+
+            // Descarta respuestas de una selección anterior.
+            if (!sesionVentasVigente(sesion)) return;
+
+            const cuadro = mostrarCuadroVentas();
+            const titulo = document.createElement('div');
+
+            titulo.textContent = 'Consolidado Semanal';
+            titulo.style.cssText =
+                'font-weight:600;margin-bottom:4px';
+
+            cuadro.appendChild(titulo);
+
+            const numero = new Intl.NumberFormat('es-VE', {
+                maximumFractionDigits: 2
+            });
+
+            const fecha = valor =>
+                `${valor.slice(8, 10)}/${valor.slice(5, 7)}`;
+
+            for (const semana of datos.semanas) {
+                const fila = document.createElement('div');
+
+                // textContent evita interpretar los datos como HTML.
+                fila.textContent =
+                    `${semana.etiqueta} → ${fecha(semana.inicio)} al ` +
+                    `${fecha(semana.fin)} = ${numero.format(semana.unidades)}`;
+
+                if (semana.puesto === 1 || semana.puesto === 2) {
+                    const punto = document.createElement('span');
+
+                    punto.setAttribute(
+                        'aria-label',
+                        semana.puesto === 1
+                            ? 'Mayor venta'
+                            : 'Segunda mayor venta'
+                    );
+
+                    // Punto de 5 px, elevado como un exponente.
+                    punto.style.cssText =
+                        'display:inline-block;width:5px;height:5px;' +
+                        'border-radius:50%;margin-left:3px;' +
+                        'vertical-align:super;' +
+                        `background:${semana.puesto === 1
+                            ? '#10B981'
+                            : '#F59E0B'
+                        }`;
+
+                    fila.appendChild(punto);
+                }
+
+                cuadro.appendChild(fila);
+            }
+
+            const demanda = document.createElement('div');
+
+            demanda.style.cssText =
+                'margin-top:6px;font-style:italic';
+
+            demanda.textContent =
+                'Demanda diaria ' +
+                datos.demanda_diaria.toLocaleString('es-VE', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                }) +
+                ' und/día.';
+
+            cuadro.appendChild(demanda);
+            posicionarCuadroVentas(sesion.td);
+
+        } catch (error) {
+            if (!sesionVentasVigente(sesion)) return;
+
+            mostrarCuadroVentas().textContent =
+                'No se pudieron consultar las ventas.';
+
+            posicionarCuadroVentas(sesion.td);
+            console.error('Tooltip de ventas:', error);
+        }
+    }
+
+    document.addEventListener('keydown', e => {
+        if (e.key !== 'Shift') {
+            // Las flechas y demás teclas conservan su funcionamiento.
+            ocultarTooltipVentas();
+            return;
+        }
+
+        if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+
+        const contexto = contextoTooltipVentas();
+
+        if (
+            !contexto ||
+            !(
+                e.target === document.body ||
+                contexto.td.contains(e.target)
+            )
+        ) {
+            return;
+        }
+
+        ocultarTooltipVentas();
+        sesionTooltipVentas = contexto;
+
+        // Evita consultar por un toque fugaz o por Shift + flechas.
+        contexto.temporizador = setTimeout(
+            () => abrirTooltipVentas(contexto),
+            180
+        );
+    }, true);
+
+    document.addEventListener('keyup', e => {
+        if (e.key === 'Shift' && !e.shiftKey) {
+            ocultarTooltipVentas();
+        }
+    }, true);
+
+    document.addEventListener(
+        'pointerdown', ocultarTooltipVentas, true
+    );
+
+    document.addEventListener(
+        'input', ocultarTooltipVentas, true
+    );
+
+    document.addEventListener('focusin', e => {
+        if (
+            sesionTooltipVentas &&
+            !sesionTooltipVentas.td.contains(e.target)
+        ) {
+            ocultarTooltipVentas();
+        }
+    }, true);
+
+    window.addEventListener('blur', ocultarTooltipVentas);
+    window.addEventListener('scroll', ocultarTooltipVentas, true);
+    window.addEventListener('resize', ocultarTooltipVentas);
+
+    document.addEventListener(
+        'visibilitychange', ocultarTooltipVentas
+    );
+
+    // Una importación invalida los resultados guardados.
+    document.addEventListener('kardex-ventas-actualizado', () => {
+        cacheTooltipVentas.clear();
+        ocultarTooltipVentas();
+    });
 
     // ============================================================
     // UTILIDADES
@@ -392,6 +716,7 @@
     }
 
     function desseleccionarCeldas() {
+        ocultarTooltipVentas(); // Cierra al quitar la selección.
         limpiarSeleccionVisual();
 
         celdasSeleccionadasAnalisis = [];
@@ -402,6 +727,7 @@
     }
 
     function aplicarSeleccionVisual(celdas) {
+        ocultarTooltipVentas(); // Cierra al cambiar la selección.
         limpiarSeleccionVisual();
 
         celdasSeleccionadasAnalisis = [];
