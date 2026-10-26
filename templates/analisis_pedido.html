@@ -518,7 +518,7 @@
                 </button>
 
                 <!-- Ejecuta una comparación independiente del cálculo actual de sugeridos -->
-                <button type="button" id="btn-comparar-kardex" onclick="compararDemandaKardexDesdeAnalisis()"
+                <button type="button" id="btn-comparar-kardex" onclick="abrirModalMesesKardex()"
                     class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold">
                     <i class="fa-solid fa-chart-column mr-1"></i>
                     Comparar períodos
@@ -573,7 +573,9 @@
                         <th class="px-3 py-2">Código</th>
                         <th class="px-3 py-2">Descripción</th>
                         <th class="px-3 py-2 text-right">Unidades vendidas</th>
-                        <th class="px-3 py-2 text-right">Días con ventas</th>
+                        <th class="px-3 py-2 text-right">
+                            Días con ventas / Intervalo
+                        </th>
                         <th class="px-3 py-2 text-right">Demanda diaria</th>
                     </tr>
                 </thead>
@@ -616,22 +618,104 @@
         <p id="kardex-comparacion-periodos" class="px-3 py-2 text-xs text-slate-600 bg-violet-50"></p>
 
         <table class="w-full text-xs text-left">
+
             <thead class="bg-slate-800 text-white">
-                <tr>
-                    <th class="px-3 py-2">Sede</th>
-                    <th class="px-3 py-2">Código</th>
-                    <th class="px-3 py-2">Descripción</th>
-                    <th class="px-3 py-2 text-right">Unidades anteriores</th>
-                    <th class="px-3 py-2 text-right">Unidades recientes</th>
-                    <th class="px-3 py-2 text-right">Demanda anterior</th>
-                    <th class="px-3 py-2 text-right">Demanda reciente</th>
-                    <th class="px-3 py-2 text-right">Variación unidades</th>
-                    <th class="px-3 py-2 text-right">Días con ventas anteriores</th>
-                    <th class="px-3 py-2 text-right">Días con ventas recientes</th>
-                </tr>
+                <tr id="kardex-comparacion-encabezados"></tr>
             </thead>
+
             <tbody id="kardex-comparacion-resultados" class="divide-y divide-slate-100"></tbody>
         </table>
+    </div>
+
+    <!-- MODAL DE COMPARACIÓN MENSUAL DEL KARDEX -->
+    <div id="modal-meses-comparacion-kardex"
+        class="hidden fixed inset-0 z-[300] items-center justify-center bg-slate-950/60 p-4" role="dialog"
+        aria-modal="true" aria-labelledby="titulo-modal-meses-kardex">
+
+        <section class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+
+            <header class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div>
+                    <h3 id="titulo-modal-meses-kardex" class="text-base font-bold text-slate-800">
+                        Comparar meses del Kardex
+                    </h3>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Selecciona entre 1 y 3 meses con ventas registradas.
+                    </p>
+                </div>
+
+                <button type="button" onclick="cerrarModalMesesKardex()"
+                    class="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100" aria-label="Cerrar modal">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </header>
+
+            <div class="p-5 space-y-5">
+
+                <!-- Navegación de año -->
+                <div class="flex items-center justify-between">
+                    <button type="button" id="anio-meses-anterior-kardex" onclick="cambiarAnioMesesKardex(-1)"
+                        class="rounded-lg border border-slate-200 px-3 py-2 text-xs disabled:opacity-40">
+                        <i class="fa-solid fa-chevron-left"></i>
+                    </button>
+
+                    <span id="anio-meses-comparacion-kardex" class="text-sm font-bold text-slate-800">
+                    </span>
+
+                    <button type="button" id="anio-meses-siguiente-kardex" onclick="cambiarAnioMesesKardex(1)"
+                        class="rounded-lg border border-slate-200 px-3 py-2 text-xs disabled:opacity-40">
+                        <i class="fa-solid fa-chevron-right"></i>
+                    </button>
+                </div>
+
+                <!-- Cuadrícula de 4 columnas x 3 filas -->
+                <div id="grid-meses-comparacion-kardex" class="grid grid-cols-4 gap-2">
+                </div>
+
+                <p class="text-[11px] text-slate-500">
+                    Los meses sin ventas están deshabilitados.
+                    Al seleccionar tres, las demás opciones se bloquean.
+                </p>
+
+                <!-- Intervalo de referencia -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-slate-200 pt-4">
+                    <label class="text-xs font-semibold text-slate-700">
+                        Fecha inicio
+                        <input type="date" id="meses-comparacion-inicio" disabled onchange="mostrarResumenMesesKardex()"
+                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                    </label>
+
+                    <label class="text-xs font-semibold text-slate-700">
+                        Fecha fin
+                        <input type="date" id="meses-comparacion-fin" disabled onchange="mostrarResumenMesesKardex()"
+                            class="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-xs">
+                    </label>
+                </div>
+
+                <p class="text-[11px] text-slate-500">
+                    El calendario utiliza el primer mes seleccionado como referencia.
+                    Se aplicarán los mismos días del mes a todos los meses elegidos.
+                </p>
+
+                <p id="mensaje-meses-comparacion-kardex" class="text-xs text-slate-600" role="status">
+                    Selecciona los meses que deseas comparar.
+                </p>
+            </div>
+
+            <footer class="flex justify-end gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+                <button type="button" onclick="cerrarModalMesesKardex()"
+                    class="rounded-lg border border-slate-300 px-4 py-2 text-xs font-semibold text-slate-600">
+                    Cancelar
+                </button>
+
+                <button type="button" id="btn-confirmar-meses-kardex" onclick="confirmarMesesComparacionKardex()"
+                    disabled
+                    class="rounded-lg bg-violet-600 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">
+                    <i class="fa-solid fa-chart-line mr-1"></i>
+                    Comparar meses
+                </button>
+            </footer>
+        </section>
     </div>
 
     <!-- FIN PANEL DE KARDEX HISTÓRICO -->
@@ -3370,6 +3454,8 @@ ${nodosProductosXML.join('\n')}
                 );
 
 
+
+
                 const sugeridoNuevoCalendario = empaques(
                     unidadesObservadasNuevoCalendario,
                     baseNuevoCalendario.demandaRegular,
@@ -3381,10 +3467,40 @@ ${nodosProductosXML.join('\n')}
 
                 const efectoCalendario = sugeridoNuevoCalendario - sugeridoActual;
                 const efectoCorreccion = sugeridoAjustado - sugeridoNuevoCalendario;
-                const evaluacion = evaluarEstadoDemandaKardex(
+
+                let evaluacion = evaluarEstadoDemandaKardex(
                     ajustada,
                     episodio
                 );
+
+                // Obtener el sugerido real de este producto.
+                const principalTexto = tr.querySelector('.inp-emp')?.value;
+
+                const principalCalculado = (
+                    principalTexto == null ||
+                    String(principalTexto).trim() === ''
+                )
+                    ? NaN
+                    : Number(principalTexto);
+
+                // Consultar la demanda cargada en el motor principal.
+                const datosMotor = window.matrizTiendas?.[sedeActual]?.[codigo];
+
+                // Validar que el motor principal y la simulación coincidan.
+                const motorValido = (
+                    datosMotor?.demandaComercialDisponible === true &&
+                    Number.isSafeInteger(principalCalculado) &&
+                    principalCalculado === sugeridoActual
+                );
+
+                // Aplicar la evaluación definitiva del pedido.
+                evaluacion = evaluarImpactoPedidoKardex(
+                    evaluacion,
+                    sugeridoActual,
+                    sugeridoAjustado,
+                    motorValido
+                );
+
 
                 const avisos = [];
 
@@ -3872,37 +3988,10 @@ ${nodosProductosXML.join('\n')}
                             : 'No';
 
 
-                    let evaluacion = evaluarEstadoDemandaKardex(
+                    const evaluacion = evaluarEstadoDemandaKardex(
                         ajustada,
                         episodio
                     );
-
-                    // Verificar la cantidad realmente visible en la tabla principal.
-                    const principalTexto = tr.querySelector('.inp-emp')?.value;
-
-                    const principalCalculado = (
-                        principalTexto == null ||
-                        String(principalTexto).trim() === ''
-                    )
-                        ? NaN
-                        : Number(principalTexto);
-
-                    const datosMotor = window.matrizTiendas?.[sedeActual]?.[codigo];
-
-                    const motorValido = (
-                        datosMotor?.demandaComercialDisponible === true &&
-                        Number.isSafeInteger(principalCalculado) &&
-                        principalCalculado === sugeridoActual
-                    );
-
-                    evaluacion = evaluarImpactoPedidoKardex(
-                        evaluacion,
-                        sugeridoActual,
-                        sugeridoAjustado,
-                        motorValido
-                    );
-
-
 
                     const valores = [
                         codigo,
@@ -4764,6 +4853,30 @@ ${nodosProductosXML.join('\n')}
             }
         }
 
+
+        function formatearDiasIntervaloKardex(
+            diasConVentas,
+            diasIntervalo
+        ) {
+            const dias = Number(diasConVentas ?? 0);
+            const intervalo = Number(diasIntervalo);
+
+            if (
+                !Number.isInteger(dias) ||
+                !Number.isInteger(intervalo) ||
+                dias < 0 ||
+                intervalo < 1 ||
+                dias > intervalo
+            ) {
+                throw new Error(
+                    'La consulta devolvió días de venta o intervalo inválidos.'
+                );
+            }
+
+            return `${dias}/${intervalo}`;
+        }
+
+
         async function exportarDemandaKardexXML() {
             // Evita exportar durante otra consulta de demanda.
             if (document.getElementById('btn-consultar-kardex')?.disabled) {
@@ -4797,10 +4910,13 @@ ${nodosProductosXML.join('\n')}
                 return;
             }
 
+
             const parametros = new URLSearchParams({
                 fecha_inicio: fechaInicio,
-                fecha_fin: fechaFin
+                fecha_fin: fechaFin,
+                modo: 'intervalo'
             });
+
 
             codigos.forEach(codigo => parametros.append('codigos', codigo));
 
@@ -4884,7 +5000,12 @@ ${nodosProductosXML.join('\n')}
                         codigo,
                         descripciones.get(codigo) || 'Sin descripción',
                         formatoNumero(item.unidades_vendidas),
-                        formatoNumero(item.dias_con_ventas),
+
+                        formatearDiasIntervaloKardex(
+                            item.dias_con_ventas,
+                            resultado.dias_intervalo
+                        ),
+
                         formatoNumero(item.demanda_diaria)
                     ];
 
@@ -4912,7 +5033,7 @@ ${nodosProductosXML.join('\n')}
                 'Código',
                 'Descripción',
                 'Unidades vendidas',
-                'Días con ventas',
+                'Días con ventas / Intervalo',
                 'Demanda diaria'
             ];
 
@@ -4961,7 +5082,9 @@ ${nodosProductosXML.join('\n')}
                     const texto = celda.textContent.trim();
 
                     // Sede, código y descripción permanecen como texto.
-                    if (indice < 3) {
+
+                    if (indice < 3 || indice === 4) {
+
                         return `
                             <Cell ss:StyleID="Texto">
                                 <Data ss:Type="String">${escaparXML(texto)}</Data>
@@ -4970,7 +5093,7 @@ ${nodosProductosXML.join('\n')}
                     }
 
                     // Las cantidades se exportan como números utilizables.
-                    const estilo = indice === 4 ? 'Entero' : 'Decimal';
+                    const estilo = 'Decimal';
 
                     return `
                         <Cell ss:StyleID="${estilo}">
@@ -5016,7 +5139,7 @@ ${nodosProductosXML.join('\n')}
             <Column ss:Width="75"/>
             <Column ss:Width="360"/>
             <Column ss:Width="125"/>
-            <Column ss:Width="105"/>
+            <Column ss:Width="170"/>
             <Column ss:Width="115"/>
             ${cabecera}
             ${datos}
@@ -5098,10 +5221,13 @@ ${nodosProductosXML.join('\n')}
             // Limpia el aviso anterior cuando ya existen productos válidos.
             mostrarMensajeKardex('', false);
 
+
             const parametros = new URLSearchParams({
                 fecha_inicio: fechaInicio,
-                fecha_fin: fechaFin
+                fecha_fin: fechaFin,
+                modo: 'intervalo'
             });
+
 
             codigos.forEach(codigo => parametros.append('codigos', codigo));
 
@@ -5178,14 +5304,19 @@ ${nodosProductosXML.join('\n')}
 
                     const codigo = normalizarCodigoAnalisis(item.codigo || '');
 
+
                     const valores = [
                         String(item.sede || '').trim(),
                         codigo,
                         descripciones.get(codigo) || 'Sin descripción',
                         formatoNumero(item.unidades_vendidas),
-                        formatoNumero(item.dias_con_ventas),
+                        formatearDiasIntervaloKardex(
+                            item.dias_con_ventas,
+                            resultado.dias_intervalo
+                        ),
                         formatoNumero(item.demanda_diaria)
                     ];
+
 
 
                     valores.forEach((valor, indice) => {
@@ -5238,303 +5369,809 @@ ${nodosProductosXML.join('\n')}
         }
 
 
-        async function compararDemandaKardexDesdeAnalisis() {
-            const fechaFin = document.getElementById(
-                'kardex-fecha-fin'
-            )?.value;
 
-            const boton = document.getElementById('btn-comparar-kardex');
-            const contenedor = document.getElementById(
+        const MESES_NOMBRE_KARDEX = [
+            'Ene.', 'Feb.', 'Mar.', 'Abr.', 'May.', 'Jun.',
+            'Jul.', 'Ago.', 'Sep.', 'Oct.', 'Nov.', 'Dic.'
+        ];
+
+        let sedeModalMesesKardex = '';
+        let anioVistaMesesKardex = new Date().getFullYear();
+        let limitesVistaMesesKardex = {
+            min: 2000, max: 2100, ultimaFecha: ''
+        };
+        let mesesDisponiblesVistaKardex = [];
+        let mesesElegidosKardex = [];
+        let ultimaConfiguracionPeriodosKardex = null;
+        let solicitudMesesKardex = 0;
+
+        const dosDigitosMesesKardex = n => String(n).padStart(2, '0');
+
+        const claveMesesKardex = m =>
+            `${m.anio}-${dosDigitosMesesKardex(m.mes)}`;
+
+        const nombreMesesKardex = m =>
+            `${MESES_NOMBRE_KARDEX[m.mes - 1]} ${m.anio}`;
+
+        function mesesElegidosOrdenadosKardex() {
+            return [...mesesElegidosKardex].sort((a, b) =>
+                claveMesesKardex(a).localeCompare(claveMesesKardex(b))
+            );
+        }
+
+        async function consultarMesesDisponiblesKardex(sede, anio) {
+            const parametros = new URLSearchParams({
+                sede,
+                anio: String(anio)
+            });
+
+            const respuesta = await fetch(
+                `/analisis/meses-kardex?${parametros}`,
+                { credentials: 'same-origin' }
+            );
+
+            const resultado = await respuesta.json();
+
+            if (!respuesta.ok || resultado.status !== 'ok' ||
+                !Array.isArray(resultado.data)) {
+                throw new Error(
+                    resultado.detail || 'No se pudieron consultar los meses con ventas.'
+                );
+            }
+
+            return resultado.data;
+        }
+
+        function cerrarModalMesesKardex() {
+            const modal = document.getElementById(
+                'modal-meses-comparacion-kardex'
+            );
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        async function abrirModalMesesKardex() {
+            const modal = document.getElementById(
+                'modal-meses-comparacion-kardex'
+            );
+
+            const sede = normalizarSedeKardex(
+                window.tiendaActivaPestana || 'CENTRO'
+            );
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            if (sedeModalMesesKardex !== sede) {
+                mesesElegidosKardex = [];
+            }
+
+            sedeModalMesesKardex = sede;
+
+            try {
+                await actualizarCoberturaKardexDesdeAnalisis(false);
+
+                const cobertura = coberturaKardexCache?.find(
+                    x => normalizarSedeKardex(x.sede) === sede
+                );
+
+                if (!cobertura?.fecha_minima || !cobertura?.fecha_maxima) {
+                    throw new Error(
+                        `No existe cobertura de ventas para ${sede}.`
+                    );
+                }
+
+                limitesVistaMesesKardex = {
+                    min: Number(cobertura.fecha_minima.slice(0, 4)),
+                    max: Number(cobertura.fecha_maxima.slice(0, 4)),
+                    ultimaFecha: cobertura.fecha_maxima
+                };
+
+                if (
+                    anioVistaMesesKardex < limitesVistaMesesKardex.min ||
+                    anioVistaMesesKardex > limitesVistaMesesKardex.max
+                ) {
+                    anioVistaMesesKardex = limitesVistaMesesKardex.max;
+                }
+
+                await cargarAnioMesesKardex(anioVistaMesesKardex);
+
+            } catch (error) {
+                document.getElementById(
+                    'mensaje-meses-comparacion-kardex'
+                ).textContent = error.message;
+
+                document.getElementById(
+                    'btn-confirmar-meses-kardex'
+                ).disabled = true;
+            }
+        }
+
+        async function cambiarAnioMesesKardex(delta) {
+            const siguiente = anioVistaMesesKardex + delta;
+
+            if (
+                siguiente < limitesVistaMesesKardex.min ||
+                siguiente > limitesVistaMesesKardex.max
+            ) return;
+
+            await cargarAnioMesesKardex(siguiente);
+        }
+
+        async function cargarAnioMesesKardex(anio) {
+            const solicitud = ++solicitudMesesKardex;
+            const sede = sedeModalMesesKardex;
+
+            const mensaje = document.getElementById(
+                'mensaje-meses-comparacion-kardex'
+            );
+
+            mensaje.textContent = 'Consultando meses disponibles...';
+
+            document.getElementById(
+                'btn-confirmar-meses-kardex'
+            ).disabled = true;
+
+            try {
+                const datos = await consultarMesesDisponiblesKardex(sede, anio);
+
+                if (
+                    solicitud !== solicitudMesesKardex ||
+                    sede !== sedeModalMesesKardex
+                ) return;
+
+                anioVistaMesesKardex = anio;
+                mesesDisponiblesVistaKardex = datos;
+
+                pintarMesesKardex();
+
+            } catch (error) {
+                if (solicitud !== solicitudMesesKardex) return;
+
+                mensaje.textContent = error.message;
+
+                document.getElementById(
+                    'grid-meses-comparacion-kardex'
+                ).replaceChildren();
+            }
+        }
+
+        function pintarMesesKardex() {
+            document.getElementById(
+                'anio-meses-comparacion-kardex'
+            ).textContent = `${anioVistaMesesKardex} · ${sedeModalMesesKardex}`;
+
+            document.getElementById(
+                'anio-meses-anterior-kardex'
+            ).disabled = anioVistaMesesKardex <= limitesVistaMesesKardex.min;
+
+            document.getElementById(
+                'anio-meses-siguiente-kardex'
+            ).disabled = anioVistaMesesKardex >= limitesVistaMesesKardex.max;
+
+            const grid = document.getElementById(
+                'grid-meses-comparacion-kardex'
+            );
+
+            grid.replaceChildren();
+
+            for (let mes = 1; mes <= 12; mes++) {
+                const informacion = mesesDisponiblesVistaKardex.find(
+                    item => Number(item.mes) === mes
+                );
+
+                const elegido = mesesElegidosKardex.some(
+                    item =>
+                        item.anio === anioVistaMesesKardex &&
+                        item.mes === mes
+                );
+
+                const inhabilitado = !informacion ||
+                    (!elegido && mesesElegidosKardex.length >= 3);
+
+                const etiqueta = document.createElement('label');
+
+                etiqueta.className =
+                    `flex items-center gap-2 rounded-lg border p-2 text-xs ${inhabilitado
+                        ? 'bg-slate-100 text-slate-400 opacity-60'
+                        : elegido
+                            ? 'bg-indigo-50 border-indigo-400 text-indigo-900'
+                            : 'bg-white border-slate-200 text-slate-700 cursor-pointer'
+                    }`;
+
+                etiqueta.title = informacion
+                    ? `Ventas registradas: ${informacion.fecha_minima} a ${informacion.fecha_maxima}`
+                    : 'Sin ventas registradas para esta sede';
+
+                const casilla = document.createElement('input');
+                casilla.type = 'checkbox';
+                casilla.checked = elegido;
+                casilla.disabled = inhabilitado;
+                casilla.className = 'rounded border-slate-300 text-indigo-600';
+
+                casilla.onchange = () =>
+                    seleccionarMesKardex(mes, casilla.checked);
+
+                etiqueta.append(
+                    casilla,
+                    document.createTextNode(MESES_NOMBRE_KARDEX[mes - 1])
+                );
+
+                grid.appendChild(etiqueta);
+            }
+
+            actualizarFechasModalMesesKardex();
+        }
+
+        function seleccionarMesKardex(mes, marcado) {
+            const clave =
+                `${anioVistaMesesKardex}-${dosDigitosMesesKardex(mes)}`;
+
+            if (marcado) {
+                const dato = mesesDisponiblesVistaKardex.find(
+                    x => Number(x.mes) === mes
+                );
+
+                if (!dato || mesesElegidosKardex.length >= 3) return;
+
+                if (!mesesElegidosKardex.some(
+                    x => claveMesesKardex(x) === clave
+                )) {
+                    mesesElegidosKardex.push({
+                        anio: anioVistaMesesKardex,
+                        mes,
+                        fecha_minima: dato.fecha_minima,
+                        fecha_maxima: dato.fecha_maxima
+                    });
+                }
+            } else {
+                mesesElegidosKardex = mesesElegidosKardex.filter(
+                    x => claveMesesKardex(x) !== clave
+                );
+            }
+
+            pintarMesesKardex();
+        }
+
+        function actualizarFechasModalMesesKardex() {
+            const inicio = document.getElementById(
+                'meses-comparacion-inicio'
+            );
+            const fin = document.getElementById(
+                'meses-comparacion-fin'
+            );
+
+            const meses = mesesElegidosOrdenadosKardex();
+
+            if (!meses.length) {
+                inicio.disabled = true;
+                fin.disabled = true;
+                inicio.value = '';
+                fin.value = '';
+                mostrarResumenMesesKardex();
+                return;
+            }
+
+            const base = meses[0];
+            const prefijo = claveMesesKardex(base);
+
+            const totalDias = new Date(
+                Date.UTC(base.anio, base.mes, 0)
+            ).getUTCDate();
+
+            const desdeDia = Number(inicio.value.slice(-2)) || 1;
+            const hastaDia = Number(fin.value.slice(-2)) ||
+                Math.min(15, totalDias);
+
+            inicio.disabled = false;
+            fin.disabled = false;
+
+            inicio.min = fin.min = `${prefijo}-01`;
+            inicio.max = fin.max =
+                `${prefijo}-${dosDigitosMesesKardex(totalDias)}`;
+
+            inicio.value =
+                `${prefijo}-${dosDigitosMesesKardex(Math.min(desdeDia, totalDias))}`;
+
+            fin.value =
+                `${prefijo}-${dosDigitosMesesKardex(Math.min(hastaDia, totalDias))}`;
+
+            mostrarResumenMesesKardex();
+        }
+
+        function validarIntervalosMesesKardex() {
+            const meses = mesesElegidosOrdenadosKardex();
+
+            if (!meses.length || meses.length > 3) {
+                throw new Error(
+                    'Selecciona entre 1 y 3 meses con ventas.'
+                );
+            }
+
+            const desde = document.getElementById(
+                'meses-comparacion-inicio'
+            ).value;
+
+            const hasta = document.getElementById(
+                'meses-comparacion-fin'
+            ).value;
+
+            const referencia = claveMesesKardex(meses[0]);
+
+            if (
+                !desde || !hasta ||
+                desde.slice(0, 7) !== referencia ||
+                hasta.slice(0, 7) !== referencia ||
+                desde > hasta
+            ) {
+                throw new Error(
+                    'Selecciona un intervalo válido dentro del mes de referencia.'
+                );
+            }
+
+            const diaInicio = Number(desde.slice(-2));
+            const diaFin = Number(hasta.slice(-2));
+            const dias = diaFin - diaInicio + 1;
+
+            return meses.map(m => {
+                const totalMes = new Date(
+                    Date.UTC(m.anio, m.mes, 0)
+                ).getUTCDate();
+
+                if (diaFin > totalMes) {
+                    throw new Error(
+                        `${nombreMesesKardex(m)} tiene solamente ${totalMes} días.`
+                    );
+                }
+
+                const prefijo = claveMesesKardex(m);
+                const inicio =
+                    `${prefijo}-${dosDigitosMesesKardex(diaInicio)}`;
+                const fin =
+                    `${prefijo}-${dosDigitosMesesKardex(diaFin)}`;
+
+                if (fin > limitesVistaMesesKardex.ultimaFecha) {
+                    throw new Error(
+                        `${nombreMesesKardex(m)}: no hay datos cargados hasta el día ${diaFin}.`
+                    );
+                }
+
+                return {
+                    anio: m.anio,
+                    mes: m.mes,
+                    inicio,
+                    fin,
+                    dias
+                };
+            });
+        }
+
+        function mostrarResumenMesesKardex() {
+            const mensaje = document.getElementById(
+                'mensaje-meses-comparacion-kardex'
+            );
+
+            const boton = document.getElementById(
+                'btn-confirmar-meses-kardex'
+            );
+
+            try {
+                const periodos = validarIntervalosMesesKardex();
+
+                mensaje.textContent = periodos.map(p =>
+                    `${nombreMesesKardex(p)}: ` +
+                    `${formatearFechaKardex(p.inicio)} a ` +
+                    `${formatearFechaKardex(p.fin)}`
+                ).join(' · ');
+
+                boton.disabled = false;
+
+            } catch (error) {
+                mensaje.textContent = error.message;
+                boton.disabled = true;
+            }
+        }
+
+        async function confirmarMesesComparacionKardex() {
+            let periodos;
+
+            try {
+                periodos = validarIntervalosMesesKardex();
+            } catch (error) {
+                mostrarResumenMesesKardex();
+                return;
+            }
+
+            cerrarModalMesesKardex();
+            await compararDemandaKardexDesdeAnalisis(periodos);
+        }
+
+
+
+        async function compararDemandaKardexDesdeAnalisis(periodosNuevos = null) {
+            const periodos = periodosNuevos ||
+                ultimaConfiguracionPeriodosKardex;
+
+            const panel = document.getElementById(
                 'kardex-comparacion-contenedor'
+            );
+            const cabecera = document.getElementById(
+                'kardex-comparacion-encabezados'
             );
             const tbody = document.getElementById(
                 'kardex-comparacion-resultados'
             );
-            const etiquetaPeriodos = document.getElementById(
+            const etiqueta = document.getElementById(
                 'kardex-comparacion-periodos'
             );
+            const boton = document.getElementById(
+                'btn-comparar-kardex'
+            );
 
-            // Valida que se haya seleccionado una fecha final.
-            if (!fechaFin) {
+            const sede = normalizarSedeKardex(
+                window.tiendaActivaPestana || 'CENTRO'
+            );
+
+            const codigos = [...new Set(
+                obtenerCodigosTablaAnalisis()
+                    .map(normalizarCodigoAnalisis)
+                    .filter(Boolean)
+            )];
+
+            if (!periodos?.length) {
                 mostrarMensajeKardex(
-                    'Selecciona la fecha final para comparar los períodos.',
+                    'Abre Comparar períodos para seleccionar meses e intervalo.',
                     true
                 );
                 return;
             }
-
-            const codigos = obtenerCodigosTablaAnalisis();
 
             if (!codigos.length) {
                 mostrarMensajeKardex(
-                    'Agrega al menos un producto a la tabla de análisis.',
+                    'Agrega productos a la tabla antes de comparar.',
                     true
                 );
                 return;
             }
 
-            // Limpia el aviso anterior cuando ya existen productos válidos.
-            mostrarMensajeKardex('', false);
-
-            // Calcula las fechas en UTC para evitar errores de zona horaria.
-            const fechaBase = fechaFin.split('-').map(Number);
-            const finReciente = new Date(Date.UTC(
-                fechaBase[0],
-                fechaBase[1] - 1,
-                fechaBase[2]
-            ));
-
-            const desplazarFecha = (fecha, dias) => {
-                const resultado = new Date(fecha);
-                resultado.setUTCDate(resultado.getUTCDate() + dias);
-                return resultado.toISOString().slice(0, 10);
-            };
-
-            // Mantiene dos períodos consecutivos de 30 días inclusivos.
-            const recienteFin = fechaFin;
-            const recienteInicio = desplazarFecha(finReciente, -29);
-            const anteriorFin = desplazarFecha(finReciente, -30);
-            const anteriorInicio = desplazarFecha(finReciente, -59);
-
-            // Consulta el endpoint existente sin modificar el motor de sugeridos.
-            const consultarPeriodo = async (inicio, fin) => {
-                const parametros = new URLSearchParams({
-                    fecha_inicio: inicio,
-                    fecha_fin: fin
-                });
-
-                codigos.forEach(codigo => {
-                    parametros.append('codigos', codigo);
-                });
-
-                const respuesta = await fetch(
-                    `/analisis/demanda-kardex?${parametros.toString()}`,
-                    {
-                        method: 'GET',
-                        credentials: 'same-origin'
-                    }
-                );
-
-                const resultado = await respuesta.json();
-
-                if (!respuesta.ok) {
-                    throw new Error(
-                        resultado.detail || 'No se pudo consultar el kardex.'
-                    );
-                }
-
-                return Array.isArray(resultado.data) ? resultado.data : [];
-            };
-
-
-            if (boton) boton.disabled = true;
-
-            // Muestra solamente el panel comparativo y su indicador.
-            if (contenedor) contenedor.classList.remove('hidden');
+            boton.disabled = true;
+            panel.classList.remove('hidden');
+            cabecera.replaceChildren();
+            tbody.replaceChildren();
+            etiqueta.textContent = '';
 
             mostrarEstadoPanelKardex(
                 'kardex-comparacion-mensaje',
-                'Comparando los dos períodos de ventas...'
+                'Validando meses e intervalos...'
             );
-            alternarCargaPanelKardex('cargando-comparacion-periodos', true);
 
+            alternarCargaPanelKardex(
+                'cargando-comparacion-periodos',
+                true
+            );
 
             try {
-                // Ejecuta ambas consultas en paralelo.
-                const [datosAnteriores, datosRecientes] = await Promise.all([
-                    consultarPeriodo(anteriorInicio, anteriorFin),
-                    consultarPeriodo(recienteInicio, recienteFin)
-                ]);
+                // Revalida la disponibilidad en la tienda actual.
+                const anios = [...new Set(periodos.map(p => p.anio))];
 
-                const sedeSeleccionada = normalizarSedeKardex(
-                    window.tiendaActivaPestana
+                const disponibilidad = (
+                    await Promise.all(
+                        anios.map(anio =>
+                            consultarMesesDisponiblesKardex(sede, anio)
+                        )
+                    )
+                ).flat();
+
+                const coberturaActual = coberturaKardexCache?.find(
+                    x => normalizarSedeKardex(x.sede) === sede
                 );
 
-                // Mantiene solo los resultados de la tienda seleccionada.
-                const datosAnterioresFiltrados = datosAnteriores.filter(item =>
-                    normalizarSedeKardex(item.sede) === sedeSeleccionada
-                );
+                for (const p of periodos) {
+                    const disponible = disponibilidad.some(
+                        x =>
+                            Number(x.anio) === p.anio &&
+                            Number(x.mes) === p.mes
+                    );
 
-                const datosRecientesFiltrados = datosRecientes.filter(item =>
-                    normalizarSedeKardex(item.sede) === sedeSeleccionada
-                );
-
-                // Obtiene las descripciones de la tabla de análisis.
-                const descripciones = obtenerDescripcionesProductosKardex();
-
-                // Une los datos usando sede normalizada y código de producto.
-                const claveRegistro = item =>
-                    `${String(item.sede || '').trim().toUpperCase()}|` +
-                    `${String(item.codigo || '').trim()}`;
-
-                const mapa = new Map();
-
-                datosAnterioresFiltrados.forEach(item => {
-                    const clave = claveRegistro(item);
-
-                    mapa.set(clave, {
-                        sede: String(item.sede || '').trim(),
-                        codigo: String(item.codigo || '').trim(),
-                        anterior: item,
-                        reciente: null
-                    });
-                });
-
-                datosRecientesFiltrados.forEach(item => {
-                    const clave = claveRegistro(item);
-
-                    if (!mapa.has(clave)) {
-                        mapa.set(clave, {
-                            sede: String(item.sede || '').trim(),
-                            codigo: String(item.codigo || '').trim(),
-                            anterior: null,
-                            reciente: item
-                        });
-                    } else {
-                        mapa.get(clave).reciente = item;
+                    if (!disponible) {
+                        throw new Error(
+                            `No hay ventas disponibles en ${nombreMesesKardex(p)} para ${sede}.`
+                        );
                     }
-                });
 
-                tbody.replaceChildren();
+                    if (
+                        coberturaActual?.fecha_maxima &&
+                        p.fin > coberturaActual.fecha_maxima
+                    ) {
+                        throw new Error(
+                            `El intervalo de ${nombreMesesKardex(p)} ` +
+                            `supera la última fecha cargada en ${sede}.`
+                        );
+                    }
+                }
 
-                const formatoNumero = valor =>
-                    Number(valor || 0).toLocaleString('es-VE', {
-                        minimumFractionDigits: 0,
+                // Consulta hasta tres meses de forma secuencial
+                // para limitar la carga simultánea en Supabase.
+                const resultados = [];
+
+                for (const [indice, p] of periodos.entries()) {
+                    mostrarEstadoPanelKardex(
+                        'kardex-comparacion-mensaje',
+                        `Consultando ${indice + 1}/${periodos.length}: ` +
+                        `${nombreMesesKardex(p)}...`
+                    );
+
+                    const parametros = new URLSearchParams({
+                        fecha_inicio: p.inicio,
+                        fecha_fin: p.fin,
+                        modo: 'intervalo'
+                    });
+
+                    codigos.forEach(codigo =>
+                        parametros.append('codigos', codigo)
+                    );
+
+                    const respuesta = await fetch(
+                        `/analisis/demanda-kardex?${parametros}`,
+                        { credentials: 'same-origin' }
+                    );
+
+                    const json = await respuesta.json();
+
+                    if (!respuesta.ok || !Array.isArray(json.data)) {
+                        throw new Error(
+                            json.detail || 'Error al consultar la demanda del Kardex.'
+                        );
+                    }
+
+                    const porCodigo = new Map(
+                        json.data
+                            .filter(x =>
+                                normalizarSedeKardex(x.sede) === sede
+                            )
+                            .map(x => [
+                                normalizarCodigoAnalisis(x.codigo),
+                                x
+                            ])
+                    );
+
+                    resultados.push({
+                        periodo: p,
+                        porCodigo
+                    });
+                }
+
+                if (
+                    normalizarSedeKardex(
+                        window.tiendaActivaPestana
+                    ) !== sede
+                ) {
+                    throw new Error(
+                        'La tienda cambió durante la comparación.'
+                    );
+                }
+
+                // Genera los encabezados según los meses elegidos.
+                const crearTh = (titulo, alinearDerecha = false) => {
+                    const th = document.createElement('th');
+
+                    th.className =
+                        `px-3 py-2 whitespace-nowrap ${alinearDerecha ? 'text-right' : 'text-left'
+                        }`;
+
+                    th.textContent = titulo;
+                    cabecera.appendChild(th);
+                };
+
+
+                ['Código', 'Descripción'].forEach(
+                    titulo => crearTh(titulo)
+                );
+
+
+
+                periodos.forEach(p =>
+                    crearTh(`Venta ${MESES_NOMBRE_KARDEX[p.mes - 1]}`, true)
+                );
+
+                periodos.forEach(p =>
+                    crearTh(`Part. ${MESES_NOMBRE_KARDEX[p.mes - 1]}`, true)
+                );
+
+                periodos.forEach(p =>
+                    crearTh(`Demanda ${MESES_NOMBRE_KARDEX[p.mes - 1]}`, true)
+                );
+
+
+                crearTh('Variación unidades', true);
+
+                const formatoNumero = numero =>
+                    Number(numero).toLocaleString('es-VE', {
+                        minimumFractionDigits: 2,
                         maximumFractionDigits: 2
                     });
 
-                const crearCelda = (fila, valor, alinearDerecha = false) => {
+                const descripciones =
+                    obtenerDescripcionesProductosKardex();
+
+                const crearCelda = (
+                    fila,
+                    texto,
+                    alinearDerecha = false
+                ) => {
                     const celda = document.createElement('td');
-                    celda.className = 'px-3 py-2';
 
-                    if (alinearDerecha) {
-                        celda.classList.add('text-right', 'tabular-nums');
-                    }
+                    celda.className =
+                        `px-3 py-2 border-b border-slate-100 ${alinearDerecha
+                            ? 'text-right tabular-nums whitespace-nowrap'
+                            : 'text-left'
+                        }`;
 
-                    // Inserta texto de forma segura, sin interpretarlo como HTML.
-                    celda.textContent = valor;
+                    celda.textContent = String(texto);
                     fila.appendChild(celda);
+
+                    return celda;
                 };
 
-                mapa.forEach(item => {
-                    const anterior = item.anterior || {};
-                    const reciente = item.reciente || {};
+                // Una fila por producto presente en la tabla principal.
 
-                    const unidadesAnteriores = Number(
-                        anterior.unidades_vendidas || 0
-                    );
-                    const unidadesRecientes = Number(
-                        reciente.unidades_vendidas || 0
-                    );
-
-                    const demandaAnterior = Number(
-                        anterior.demanda_diaria || 0
-                    );
-                    const demandaReciente = Number(
-                        reciente.demanda_diaria || 0
-                    );
-
-                    // Cuenta los días con ventas de cada período.
-                    const diasAnteriores = Number(
-                        anterior.dias_con_ventas || 0
-                    );
-                    const diasRecientes = Number(
-                        reciente.dias_con_ventas || 0
-                    );
-
-                    // Si no hay ventas anteriores, la variación no tiene base fiable.
-                    const tieneBaseAnterior =
-                        Boolean(item.anterior) && unidadesAnteriores > 0;
-
-                    const variacionUnidades = !tieneBaseAnterior
-                        ? 'Sin base'
-                        : `${formatoNumero(
-                            ((unidadesRecientes - unidadesAnteriores)
-                                / unidadesAnteriores) * 100
-                        )} %`;
-
-                    // Menos de 5 días en cualquiera de los períodos genera advertencia.
-                    const datosLimitados =
-                        diasAnteriores < 5 || diasRecientes < 5;
-
-                    // La falta de base anterior se informa por separado de la calidad.
-                    let calidadDatos;
-
-                    if (!tieneBaseAnterior && datosLimitados) {
-                        calidadDatos =
-                            'Sin base de comparación · Datos limitados';
-                    } else if (!tieneBaseAnterior) {
-                        calidadDatos = 'Sin base de comparación';
-                    } else if (datosLimitados) {
-                        calidadDatos = 'Datos limitados';
-                    } else {
-                        calidadDatos = 'Datos suficientes';
-                    }
-
+                codigos.forEach(codigo => {
                     const fila = document.createElement('tr');
 
-                    // Conserva el orden de las columnas de la tabla.
-                    crearCelda(fila, item.sede);
-                    crearCelda(fila, item.codigo);
+                    crearCelda(fila, codigo);
 
-                    // Muestra la descripción del producto correspondiente.
+
                     crearCelda(
                         fila,
-                        descripciones.get(normalizarCodigoAnalisis(item.codigo))
-                        || 'Sin descripción'
+                        descripciones.get(codigo) || 'Sin descripción'
                     );
-                    crearCelda(fila, formatoNumero(unidadesAnteriores), true);
-                    crearCelda(fila, formatoNumero(unidadesRecientes), true);
-                    crearCelda(fila, formatoNumero(demandaAnterior), true);
-                    crearCelda(fila, formatoNumero(demandaReciente), true);
-                    crearCelda(fila, variacionUnidades, true);
-                    crearCelda(fila, formatoNumero(diasAnteriores), true);
-                    crearCelda(fila, formatoNumero(diasRecientes), true);
+
+                    const ventas = resultados.map(({ porCodigo }) => {
+                        const numero = Number(
+                            porCodigo.get(codigo)?.unidades_vendidas ?? 0
+                        );
+
+                        if (!Number.isFinite(numero) || numero < 0) {
+                            throw new Error(
+                                `Ventas inválidas para ${codigo}.`
+                            );
+                        }
+
+                        return numero;
+                    });
+
+                    // Columnas de ventas.
+                    ventas.forEach(numero =>
+                        crearCelda(fila, formatoNumero(numero), true)
+                    );
+
+                    // Columnas de participación.
+                    resultados.forEach(({ periodo, porCodigo }) => {
+                        const dias = Number(
+                            porCodigo.get(codigo)?.dias_con_ventas ?? 0
+                        );
+
+                        if (
+                            !Number.isInteger(dias) ||
+                            dias < 0 ||
+                            dias > periodo.dias
+                        ) {
+                            throw new Error(
+                                `Días con ventas inválidos para ${codigo}.`
+                            );
+                        }
+
+                        crearCelda(
+                            fila,
+                            `${dias}/${periodo.dias}`,
+                            true
+                        );
+                    });
+
+                    // Demanda = unidades vendidas / días de intervalo.
+                    ventas.forEach((numero, indice) => {
+                        const demanda = numero / periodos[indice].dias;
+
+                        crearCelda(
+                            fila,
+                            formatoNumero(demanda),
+                            true
+                        );
+                    });
+
+                    // Una única columna con las variaciones consecutivas.
+                    const celdaVariacion = crearCelda(fila, '', true);
+
+                    if (periodos.length === 1) {
+                        celdaVariacion.textContent = '—';
+                    }
+
+                    for (let i = 1; i < periodos.length; i++) {
+                        const anterior = ventas[i - 1];
+                        const actual = ventas[i];
+
+                        const linea = document.createElement('div');
+
+                        let texto;
+                        let color = 'text-slate-500';
+
+                        if (anterior === 0 && actual > 0) {
+                            texto = '↑ Nuevo (sin base %)';
+                            color = 'text-emerald-600';
+
+                        } else if (anterior === 0) {
+                            texto = '→ 0,00 %';
+
+                        } else {
+                            const variacion =
+                                ((actual - anterior) / anterior) * 100;
+
+                            if (variacion > 0) {
+                                texto =
+                                    `↑ +${formatoNumero(variacion)} %`;
+                                color = 'text-emerald-600';
+
+                            } else if (variacion < 0) {
+                                texto =
+                                    `↓ ${formatoNumero(variacion)} %`;
+                                color = 'text-rose-600';
+
+                            } else {
+                                texto = '→ 0,00 %';
+                            }
+                        }
+
+                        linea.className =
+                            `${color} font-semibold whitespace-nowrap`;
+
+                        linea.textContent =
+                            `${MESES_NOMBRE_KARDEX[periodos[i - 1].mes - 1]}` +
+                            `→${MESES_NOMBRE_KARDEX[periodos[i].mes - 1]}: ` +
+                            texto;
+
+                        celdaVariacion.appendChild(linea);
+                    }
 
                     tbody.appendChild(fila);
                 });
 
+                etiqueta.textContent = periodos.map(p =>
+                    `${nombreMesesKardex(p)}: ` +
+                    `${formatearFechaKardex(p.inicio)} a ` +
+                    `${formatearFechaKardex(p.fin)}`
+                ).join(' | ') +
+                    ` · ${periodos[0].dias} días por intervalo.`;
 
-                // Muestra las fechas comparadas en formato DD-MM-AAAA.
-                etiquetaPeriodos.textContent =
-                    `Anterior: ${formatearFechaKardex(anteriorInicio)} a ${formatearFechaKardex(anteriorFin)} | ` +
-                    `Reciente: ${formatearFechaKardex(recienteInicio)} a ${formatearFechaKardex(recienteFin)}. ` +
-                    'Períodos inclusivos de 30 días; umbral de calidad: 5 días con ventas.';
-
-
-                if (mapa.size === 0) {
-                    // Mantiene abierto el panel y comunica que no hubo resultados.
-                    mostrarEstadoPanelKardex(
-                        'kardex-comparacion-mensaje',
-                        'No se encontraron ventas para los productos y períodos seleccionados.'
-                    );
-                    return;
-                }
-
-                if (contenedor) contenedor.classList.remove('hidden');
+                // Permite actualizar la comparación al cambiar de tienda.
+                ultimaConfiguracionPeriodosKardex =
+                    periodos.map(p => ({ ...p }));
 
                 mostrarEstadoPanelKardex(
                     'kardex-comparacion-mensaje',
-                    `Comparación completada: ${mapa.size} combinaciones de sede y producto.`
+                    `Comparación completada: ${codigos.length} productos · ` +
+                    `${sede} · ${periodos.length} mes(es).`
                 );
 
             } catch (error) {
-                console.error('Error al comparar la demanda del kardex:', error);
+                cabecera.replaceChildren();
+                tbody.replaceChildren();
 
-                // El error se muestra solo en el panel comparativo.
                 mostrarEstadoPanelKardex(
                     'kardex-comparacion-mensaje',
-                    error.message || 'No se pudo comparar la demanda.',
+                    error.message || 'Error al comparar los meses.',
                     true
                 );
+
             } finally {
-                // Oculta únicamente el indicador del comparativo.
-                alternarCargaPanelKardex('cargando-comparacion-periodos', false);
+                alternarCargaPanelKardex(
+                    'cargando-comparacion-periodos',
+                    false
+                );
 
-                if (boton) boton.disabled = false;
+                boton.disabled = false;
             }
-
         }
+
 
 
     </script>

@@ -819,6 +819,64 @@ async def obtener_cobertura_kardex(
 
 
 # ============================================================
+# MESES CON VENTAS DISPONIBLES PARA COMPARACIÓN
+# ============================================================
+
+@router.get("/analisis/meses-kardex")
+async def consultar_meses_kardex(
+    sede: str,
+    anio: int,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None),
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
+
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    sede_normalizada = sede.strip().upper()
+
+    if not sede_normalizada or len(sede_normalizada) > 80:
+        raise HTTPException(
+            status_code=400,
+            detail="Sede inválida."
+        )
+
+    if anio < 2000 or anio > date.today().year:
+        raise HTTPException(
+            status_code=400,
+            detail="Año fuera del rango permitido."
+        )
+
+    try:
+        def consultar():
+            return config.supabase_admin.rpc(
+                "obtener_meses_disponibles_kardex",
+                {
+                    "p_sede": sede_normalizada,
+                    "p_anio": anio,
+                },
+            ).execute()
+
+        respuesta = await asyncio.to_thread(consultar)
+
+        return {
+            "status": "ok",
+            "sede": sede_normalizada,
+            "anio": anio,
+            "data": respuesta.data or [],
+        }
+
+    except Exception as error:
+        print("ERROR AL CONSULTAR MESES DEL KARDEX:", str(error))
+
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudieron consultar los meses del Kardex."
+        )
+
+
+# ============================================================
 # DEMANDA CALCULADA A PARTIR DEL KARDEX
 # ============================================================
 
@@ -827,11 +885,20 @@ async def obtener_cobertura_kardex(
 async def obtener_demanda_kardex(
     fecha_inicio: date,
     fecha_fin: date,
+    
     codigos: Optional[List[str]] = Query(None),
+    modo: str = Query("ventas"),
     access_token: str = Cookie(None),
+
     refresh_token: str = Cookie(None),
 ):
     user = await obtener_usuario_actual(access_token, refresh_token)
+
+    if modo not in ("ventas", "intervalo"):
+        raise HTTPException(
+            status_code=400,
+            detail="Modo de cálculo de demanda inválido."
+        )
 
     if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -873,14 +940,50 @@ async def obtener_demanda_kardex(
                 },
             ).execute()
 
+        
         respuesta = await asyncio.to_thread(consultar)
+
+        # Intervalo calendario inclusivo.
+        # Ejemplo: 18/10 al 24/10 = 7 días.
+        dias_intervalo = (fecha_fin - fecha_inicio).days + 1
+
+        datos = respuesta.data or []
+
+        # El modo original permanece disponible para
+        # los procesos que todavía utilizan esa demanda.
+        if modo == "intervalo":
+            datos_calculados = []
+
+            for item in datos:
+                registro = dict(item)
+
+                unidades = Decimal(
+                    str(registro.get("unidades_vendidas") or 0)
+                )
+
+                # Nuevo cálculo:
+                # Demanda diaria = unidades / días calendario.
+                registro["demanda_diaria"] = float(
+                    unidades / Decimal(dias_intervalo)
+                )
+
+                # Conservamos los días reales con ventas
+                # y agregamos la duración del intervalo.
+                registro["dias_intervalo"] = dias_intervalo
+
+                datos_calculados.append(registro)
+
+            datos = datos_calculados
 
         return {
             "status": "ok",
             "fecha_inicio": fecha_inicio.isoformat(),
             "fecha_fin": fecha_fin.isoformat(),
-            "data": respuesta.data or [],
+            "modo": modo,
+            "dias_intervalo": dias_intervalo,
+            "data": datos,
         }
+
 
     except Exception as error:
         print("ERROR AL CALCULAR DEMANDA DEL KARDEX:", str(error))
