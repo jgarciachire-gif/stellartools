@@ -8,11 +8,6 @@ class ProductoModificado(BaseModel):
 class CodigosProductosRequest(BaseModel):
     codigos: List[str] = Field(default_factory=list, max_length=1000)  # Máximo 1000 códigos por solicitud
 
-
-class CodigosVentasRequest(BaseModel):
-    codigos: List[str] = Field(default_factory=list, max_length=2000)  # Máximo 2000 códigos por consulta
-
-
 class AnalisisDetalle(BaseModel):
     sede: str  # Sede donde se guarda el pedido
     codigo: str  # Código del producto

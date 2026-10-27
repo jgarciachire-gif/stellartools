@@ -124,7 +124,7 @@
         background: #e2e8f0;
     }
 
-    #panel-consultas-pedido {
+    #panel-estadisticas-pedido {
         scroll-margin-top: 140px;
     }
 
@@ -144,6 +144,35 @@
             width: auto;
             flex: 1;
         }
+    }
+
+    /* La lista flota fuera del área de desplazamiento del modal. */
+    #modal-productos-proveedor #opciones_marca_analisis {
+        position: fixed;
+        right: auto;
+        bottom: auto;
+        margin: 0;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        z-index: 350;
+    }
+
+    /* Mantiene el desplazamiento con la rueda del mouse. */
+    #modal-productos-proveedor>section {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    /* Oculta las barras del modal y de sus listas, sin bloquear el scroll. */
+    #modal-productos-proveedor>section,
+    #modal-productos-proveedor [id^="opciones_"] {
+        scrollbar-width: none;
+    }
+
+    /* Compatibilidad */
+    #modal-productos-proveedor>section::-webkit-scrollbar,
+    #modal-productos-proveedor [id^="opciones_"]::-webkit-scrollbar {
+        display: none;
     }
 </style>
 {% endblock %}
@@ -180,6 +209,11 @@
                 <span>Cargar pedido</span>
             </button>
 
+            <button type="button" class="pedido-item" data-accion-pedido onclick="abrirModalProductosProveedor()">
+                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                <span>Productos por proveedor</span>
+            </button>
+
             <button type="button" class="pedido-item" data-accion-pedido onclick="abrirModalImportarInventarios()">
                 <i class="fa-solid fa-file-import" aria-hidden="true"></i>
                 <span>Importar inventario</span>
@@ -195,10 +229,26 @@
         </div>
     </div>
 
-    <!-- CONSULTAS: acceso al panel que conserva su ubicación actual. -->
-    <a href="#panel-consultas-pedido" class="pedido-trigger" @click="abierto = null">
-        Consultas
-    </a>
+    <!-- ESTADÍSTICAS -->
+    <div class="pedido-menu">
+        <button type="button" id="btn-menu-estadisticas" class="pedido-trigger" x-ref="estadisticas"
+            aria-controls="menu-pedido-estadisticas" :aria-expanded="abierto === 'estadisticas'"
+            @click="abierto = abierto === 'estadisticas' ? null : 'estadisticas'">
+            Estadísticas
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+
+        <div id="menu-pedido-estadisticas" class="pedido-panel" x-show="abierto === 'estadisticas'" x-cloak
+            x-transition.opacity.duration.120ms>
+
+            <!-- Conserva el ID utilizado durante la consulta. -->
+            <button type="button" id="btn-comparar-kardex" class="pedido-item" data-accion-pedido
+                onclick="abrirModalMesesKardex()">
+                <i class="fa-solid fa-chart-column" aria-hidden="true"></i>
+                <span>Comparar períodos</span>
+            </button>
+        </div>
+    </div>
 
     <!-- EXPORTAR -->
     <div class="pedido-menu">
@@ -231,9 +281,8 @@
 
             <div class="pedido-divider" aria-hidden="true"></div>
 
-            <!-- Conserva el ID que utiliza el control de carga del XML. -->
-            <button type="button" id="btn-exportar-demanda-xml" class="pedido-item" data-accion-pedido
-                onclick="exportarDemandaKardexXML()">
+            <button type="button" id="btn-abrir-exportar-demanda-xml" class="pedido-item" data-accion-pedido
+                onclick="abrirModalExportarDemandaXML()">
                 <i class="fa-solid fa-file-export" aria-hidden="true"></i>
                 <span>Exportar demanda XML</span>
             </button>
@@ -255,18 +304,8 @@
                 onclick="document.getElementById('kardex-archivo-csv').click()">
                 <i class="fa-solid fa-file-import" aria-hidden="true"></i>
                 <span>
-                    Importar CSV
-                    <small>Kardex histórico de ventas</small>
-                </span>
-            </button>
-
-            <!-- Conserva la segunda importación que tenía el menú de tres puntos. -->
-            <button type="button" class="pedido-item" data-accion-pedido
-                onclick="document.getElementById('input-csv-stellar').click()">
-                <i class="fa-solid fa-file-csv" aria-hidden="true"></i>
-                <span>
-                    Cargar ventas Stellar
-                    <small>CSV de demanda diaria</small>
+                    Importar Kardex
+                    <small>Histórico de ventas Stellar</small>
                 </span>
             </button>
         </div>
@@ -288,9 +327,6 @@
         Planificación y estimación de cantidades por tienda y proveedor
     </p>
 </div>
-
-<!-- Conserva el selector de archivos utilizado por subirCSVStellar(). -->
-<input type="file" id="input-csv-stellar" accept=".csv" class="hidden" onchange="subirCSVStellar(event)">
 
 <!-- CONTENEDOR 1: SELECCIÓN Y FICHA TÉCNICA DEL PROVEEDOR (EXTENDIDO A LO ANCHO) -->
 <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 space-y-4">
@@ -410,104 +446,6 @@
         </div>
     </div>
 
-    <!-- CONTENEDOR 2: FILTROS EN CASCADA -->
-    <div id="sec-filtros-clasificacion"
-        class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 opacity-50 pointer-events-none transition-all">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4 items-end">
-            <!-- 1er Campo: Departamento -->
-            <div class="relative" id="combo-depto-analisis">
-                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
-                    <i class="fa-solid fa-layer-group text-blue-600 mr-1"></i> Departamento
-                </label>
-                <input type="hidden" id="depto_analisis" value="">
-                <div class="relative">
-                    <input type="text" id="buscar_depto_analisis" placeholder="Todos los departamentos..."
-                        autocomplete="off" oninput="filtrarDeptosAnalisis()" onfocus="mostrarOpcionesDeptoAnalisis()"
-                        disabled
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
-                    <button type="button" onclick="limpiarDeptoAnalisis()"
-                        class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                </div>
-                <div id="opciones_depto_analisis"
-                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
-                </div>
-            </div>
-
-            <!-- 2do Campo: Grupo -->
-            <div class="relative" id="combo-grupo-analisis">
-                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
-                    <i class="fa-solid fa-boxes-stacked text-blue-600 mr-1"></i> Grupo
-                </label>
-                <input type="hidden" id="grupo_analisis" value="">
-                <div class="relative">
-                    <input type="text" id="buscar_grupo_analisis" placeholder="Todos los grupos..." autocomplete="off"
-                        oninput="filtrarGruposAnalisis()" onfocus="mostrarOpcionesGrupoAnalisis()" disabled
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
-                    <button type="button" onclick="limpiarGrupoAnalisis()"
-                        class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                </div>
-                <div id="opciones_grupo_analisis"
-                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
-                </div>
-            </div>
-
-            <!-- 3er Campo: Subgrupo -->
-            <div class="relative" id="combo-subgrupo-analisis">
-                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
-                    <i class="fa-solid fa-tags text-blue-600 mr-1"></i> Subgrupo
-                </label>
-                <input type="hidden" id="subgrupo_analisis" value="">
-                <div class="relative">
-                    <input type="text" id="buscar_subgrupo_analisis" placeholder="Todos los subgrupos..."
-                        autocomplete="off" oninput="filtrarSubgruposAnalisis()"
-                        onfocus="mostrarOpcionesSubgrupoAnalisis()" disabled
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
-                    <button type="button" onclick="limpiarSubgrupoAnalisis()"
-                        class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                </div>
-                <div id="opciones_subgrupo_analisis"
-                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
-                </div>
-            </div>
-            <!-- 4to Campo: Marca (No bloqueado) -->
-            <div class="relative" id="combo-marca-analisis">
-                <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
-                    <i class="fa-solid fa-copyright text-blue-600 mr-1"></i> Marca
-                </label>
-                <!-- Almacena la marca seleccionada -->
-                <input type="hidden" id="marca_analisis" value="">
-                <div class="relative">
-                    <!-- Campo de búsqueda no bloqueado por defecto -->
-                    <input type="text" id="buscar_marca_analisis" placeholder="Todas las marcas..." autocomplete="off"
-                        oninput="filtrarMarcasAnalisis()" onfocus="mostrarOpcionesMarcaAnalisis()"
-                        class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
-                    <!-- Botón para deseleccionar/limpiar marca -->
-                    <button type="button" onclick="limpiarMarcaAnalisis()"
-                        class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
-                        <i class="fa-solid fa-xmark text-xs"></i>
-                    </button>
-                </div>
-                <!-- Menú desplegable flotante de marcas -->
-                <div id="opciones_marca_analisis"
-                    class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
-                </div>
-            </div>
-
-            <!-- Botón Importar Productos -->
-            <div>
-                <button type="button" id="btn_importar_productos" onclick="importarProductosAnalisis()" disabled
-                    class="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-slate-300 text-white font-medium rounded-xl text-sm transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:cursor-default">
-                    <i class="fa-solid fa-file-import"></i> Importar Productos
-                </button>
-            </div>
-        </div>
-    </div>
     <!-- CONTENEDOR MULTITIENDA Y CÁLCULO DE SUGERIDO -->
     <div
         class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -582,106 +520,21 @@
         </div>
     </div>
 
-    <!-- Panel al que dirige el acceso Consultas del header. -->
-    <div id="panel-consultas-pedido" class="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
-        <div class="flex flex-col lg:flex-row lg:items-end gap-4">
+    <!-- Encabezado visible únicamente al ejecutar la comparación. -->
+    <div id="panel-consultas-pedido" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
 
-            <div class="flex-1">
-                <h3 class="text-sm font-bold text-slate-800">
-                    <i class="fa-solid fa-chart-line text-indigo-600 mr-1"></i>
-                    Demanda histórica de ventas
-                </h3>
-                <p class="text-xs text-slate-500 mt-1">
-                    Importa el kardex y consulta la demanda diaria
-                    sin modificar el cálculo actual de sugeridos.
-                </p>
-            </div>
+        <h3 class="text-sm font-bold text-slate-800">
+            <i class="fa-solid fa-chart-column text-violet-600 mr-1"></i>
+            Comparación de períodos
+        </h3>
 
-            <div class="flex flex-wrap items-end gap-3">
-                <div>
-                    <label for="kardex-fecha-inicio" class="block text-xs font-semibold text-slate-600 mb-1">
-                        Fecha inicial
-                    </label>
-                    <input type="date" id="kardex-fecha-inicio" disabled
-                        class="border border-slate-300 rounded-lg px-3 py-2 text-xs">
-                </div>
-
-                <div>
-                    <label for="kardex-fecha-fin" class="block text-xs font-semibold text-slate-600 mb-1">
-                        Fecha final
-                    </label>
-                    <input type="date" id="kardex-fecha-fin" disabled
-                        class="border border-slate-300 rounded-lg px-3 py-2 text-xs">
-                </div>
-
-                <input type="file" id="kardex-archivo-csv" accept=".csv,text/csv" class="hidden"
-                    onchange="importarKardexDesdeAnalisis(event)">
-
-                <button type="button" id="btn-consultar-kardex" onclick="consultarDemandaKardexDesdeAnalisis()"
-                    class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold">
-                    <i class="fa-solid fa-magnifying-glass mr-1"></i>
-                    Consultar demanda
-                </button>
-
-                <!-- Ejecuta una comparación independiente del cálculo actual de sugeridos -->
-                <button type="button" id="btn-comparar-kardex" onclick="abrirModalMesesKardex()"
-                    class="px-4 py-2 bg-violet-600 hover:bg-violet-700 text-white rounded-lg text-xs font-semibold">
-                    <i class="fa-solid fa-chart-column mr-1"></i>
-                    Comparar períodos
-                </button>
-            </div>
-        </div>
-
-        <p id="kardex-mensaje" class="text-xs text-slate-500 mt-3" role="status">
-            Selecciona el período y carga los productos en la tabla
-            para consultar sus ventas históricas.
+        <p class="text-xs text-slate-500 mt-1">
+            Resultados de los períodos seleccionados en Estadísticas.
         </p>
 
-
-        <!-- Contenedor independiente de resultados de demanda -->
-        <div id="kardex-resultados-contenedor"
-            class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl">
-
-
-            <!-- Cierra solamente los resultados de consultar demanda -->
-            <button type="button" onclick="cerrarResultadosKardex('kardex-resultados-contenedor')"
-                class="absolute right-2 top-2 z-30 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
-                title="Cerrar resultados de demanda" aria-label="Cerrar resultados de demanda">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-
-            <!-- Mensaje exclusivo de la consulta de demanda -->
-            <p id="kardex-demanda-mensaje" class="hidden px-3 py-2 text-xs text-slate-600" role="status"
-                aria-live="polite">
-            </p>
-
-            <!-- Indicador de carga exclusivo de la consulta de demanda -->
-            <div id="cargando-demanda-kardex"
-                class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90"
-                role="status" aria-live="polite">
-                <i class="fa-solid fa-spinner fa-spin text-3xl text-indigo-600"></i>
-                <span class="text-sm font-semibold text-slate-700">
-                    Consultando ventas de la tienda...
-                </span>
-            </div>
-
-            <table class="w-full text-xs text-left">
-                <thead class="bg-slate-900 text-white">
-                    <tr>
-                        <th class="px-3 py-2">Sede</th>
-                        <th class="px-3 py-2">Código</th>
-                        <th class="px-3 py-2">Descripción</th>
-                        <th class="px-3 py-2 text-right">Unidades vendidas</th>
-                        <th class="px-3 py-2 text-right">
-                            Días con ventas / Intervalo
-                        </th>
-                        <th class="px-3 py-2 text-right">Demanda diaria</th>
-                    </tr>
-                </thead>
-                <tbody id="kardex-resultados" class="divide-y divide-slate-100">
-                </tbody>
-            </table>
-        </div>
+        <!-- Conserva los mensajes compartidos del Kardex. -->
+        <p id="kardex-mensaje" class="text-xs text-slate-500 mt-3" role="status">
+        </p>
     </div>
 
 
@@ -701,11 +554,12 @@
             </span>
         </div>
 
-        <!-- Cierra solamente los resultados de comparación -->
+        <!-- Cierra el encabezado y los resultados de la comparación. -->
         <button type="button" onclick="cerrarResultadosKardex('kardex-comparacion-contenedor')"
-            class="absolute right-2 top-2 z-30 rounded-lg bg-white px-2 py-1 text-slate-500 shadow hover:bg-slate-100 hover:text-red-600"
-            title="Cerrar comparación de períodos" aria-label="Cerrar comparación de períodos">
-            <i class="fa-solid fa-xmark"></i>
+            class="absolute right-2 top-2 z-30 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-rose-50 hover:text-rose-600"
+            aria-label="Cerrar comparación de períodos">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+            <span>Cerrar</span>
         </button>
 
 
@@ -725,6 +579,83 @@
             <tbody id="kardex-comparacion-resultados" class="divide-y divide-slate-100"></tbody>
         </table>
     </div>
+
+    <!-- Selector independiente del panel de comparación. -->
+    <input type="file" id="kardex-archivo-csv" accept=".csv,text/csv" class="hidden"
+        onchange="importarKardexDesdeAnalisis(event)">
+
+    <!-- Modal independiente para exportar demanda. -->
+    <dialog id="modal-exportar-demanda-xml"
+        class="m-auto max-w-lg rounded-2xl border-0 bg-white p-0 text-slate-800 shadow-2xl backdrop:bg-slate-950/60"
+        style="width:calc(100% - 2rem);max-height:90vh;" aria-labelledby="titulo-exportar-demanda-xml"
+        aria-describedby="descripcion-exportar-demanda-xml" onkeydown="event.stopPropagation()"
+        oncancel="event.preventDefault(); cerrarModalExportarDemandaXML()">
+
+        <form id="form-exportar-demanda-xml" onsubmit="event.preventDefault(); exportarDemandaKardexXML()">
+
+            <header class="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                <div>
+                    <h3 id="titulo-exportar-demanda-xml" class="text-sm font-semibold">
+                        Exportar demanda XML
+                    </h3>
+
+                    <p id="descripcion-exportar-demanda-xml" class="mt-1 text-xs text-slate-500">
+                        Productos de la tabla actual · Todas las tiendas
+                    </p>
+                </div>
+
+                <button type="button" onclick="cerrarModalExportarDemandaXML()"
+                    class="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    aria-label="Cerrar exportación">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </header>
+
+            <div class="space-y-4 px-5 py-5">
+                <p class="text-xs leading-relaxed text-slate-600">
+                    Selecciona el intervalo de ventas que deseas exportar.
+                    Se generará un archivo XML con la demanda de todas las tiendas.
+                </p>
+
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                        <label for="kardex-fecha-inicio" class="mb-1.5 block text-xs font-semibold text-slate-700">
+                            Fecha inicial
+                        </label>
+
+                        <input type="date" id="kardex-fecha-inicio" required disabled
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none">
+                    </div>
+
+                    <div>
+                        <label for="kardex-fecha-fin" class="mb-1.5 block text-xs font-semibold text-slate-700">
+                            Fecha final
+                        </label>
+
+                        <input type="date" id="kardex-fecha-fin" required disabled
+                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none">
+                    </div>
+                </div>
+
+                <p id="estado-exportacion-demanda-xml" class="text-xs text-slate-500" role="status" aria-live="polite">
+                </p>
+            </div>
+
+            <footer class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+                <button type="button" onclick="cerrarModalExportarDemandaXML()"
+                    class="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50">
+                    Cancelar
+                </button>
+
+                <!-- El exportador existente utiliza este ID. -->
+                <button type="submit" id="btn-exportar-demanda-xml" disabled
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:cursor-wait disabled:opacity-50">
+                    <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+                    Descargar XML
+                </button>
+            </footer>
+        </form>
+    </dialog>
 
     <!-- MODAL DE COMPARACIÓN MENSUAL DEL KARDEX -->
     <div id="modal-meses-comparacion-kardex"
@@ -1320,29 +1251,49 @@
         async function limpiarListaProductos() {
             const tbody = document.getElementById('filas-tabla-analisis');
 
-            if (tbody) {
-                if (tbody.children.length === 0) return;
+            if (!tbody) return;
 
-                const confirmado = await mostrarConfirmacion({
-                    tipo: 'warning',
-                    titulo: 'Vaciar lista',
-                    mensaje: '¿Estás seguro de que deseas vaciar todos los productos de la lista?',
-                    textoAceptar: 'Vaciar lista',
-                    textoCancelar: 'Cancelar'
+            const matriz = window.matrizTiendas || {};
+
+            // También detecta productos ocultos en la memoria de otras tiendas.
+            const hayProductosEnMemoria = Object.values(matriz).some(
+                productos => productos && Object.keys(productos).length > 0
+            );
+
+            if (!tbody.children.length && !hayProductosEnMemoria) return;
+
+            const confirmado = await mostrarConfirmacion({
+                tipo: 'warning',
+                titulo: 'Limpiar pedido',
+                mensaje:
+                    'Se eliminarán los productos y cantidades del pedido actual ' +
+                    'en todas las tiendas. ¿Deseas continuar?',
+                textoAceptar: 'Limpiar tabla',
+                textoCancelar: 'Cancelar'
+            });
+
+            if (!confirmado) return;
+
+            // Retira la selección y cierra el tooltip.
+            window.desseleccionarCeldas?.();
+
+            // Elimina las filas visibles.
+            tbody.replaceChildren();
+
+            // Vacía todas las tiendas conservando las referencias a sus objetos.
+            Object.values(matriz).forEach(productos => {
+                if (!productos || typeof productos !== 'object') return;
+
+                Object.keys(productos).forEach(codigo => {
+                    delete productos[codigo];
                 });
+            });
 
-                if (!confirmado) {
-                    return;
-                }
-
-                tbody.innerHTML = '';
-
-                // Recalcular totales si la función existe en tu lógica de la vista.
-                if (typeof calcularTotalesAnalisis === 'function') {
-                    calcularTotalesAnalisis();
-                } else if (typeof calcularTotales === 'function') {
-                    calcularTotales();
-                }
+            // Actualiza los totales de la pantalla.
+            if (typeof calcularTotalesAnalisis === 'function') {
+                calcularTotalesAnalisis();
+            } else if (typeof calcularTotales === 'function') {
+                calcularTotales();
             }
         }
         let indiceDestacadoAnalisis = -1;
@@ -1500,6 +1451,188 @@
             return val;
         }
 
+        function posicionarListaMarcaModal() {
+            const modal = document.getElementById('modal-productos-proveedor');
+            const input = document.getElementById('buscar_marca_analisis');
+            const lista = document.getElementById('opciones_marca_analisis');
+
+            if (
+                !modal || !input || !lista ||
+                modal.classList.contains('hidden') ||
+                lista.classList.contains('hidden')
+            ) {
+                return;
+            }
+
+            const rect = input.getBoundingClientRect();
+
+            // Coloca la lista debajo del input, fuera del recorte del modal.
+            lista.style.top = `${rect.bottom + 4}px`;
+            lista.style.left = `${rect.left}px`;
+            lista.style.width = `${rect.width}px`;
+
+            // Limita la altura al espacio disponible en la pantalla.
+            const espacio = window.innerHeight - rect.bottom - 12;
+
+            lista.style.maxHeight =
+                `${Math.max(0, Math.min(192, espacio))}px`;
+        }
+
+        // Mantiene la lista alineada al desplazar o redimensionar.
+        window.addEventListener(
+            'scroll', posicionarListaMarcaModal, true
+        );
+
+        window.addEventListener(
+            'resize', posicionarListaMarcaModal
+        );
+
+        let solicitudClasificacionProductos = 0;
+        let importandoProductosProveedor = false;
+        let focoAntesModalProductos = null;
+
+        function abrirModalProductosProveedor() {
+            const proveedor = document.getElementById(
+                'proveedor_id_analisis'
+            ).value;
+
+            const boton = document.getElementById('btn_importar_productos');
+
+            if (!proveedor) {
+                mostrarNotificacion({
+                    tipo: 'info',
+                    mensaje: 'Selecciona primero un proveedor.'
+                });
+                return;
+            }
+
+            if (boton.disabled) {
+                mostrarNotificacion({
+                    tipo: 'info',
+                    mensaje: 'Espera a que carguen los filtros del proveedor.'
+                });
+                return;
+            }
+
+            const modal = document.getElementById('modal-productos-proveedor');
+
+            if (!modal.classList.contains('hidden')) return;
+
+            focoAntesModalProductos = document.activeElement;
+
+            document.getElementById(
+                'nombre-proveedor-modal-productos'
+            ).textContent = document.getElementById(
+                'buscar_proveedor_analisis'
+            ).value;
+
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+
+            document.getElementById('buscar_depto_analisis').focus();
+        }
+
+        function cerrarModalProductosProveedor() {
+            // Evita cerrar mientras se están incorporando productos.
+            if (importandoProductosProveedor) return;
+
+            const modal = document.getElementById('modal-productos-proveedor');
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+
+            // Oculta las listas para la siguiente apertura.
+            [
+                'opciones_depto_analisis',
+                'opciones_grupo_analisis',
+                'opciones_subgrupo_analisis',
+                'opciones_marca_analisis'
+            ].forEach(id => {
+                document.getElementById(id)?.classList.add('hidden');
+            });
+
+            const destino =
+                focoAntesModalProductos?.isConnected &&
+                    focoAntesModalProductos.getClientRects().length
+                    ? focoAntesModalProductos
+                    : document.querySelector('[x-ref="archivo"]');
+
+            destino?.focus();
+        }
+
+        function tecladoModalProductosProveedor(evento) {
+            // Impide que el teclado del modal controle la tabla.
+            evento.stopPropagation();
+
+            if (evento.key === 'Escape') {
+                evento.preventDefault();
+                cerrarModalProductosProveedor();
+                return;
+            }
+
+            if (evento.key !== 'Tab') return;
+
+            // Mantiene el foco dentro del modal.
+            const controles = [
+                ...evento.currentTarget.querySelectorAll(
+                    'button:not(:disabled), input:not(:disabled):not([type="hidden"])'
+                )
+            ].filter(el => el.getClientRects().length);
+
+            if (!controles.length) {
+                evento.preventDefault();
+                return;
+            }
+
+            const primero = controles[0];
+            const ultimo = controles.at(-1);
+
+            if (evento.shiftKey && document.activeElement === primero) {
+                evento.preventDefault();
+                ultimo.focus();
+            } else if (!evento.shiftKey && document.activeElement === ultimo) {
+                evento.preventDefault();
+                primero.focus();
+            }
+        }
+
+        async function confirmarProductosProveedor() {
+            const boton = document.getElementById('btn_importar_productos');
+
+            if (importandoProductosProveedor || boton.disabled) return;
+
+            const seccion = document.getElementById('sec-filtros-clasificacion');
+            const textoOriginal = boton.innerHTML;
+
+            const botonesCerrar = [
+                document.getElementById('btn-cerrar-productos-proveedor'),
+                document.getElementById('btn-cancelar-productos-proveedor')
+            ];
+
+            importandoProductosProveedor = true;
+            boton.disabled = true;
+            boton.textContent = 'Importando…';
+
+            botonesCerrar.forEach(btn => btn.disabled = true);
+            seccion.classList.add('pointer-events-none');
+
+            try {
+                const correcto = await importarProductosAnalisis();
+
+                if (correcto) {
+                    importandoProductosProveedor = false;
+                    cerrarModalProductosProveedor();
+                }
+            } finally {
+                importandoProductosProveedor = false;
+                boton.disabled = false;
+                boton.innerHTML = textoOriginal;
+
+                botonesCerrar.forEach(btn => btn.disabled = false);
+                seccion.classList.remove('pointer-events-none');
+            }
+        }
+
         // Extrae los datos sanitizados desde los atributos data-* del elemento
         function seleccionarProveedorDesdeElemento(el) {
             const d = el.dataset; // Lee los atributos data-* en notación camello
@@ -1539,6 +1672,9 @@
 
             if (typeof limpiarDeptoAnalisis === 'function') limpiarDeptoAnalisis();
 
+            // Evita conservar una marca del proveedor anterior.
+            limpiarMarcaAnalisis();
+
             // Si se limpia el proveedor (ID vacío), resetea el formulario
             if (!id) {
                 if (secFiltros) secFiltros.classList.add('opacity-50', 'pointer-events-none');
@@ -1555,16 +1691,18 @@
                 return;
             }
 
-            // Habilita los controles adyacentes
-            if (secFiltros) secFiltros.classList.remove('opacity-50', 'pointer-events-none');
-            if (inpDepto) inpDepto.disabled = false;
-            if (btnImportar) btnImportar.disabled = false;
+            // Se habilitan cuando termine de cargar la clasificación.
+            if (secFiltros) secFiltros.classList.add('opacity-50', 'pointer-events-none');
+            if (inpDepto) inpDepto.disabled = true;
+            if (btnImportar) btnImportar.disabled = true;
 
             try {
                 // Consulta asíncrona a la API de FastAPI
                 const respuesta = await fetch(`/api/proveedores/${id}`);
                 if (respuesta.ok) {
                     const data = await respuesta.json();
+                    // Evita mostrar información de una selección anterior.
+                    if (String(inputId.value) !== String(id)) return;
 
                     // Vuelca los datos obtenidos de Supabase a los inputs del HTML
                     const elemContacto = document.getElementById('prov_contacto');
@@ -1599,9 +1737,13 @@
                 console.error("Error al obtener los datos del proveedor:", error);
             }
 
-            // Carga los departamentos asignados al proveedor
-            if (typeof cargarClasificacionProveedor === 'function') {
-                cargarClasificacionProveedor(id);
+            if (String(inputId.value) !== String(id)) return;
+
+            // Abre el modal únicamente cuando los filtros estén preparados.
+            const preparado = await cargarClasificacionProveedor(id);
+
+            if (preparado && String(inputId.value) === String(id)) {
+                abrirModalProductosProveedor();
             }
         }
 
@@ -1649,15 +1791,59 @@
             }, 400);
         }
 
-        // --- CARGA Y FILTRADO EN CASCADA (DEPTO -> GRUPO -> SUBGRUPO) ---
         async function cargarClasificacionProveedor(proveedorId) {
+            const solicitud = ++solicitudClasificacionProductos;
+            const boton = document.getElementById('btn_importar_productos');
+            const seccion = document.getElementById('sec-filtros-clasificacion');
+
+            boton.disabled = true;
+            seccion.classList.add('opacity-50', 'pointer-events-none');
+
             try {
-                const res = await fetch(`/api/clasificacion?proveedor_id=${encodeURIComponent(proveedorId)}`);
-                datosClasificacionAnalisis = await res.json();
-                poblarDepartamentosAnalisis(); // Genera departamentos
-                poblarMarcasAnalisis(); // Genera marcas iniciales del proveedor
-            } catch (e) {
-                console.error('Error al obtener clasificaciones:', e);
+                const res = await fetch(
+                    '/api/clasificacion?proveedor_id=' +
+                    encodeURIComponent(proveedorId)
+                );
+
+                if (!res.ok) {
+                    throw new Error('No se pudieron cargar los filtros.');
+                }
+
+                const datos = await res.json();
+
+                // Descarta respuestas de un proveedor que ya no está seleccionado.
+                if (
+                    solicitud !== solicitudClasificacionProductos ||
+                    String(
+                        document.getElementById('proveedor_id_analisis').value
+                    ) !== String(proveedorId)
+                ) {
+                    return false;
+                }
+
+                if (!Array.isArray(datos)) {
+                    throw new Error('La clasificación recibida no es válida.');
+                }
+
+                datosClasificacionAnalisis = datos;
+                poblarDepartamentosAnalisis();
+                poblarMarcasAnalisis();
+
+                seccion.classList.remove('opacity-50', 'pointer-events-none');
+                document.getElementById('buscar_depto_analisis').disabled = false;
+                boton.disabled = false;
+
+                return true;
+
+            } catch (error) {
+                if (solicitud === solicitudClasificacionProductos) {
+                    mostrarNotificacion({
+                        tipo: 'error',
+                        mensaje: error.message
+                    });
+                }
+
+                return false;
             }
         }
 
@@ -1964,10 +2150,13 @@
                     });
                 }
 
-                // El filtro puede devolver productos que ya están cargados.
-                // En ese caso no se crea ni modifica ninguna fila.
                 if (productosNuevos.length === 0) {
-                    return;
+                    mostrarNotificacion({
+                        tipo: 'info',
+                        mensaje: 'Los productos de estos filtros ya están en la tabla.'
+                    });
+
+                    return false;
                 }
 
                 // ========================================================
@@ -2024,6 +2213,8 @@
 
                 // Una sola recalculación al finalizar la importación.
                 totalizarAnalisis();
+                // Permite cerrar el modal después de importar correctamente.
+                return true;
 
             } catch (e) {
                 console.error(
@@ -2239,18 +2430,11 @@
                 return;
             }
 
-            // Obtiene todos los códigos únicos presentes en la tabla activa y en la matriz
-            const codigosSet = new Set();
-            document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
-                const cod = obtenerCodigoFila(tr);
-                if (cod) codigosSet.add(cod);
-            });
-            Object.keys(matrizTiendas).forEach(tienda => {
-                Object.keys(matrizTiendas[tienda] || {}).forEach(cod => {
-                    const codNorm = normalizarCodigoAnalisis(cod);
-                    if (codNorm) codigosSet.add(codNorm);
-                });
-            });
+            // Exporta únicamente códigos presentes en la tabla del pedido actual.
+            // Las cantidades se siguen obteniendo de cada tienda seleccionada.
+            const codigosSet = new Set(
+                obtenerCodigosTablaAnalisis()
+            );
 
             let archivosGenerados = 0;
 
@@ -2324,16 +2508,6 @@
                     const desc = tr.querySelector('.inp-desc')?.value || '';
                     mapaProductos.set(cod, desc);
                 }
-            });
-
-            // 2. Recolecta códigos guardados previamente en memoria para otras sedes
-            Object.keys(matrizTiendas).forEach(tienda => {
-                Object.keys(matrizTiendas[tienda] || {}).forEach(cod => {
-                    const codNorm = typeof normalizarCodigoAnalisis === 'function' ? normalizarCodigoAnalisis(cod) : cod;
-                    if (codNorm && !mapaProductos.has(codNorm)) {
-                        mapaProductos.set(codNorm, '');
-                    }
-                });
             });
 
             // Función de seguridad para escapar caracteres especiales XML (&, <, >, ", ')
@@ -2800,11 +2974,6 @@ ${nodosProductosXML.join('\n')}
                     );
                 }
 
-                // Carga únicamente ventas de los productos restaurados.
-                await cargarVentasStellarEnMemoria(
-                    codigosUnicos
-                );
-
                 // Refresca la tienda activa.
                 if (
                     typeof cargarEstadoTablaDesdeMemoria
@@ -2814,9 +2983,6 @@ ${nodosProductosXML.join('\n')}
                         tiendaActivaPestana
                     );
                 }
-
-                // Recalcula sugeridos usando solo memoria.
-                ejecutarCalculoSugeridosSync();
 
                 // Confirma restauración.
                 mostrarNotificacion({
@@ -2921,58 +3087,21 @@ ${nodosProductosXML.join('\n')}
 
 
         async function actualizarDemandaKardexAlCambiarTienda() {
-            // Lee las fechas seleccionadas.
-            const fechaInicio = document.getElementById(
-                'kardex-fecha-inicio'
-            )?.value;
-
-            const fechaFin = document.getElementById(
-                'kardex-fecha-fin'
-            )?.value;
-
-            // No actualiza si las fechas no son válidas.
-            if (!fechaInicio || !fechaFin || fechaInicio > fechaFin) {
-                return;
-            }
-
-            // No actualiza si no hay productos en la tabla.
-            if (!obtenerCodigosTablaAnalisis().length) {
-                return;
-            }
-
-            // Detecta cuáles resultados están abiertos.
-            const contenedorDemanda = document.getElementById(
-                'kardex-resultados-contenedor'
-            );
-
-            const contenedorComparacion = document.getElementById(
+            const panel = document.getElementById(
                 'kardex-comparacion-contenedor'
             );
 
-            const demandaVisible =
-                contenedorDemanda &&
-                !contenedorDemanda.classList.contains('hidden');
+            // Actualiza solamente una comparación que esté abierta.
+            if (!panel || panel.classList.contains('hidden')) return;
 
-            const comparacionVisible =
-                contenedorComparacion &&
-                !contenedorComparacion.classList.contains('hidden');
+            // Reutiliza los meses e intervalos elegidos en el modal.
+            if (!ultimaConfiguracionPeriodosKardex?.length) return;
 
-            // Actualiza solamente las consultas que el usuario tiene abiertas.
-            const tareas = [];
+            // Evita consultas sin productos.
+            if (!obtenerCodigosTablaAnalisis().length) return;
 
-            if (demandaVisible) {
-                tareas.push(consultarDemandaKardexDesdeAnalisis());
-            }
-
-            if (comparacionVisible) {
-                tareas.push(compararDemandaKardexDesdeAnalisis());
-            }
-
-            // Espera las actualizaciones sin cancelar una por el error de la otra.
-            await Promise.allSettled(tareas);
+            await compararDemandaKardexDesdeAnalisis();
         }
-
-
 
 
         function cargarEstadoTablaDesdeMemoria(tienda) {
@@ -2995,65 +3124,8 @@ ${nodosProductosXML.join('\n')}
                 }
             });
         }
-        // Enviar el archivo CSV al backend FastAPI mediante FormData
-        async function subirCSVStellar(event) {
-            const fileInput = event.target;
-            if (!fileInput.files || fileInput.files.length === 0) return;
 
-            const formData = new FormData();
-            formData.append('file', fileInput.files[0]);
-
-            try {
-                const response = await fetch('/analisis/cargar-ventas-csv', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const result = await response.json();
-
-                if (!response.ok) {
-                    mostrarNotificacion({
-                        tipo: 'error',
-                        mensaje:
-                            result.detail
-                            || 'Error al procesar el archivo CSV.'
-                    });
-
-                    return;
-                }
-
-                mostrarNotificacion({
-                    tipo: 'success',
-                    mensaje:
-                        `Ventas actualizadas exitosamente (${result.procesados} registros).`
-                });
-
-                // Invalida la caché de ventas porque el CSV cambió los datos.
-                ventasStellarCodigosCargados.clear();
-
-                // Vuelve a consultar únicamente los códigos visibles.
-                await cargarVentasStellarEnMemoria(
-                    obtenerCodigosTablaAnalisis()
-                );
-
-            } catch (error) {
-                console.error('Error en la petición:', error);
-                mostrarNotificacion({
-                    tipo: 'error',
-                    mensaje:
-                        'Ocurrió un error al conectar con el servidor.'
-                });
-            } finally {
-                fileInput.value = ''; // Limpiar el input file
-            }
-        }
-
-
-        // Guarda qué códigos ya fueron consultados en Supabase.
-        let ventasStellarCodigosCargados = new Set();
-
-
-        // Obtiene los códigos visibles actualmente en la tabla.
+        // Obtiene los códigos del pedido actual para las consultas y exportaciones.
         function obtenerCodigosTablaAnalisis() {
             return [
                 ...new Set(
@@ -3063,168 +3135,11 @@ ${nodosProductosXML.join('\n')}
                         )
                     )
                         .map(input =>
-                            normalizarCodigoAnalisis(
-                                input.value
-                            )
+                            normalizarCodigoAnalisis(input.value)
                         )
                         .filter(Boolean)
                 )
             ];
-        }
-
-
-        // Consulta ventas únicamente para códigos todavía no cargados.
-        async function cargarVentasStellarEnMemoria(
-            codigos = []
-        ) {
-            // Normaliza y elimina códigos repetidos.
-            const codigosNormalizados = [
-                ...new Set(
-                    codigos
-                        .map(codigo =>
-                            normalizarCodigoAnalisis(
-                                codigo
-                            )
-                        )
-                        .filter(Boolean)
-                )
-            ];
-
-            // Solo envía códigos que aún no tenemos en memoria.
-            const codigosPendientes =
-                codigosNormalizados.filter(
-                    codigo =>
-                        !ventasStellarCodigosCargados.has(
-                            codigo
-                        )
-                );
-
-            // Si todos ya están en memoria, no toca la red.
-            if (codigosPendientes.length === 0) {
-                return;
-            }
-
-            try {
-                // Consulta exclusivamente los códigos pendientes.
-                const response = await fetch(
-                    '/analisis/obtener-ventas-stellar',
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            codigos: codigosPendientes
-                        })
-                    }
-                );
-
-                // Convierte la respuesta.
-                const result = await response.json();
-
-                // Valida HTTP.
-                if (!response.ok) {
-                    throw new Error(
-                        result.detail
-                        || 'No se pudieron cargar las ventas.'
-                    );
-                }
-
-                // Extrae los registros.
-                const registros = Array.isArray(
-                    result?.data
-                )
-                    ? result.data
-                    : [];
-
-                // Actualiza la matriz con las ventas recibidas.
-                registros.forEach(item => {
-                    // Ignora filas incompletas.
-                    if (!item || !item.sede) {
-                        return;
-                    }
-
-                    // Normaliza la sede.
-                    const sedeLimpia = String(
-                        item.sede
-                    )
-                        .trim()
-                        .toUpperCase();
-
-                    // Unifica nombres históricos.
-                    const sedeNormalizada =
-                        (
-                            sedeLimpia === 'ALIANZA'
-                            || sedeLimpia === 'C. ALIANZA'
-                        )
-                            ? 'CIUDAD ALIANZA'
-                            : sedeLimpia;
-
-                    // Normaliza código.
-                    const codigo =
-                        normalizarCodigoAnalisis(
-                            item.codigo
-                        );
-
-                    // Ignora códigos inválidos.
-                    if (!codigo) {
-                        return;
-                    }
-
-                    // Crea la estructura de tienda.
-                    asegurarEstructuraTienda(
-                        sedeNormalizada
-                    );
-
-                    // Crea el producto si aún no existe.
-                    if (
-                        !matrizTiendas[
-                        sedeNormalizada
-                        ][codigo]
-                    ) {
-                        matrizTiendas[
-                            sedeNormalizada
-                        ][codigo] = {
-                            invEmp: 0,
-                            emp: 0,
-                            demandaDiaria: 0
-                        };
-                    }
-
-                    // Convierte la demanda recibida.
-                    const demanda =
-                        parseFloat(
-                            String(
-                                item.demanda_diaria
-                                || 0
-                            ).replace(',', '.')
-                        ) || 0;
-
-                    // Guarda la demanda en memoria.
-                    matrizTiendas[
-                        sedeNormalizada
-                    ][codigo].demandaDiaria =
-                        demanda;
-                });
-
-                // Marca también como cargados los códigos sin ventas.
-                codigosPendientes.forEach(
-                    codigo =>
-                        ventasStellarCodigosCargados.add(
-                            codigo
-                        )
-                );
-
-            } catch (error) {
-                // Registra el fallo.
-                console.error(
-                    'Error al cargar ventas en memoria:',
-                    error
-                );
-
-                // Propaga el error para que el botón lo maneje.
-                throw error;
-            }
         }
 
 
@@ -3763,29 +3678,14 @@ ${nodosProductosXML.join('\n')}
             mostrarMensaje = true,
             forzarConsulta = false
         ) {
-            const fechaInicio = document.getElementById('kardex-fecha-inicio');
-            const fechaFin = document.getElementById('kardex-fecha-fin');
-
-            if (!fechaInicio || !fechaFin) return;
-
-            const normalizarSede = sede => {
-                const valor = String(sede || '').trim().toUpperCase();
-
-                if (['ALIANZA', 'C. ALIANZA'].includes(valor)) {
-                    return 'CIUDAD ALIANZA';
-                }
-
-                return valor;
-            };
-
             try {
-                // La consulta se hace una sola vez y se reutiliza al cambiar de tienda.
                 if (forzarConsulta) {
                     coberturaKardexCache = null;
                     promesaCargaCoberturaKardex = null;
                 }
 
                 if (!coberturaKardexCache) {
+                    // Comparador y exportación comparten la misma consulta.
                     if (!promesaCargaCoberturaKardex) {
                         promesaCargaCoberturaKardex = (async () => {
                             const respuesta = await fetch(
@@ -3795,150 +3695,48 @@ ${nodosProductosXML.join('\n')}
 
                             const resultado = await respuesta.json();
 
-                            if (!respuesta.ok || resultado.status !== 'ok') {
+                            if (
+                                !respuesta.ok ||
+                                resultado.status !== 'ok' ||
+                                !Array.isArray(resultado.data)
+                            ) {
                                 throw new Error(
-                                    resultado.detail ||
                                     'No se pudo consultar la cobertura del Kardex.'
                                 );
                             }
 
-                            return resultado.data || [];
+                            return resultado.data;
                         })();
                     }
 
+                    const pendiente = promesaCargaCoberturaKardex;
+
                     try {
-                        coberturaKardexCache =
-                            await promesaCargaCoberturaKardex;
+                        const datos = await pendiente;
+
+                        // Una consulta anterior no reemplaza una recarga nueva.
+                        if (promesaCargaCoberturaKardex === pendiente) {
+                            coberturaKardexCache = datos;
+                        }
+
+                        return datos;
                     } finally {
-                        promesaCargaCoberturaKardex = null;
+                        if (promesaCargaCoberturaKardex === pendiente) {
+                            promesaCargaCoberturaKardex = null;
+                        }
                     }
                 }
 
-                // Leer la tienda DESPUÉS de esperar la consulta evita aplicar
-                // accidentalmente los límites de una pestaña anterior.
-                const sedeActiva = normalizarSede(
-                    window.tiendaActivaPestana || 'CENTRO'
-                );
-
-                const cobertura = coberturaKardexCache.find(
-                    registro =>
-                        normalizarSede(registro.sede) === sedeActiva
-                );
-
-                if (!cobertura?.fecha_minima || !cobertura?.fecha_maxima) {
-                    fechaInicio.value = '';
-                    fechaFin.value = '';
-
-                    fechaInicio.disabled = true;
-                    fechaFin.disabled = true;
-
-                    fechaInicio.removeAttribute('min');
-                    fechaInicio.removeAttribute('max');
-                    fechaFin.removeAttribute('min');
-                    fechaFin.removeAttribute('max');
-
-                    if (mostrarMensaje) {
-                        mostrarMensajeKardex(
-                            `No hay fechas registradas en el Kardex para ${sedeActiva}.`,
-                            true
-                        );
-                    }
-
-                    return;
-                }
-
-                const minimo = cobertura.fecha_minima;
-                const maximo = cobertura.fecha_maxima;
-
-                fechaInicio.disabled = false;
-                fechaFin.disabled = false;
-
-                fechaInicio.min = minimo;
-                fechaInicio.max = maximo;
-                fechaFin.min = minimo;
-                fechaFin.max = maximo;
-
-
-                // Obtiene la fecha actual en hora local, sin errores de UTC.
-                const formatearFechaLocal = fecha => {
-                    const anio = fecha.getFullYear();
-                    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
-                    const dia = String(fecha.getDate()).padStart(2, '0');
-                    return `${anio}-${mes}-${dia}`;
-                };
-
-                // Limita cualquier fecha al historial disponible de la tienda.
-                const limitarFecha = fecha =>
-                    fecha < minimo ? minimo :
-                        fecha > maximo ? maximo :
-                            fecha;
-
-                // Solo calcula valores predeterminados cuando hacen falta.
-                if (!fechaInicio.value || !fechaFin.value) {
-                    const hoy = formatearFechaLocal(new Date());
-
-                    // La fecha final no puede superar la última venta registrada.
-                    const fechaFinal = limitarFecha(hoy);
-
-                    // Retrocede siete días desde la fecha final efectiva.
-                    const fechaInicialBase = new Date(`${fechaFinal}T12:00:00`);
-                    fechaInicialBase.setDate(fechaInicialBase.getDate() - 6);
-
-                    const fechaInicial = limitarFecha(
-                        formatearFechaLocal(fechaInicialBase)
-                    );
-
-                    if (!fechaInicio.value) {
-                        fechaInicio.value = fechaInicial;
-                    }
-
-                    if (!fechaFin.value) {
-                        fechaFin.value = fechaFinal;
-                    }
-                }
-
-                // Si una fecha quedó fuera de la cobertura de esta tienda,
-                // ajústala sin permitir un período invertido.
-                if (
-                    fechaInicio.value < minimo ||
-                    fechaInicio.value > maximo
-                ) {
-                    fechaInicio.value = minimo;
-                }
-
-                if (
-                    fechaFin.value < minimo ||
-                    fechaFin.value > maximo
-                ) {
-                    fechaFin.value = maximo;
-                }
-
-                // Corrige el período si la fecha inicial supera la final.
-                if (fechaInicio.value > fechaFin.value) {
-                    const inicioAjustado = new Date(
-                        `${fechaFin.value}T12:00:00`
-                    );
-                    inicioAjustado.setDate(inicioAjustado.getDate() - 6);
-
-                    fechaInicio.value = limitarFecha(
-                        formatearFechaLocal(inicioAjustado)
-                    );
-                }
-
+                return coberturaKardexCache;
 
             } catch (error) {
-                console.error(
-                    'Error al actualizar la cobertura del Kardex:',
-                    error
-                );
+                console.error('Cobertura del Kardex:', error);
 
                 if (mostrarMensaje) {
-                    mostrarMensajeKardex(
-                        error.message ||
-                        'No se pudo actualizar la cobertura del Kardex.',
-                        true
-                    );
+                    mostrarMensajeKardex(error.message, true);
                 }
+
+                return [];
             }
         }
 
@@ -3946,12 +3744,25 @@ ${nodosProductosXML.join('\n')}
 
         function mostrarMensajeKardex(mensaje, error = false) {
             const elemento = document.getElementById('kardex-mensaje');
-            if (!elemento) return;
 
-            elemento.textContent = mensaje;
-            elemento.className = error
-                ? 'text-xs text-rose-600 mt-3'
-                : 'text-xs text-slate-500 mt-3';
+            if (elemento) {
+                elemento.textContent = mensaje;
+                elemento.className = error
+                    ? 'text-xs text-rose-600 mt-3'
+                    : 'text-xs text-slate-500 mt-3';
+            }
+
+            const panelOculto = document.getElementById(
+                'panel-consultas-pedido'
+            )?.classList.contains('hidden');
+
+            // Permite informar errores sin abrir el contenedor.
+            if (error && panelOculto) {
+                mostrarNotificacion({
+                    tipo: 'error',
+                    mensaje
+                });
+            }
         }
 
 
@@ -4067,11 +3878,20 @@ ${nodosProductosXML.join('\n')}
 
 
         function cerrarResultadosKardex(idContenedor) {
-            // Oculta únicamente el contenedor solicitado.
-            const contenedor = document.getElementById(idContenedor);
+            document.getElementById(
+                idContenedor
+            )?.classList.add('hidden');
 
-            if (contenedor) {
-                contenedor.classList.add('hidden');
+            if (idContenedor === 'kardex-comparacion-contenedor') {
+                // Oculta también el encabezado y los calendarios XML.
+                document.getElementById(
+                    'panel-consultas-pedido'
+                )?.classList.add('hidden');
+
+                // Devuelve el foco al acceso del header.
+                document.getElementById(
+                    'btn-menu-estadisticas'
+                )?.focus({ preventScroll: true });
             }
         }
 
@@ -4098,14 +3918,128 @@ ${nodosProductosXML.join('\n')}
             return `${dias}/${intervalo}`;
         }
 
+        let solicitudModalExportacionXML = 0;
 
-        async function exportarDemandaKardexXML() {
-            // Evita exportar durante otra consulta de demanda.
-            if (document.getElementById('btn-consultar-kardex')?.disabled) {
-                alert('Espera a que termine la consulta de demanda.');
+        function cerrarModalExportarDemandaXML() {
+            // Invalida cualquier carga pendiente del modal cerrado.
+            solicitudModalExportacionXML++;
+
+            document.getElementById(
+                'modal-exportar-demanda-xml'
+            ).close();
+
+            document.querySelector(
+                '[x-ref="exportar"]'
+            )?.focus({ preventScroll: true });
+        }
+
+        async function abrirModalExportarDemandaXML() {
+            if (!obtenerCodigosTablaAnalisis().length) {
+                mostrarNotificacion({
+                    tipo: 'info',
+                    mensaje: 'Agrega productos antes de exportar.'
+                });
                 return;
             }
 
+            const modal = document.getElementById(
+                'modal-exportar-demanda-xml'
+            );
+
+            if (modal.open) return;
+
+            const solicitud = ++solicitudModalExportacionXML;
+
+            const inicio = document.getElementById('kardex-fecha-inicio');
+            const fin = document.getElementById('kardex-fecha-fin');
+            const boton = document.getElementById('btn-exportar-demanda-xml');
+            const mensaje = document.getElementById(
+                'estado-exportacion-demanda-xml'
+            );
+
+            inicio.disabled = fin.disabled = boton.disabled = true;
+            mensaje.textContent = 'Consultando fechas disponibles…';
+
+            // Apertura nativa con foco contenido dentro del modal.
+            modal.showModal();
+
+            const coberturas = await actualizarCoberturaKardexDesdeAnalisis(
+                false
+            );
+
+            // Descarta respuestas de una apertura anterior.
+            if (
+                !modal.open ||
+                solicitud !== solicitudModalExportacionXML
+            ) {
+                return;
+            }
+
+            const disponibles = coberturas.filter(
+                x => x.fecha_minima && x.fecha_maxima
+            );
+
+            if (!disponibles.length) {
+                mensaje.textContent =
+                    'No hay cobertura disponible. Importa el Kardex ' +
+                    'o vuelve a intentarlo.';
+                return;
+            }
+
+            // La exportación abarca todas las tiendas.
+            const minimo = disponibles
+                .map(x => x.fecha_minima)
+                .sort()[0];
+
+            const maximo = disponibles
+                .map(x => x.fecha_maxima)
+                .sort()
+                .at(-1);
+
+            for (const campo of [inicio, fin]) {
+                campo.min = minimo;
+                campo.max = maximo;
+                campo.disabled = false;
+            }
+
+            // Sugiere los últimos siete días del historial disponible.
+            const desde = new Date(maximo + 'T12:00:00');
+            desde.setDate(desde.getDate() - 6);
+
+            const sugerido = fechaISOAnalisis(desde);
+
+            if (
+                !fin.value ||
+                fin.value < minimo ||
+                fin.value > maximo
+            ) {
+                fin.value = maximo;
+            }
+
+            if (
+                !inicio.value ||
+                inicio.value < minimo ||
+                inicio.value > maximo ||
+                inicio.value > fin.value
+            ) {
+                inicio.value = sugerido < minimo ? minimo : sugerido;
+
+                if (inicio.value > fin.value) {
+                    inicio.value = fin.value;
+                }
+            }
+
+            mensaje.textContent =
+                'Historial disponible: ' +
+                formatearFechaKardex(minimo) + ' a ' +
+                formatearFechaKardex(maximo) + '.';
+
+            boton.disabled = false;
+            inicio.focus();
+        }
+
+
+        async function exportarDemandaKardexXML() {
             const boton = document.getElementById('btn-exportar-demanda-xml');
 
             // Evita descargas duplicadas por varios clics.
@@ -4387,200 +4321,17 @@ ${nodosProductosXML.join('\n')}
                 // Identifica el alcance y el período del documento.
                 enlace.download = `demanda_todas_las_tiendas_${fechaInicio}_${fechaFin}.xml`;
                 document.body.appendChild(enlace);
-                enlace.click();
+                enlace.click();  // Inicia la descarga del XML generado.
                 enlace.remove();
 
                 setTimeout(() => URL.revokeObjectURL(url), 1000);
+
+                // Cierra el modal después de generar e iniciar la descarga.
+                cerrarModalExportarDemandaXML();
             } catch (error) {
                 console.error('Error al exportar demanda:', error);
                 alert(error.message || 'No se pudo exportar la demanda.');
             }
-        }
-
-
-
-        async function consultarDemandaKardexDesdeAnalisis() {
-            const fechaInicio = document.getElementById(
-                'kardex-fecha-inicio'
-            )?.value;
-
-            const fechaFin = document.getElementById(
-                'kardex-fecha-fin'
-            )?.value;
-
-            const boton = document.getElementById('btn-consultar-kardex');
-            const tbody = document.getElementById('kardex-resultados');
-            const contenedor = document.getElementById(
-                'kardex-resultados-contenedor'
-            );
-
-            if (!fechaInicio || !fechaFin) {
-                mostrarMensajeKardex(
-                    'Selecciona las dos fechas del período.',
-                    true
-                );
-                return;
-            }
-
-            if (fechaInicio > fechaFin) {
-                mostrarMensajeKardex(
-                    'La fecha inicial no puede ser posterior a la final.',
-                    true
-                );
-                return;
-            }
-
-            const codigos = obtenerCodigosTablaAnalisis();
-
-            if (!codigos.length) {
-                mostrarMensajeKardex(
-                    'Agrega al menos un producto a la tabla de análisis.',
-                    true
-                );
-                return;
-            }
-
-            // Limpia el aviso anterior cuando ya existen productos válidos.
-            mostrarMensajeKardex('', false);
-
-
-            const parametros = new URLSearchParams({
-                fecha_inicio: fechaInicio,
-                fecha_fin: fechaFin,
-                modo: 'intervalo'
-            });
-
-
-            codigos.forEach(codigo => parametros.append('codigos', codigo));
-
-
-            if (boton) boton.disabled = true;
-
-            // Muestra solamente el panel de demanda y su indicador.
-            contenedor.classList.remove('hidden');
-            mostrarEstadoPanelKardex(
-                'kardex-demanda-mensaje',
-                'Consultando ventas del período...'
-            );
-            alternarCargaPanelKardex('cargando-demanda-kardex', true);
-
-
-            try {
-                const respuesta = await fetch(
-                    `/analisis/demanda-kardex?${parametros.toString()}`,
-                    {
-                        method: 'GET',
-                        credentials: 'same-origin'
-                    }
-                );
-
-                const resultado = await respuesta.json();
-
-                if (!respuesta.ok) {
-                    throw new Error(
-                        resultado.detail || 'No se pudo consultar la demanda.'
-                    );
-                }
-
-
-                const registrosRespuesta = Array.isArray(resultado.data)
-                    ? resultado.data
-                    : [];
-
-                // Obtiene la tienda seleccionada actualmente.
-                const sedeSeleccionada = normalizarSedeKardex(
-                    window.tiendaActivaPestana
-                );
-
-                // Descarta las ventas de las demás tiendas.
-                const registros = registrosRespuesta.filter(item =>
-                    normalizarSedeKardex(item.sede) === sedeSeleccionada
-                );
-
-                // Prepara las descripciones de los productos visibles.
-                const descripciones = obtenerDescripcionesProductosKardex();
-
-
-                tbody.replaceChildren();
-
-
-                if (!registros.length) {
-                    // Mantiene visible el panel para mostrar que no hubo resultados.
-                    mostrarEstadoPanelKardex(
-                        'kardex-demanda-mensaje',
-                        `No se encontraron ventas entre ${fechaInicio} y ${fechaFin}.`
-                    );
-                    return;
-                }
-
-
-                const formatoNumero = valor =>
-                    Number(valor || 0).toLocaleString('es-VE', {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                    });
-
-                registros.forEach(item => {
-                    const fila = document.createElement('tr');
-
-
-                    const codigo = normalizarCodigoAnalisis(item.codigo || '');
-
-
-                    const valores = [
-                        String(item.sede || '').trim(),
-                        codigo,
-                        descripciones.get(codigo) || 'Sin descripción',
-                        formatoNumero(item.unidades_vendidas),
-                        formatearDiasIntervaloKardex(
-                            item.dias_con_ventas,
-                            resultado.dias_intervalo
-                        ),
-                        formatoNumero(item.demanda_diaria)
-                    ];
-
-
-
-                    valores.forEach((valor, indice) => {
-                        const celda = document.createElement('td');
-                        celda.className = 'px-3 py-2';
-
-                        if (indice >= 3) {
-                            celda.classList.add('text-right', 'tabular-nums');
-                        }
-
-                        celda.textContent = valor;
-                        fila.appendChild(celda);
-                    });
-
-                    tbody.appendChild(fila);
-                });
-
-                contenedor.classList.remove('hidden');
-
-
-                mostrarEstadoPanelKardex(
-                    'kardex-demanda-mensaje',
-                    `Consulta completada: ${registros.length} combinaciones de sede y producto.`
-                );
-
-
-            } catch (error) {
-                console.error('Error al consultar demanda del kardex:', error);
-
-                // Informa el error solo en el panel de demanda.
-                mostrarEstadoPanelKardex(
-                    'kardex-demanda-mensaje',
-                    error.message || 'No se pudo consultar la demanda.',
-                    true
-                );
-            } finally {
-                // Oculta únicamente el indicador de demanda.
-                alternarCargaPanelKardex('cargando-demanda-kardex', false);
-
-                if (boton) boton.disabled = false;
-            }
-
         }
 
 
@@ -5057,6 +4808,12 @@ ${nodosProductosXML.join('\n')}
             }
 
             boton.disabled = true;
+
+            // Muestra el encabezado y los resultados al iniciar la consulta.
+            document.getElementById(
+                'panel-consultas-pedido'
+            )?.classList.remove('hidden');
+
             panel.classList.remove('hidden');
             cabecera.replaceChildren();
             tbody.replaceChildren();
@@ -5398,7 +5155,143 @@ ${nodosProductosXML.join('\n')}
 
     </script>
 
+    {% endblock %}
+    {% block modals %}
+    <!-- Modal exclusivo de productos por proveedor. -->
+    <div id="modal-productos-proveedor"
+        class="hidden fixed inset-0 z-[300] items-center justify-center bg-slate-950/60 p-4" role="dialog"
+        aria-modal="true" aria-labelledby="titulo-modal-productos-proveedor"
+        onkeydown="tecladoModalProductosProveedor(event)">
 
+        <section class="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl bg-white shadow-2xl">
+            <header class="flex items-center justify-between gap-4 border-b border-slate-200 px-5 py-4">
+                <div>
+                    <h3 id="titulo-modal-productos-proveedor" class="text-sm font-semibold text-slate-800">
+                        Productos por proveedor
+                    </h3>
 
+                    <p id="nombre-proveedor-modal-productos" class="mt-1 text-xs text-slate-500">
+                    </p>
+                </div>
 
+                <button type="button" id="btn-cerrar-productos-proveedor" onclick="cerrarModalProductosProveedor()"
+                    class="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-40"
+                    aria-label="Cerrar productos por proveedor">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
+            </header>
+
+            <div class="px-5 py-5">
+                <p class="mb-4 text-xs leading-relaxed text-slate-500">
+                    Los filtros son opcionales. Puedes importar todos los productos
+                    del proveedor o limitar la selección.
+                </p>
+
+                <!-- CONTENEDOR 2: FILTROS EN CASCADA -->
+                <div id="sec-filtros-clasificacion" class="opacity-50 pointer-events-none transition-all">
+                    <div class="flex flex-col gap-4">
+                        <!-- 1er Campo: Departamento -->
+                        <div class="relative" id="combo-depto-analisis">
+                            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                                <i class="fa-solid fa-layer-group text-blue-600 mr-1"></i> Departamento
+                            </label>
+                            <input type="hidden" id="depto_analisis" value="">
+                            <div class="relative">
+                                <input type="text" id="buscar_depto_analisis" placeholder="Todos los departamentos..."
+                                    autocomplete="off" oninput="filtrarDeptosAnalisis()"
+                                    onfocus="mostrarOpcionesDeptoAnalisis()" disabled
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                                <button type="button" onclick="limpiarDeptoAnalisis()"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                            <div id="opciones_depto_analisis"
+                                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+                            </div>
+                        </div>
+
+                        <!-- 2do Campo: Grupo -->
+                        <div class="relative" id="combo-grupo-analisis">
+                            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                                <i class="fa-solid fa-boxes-stacked text-blue-600 mr-1"></i> Grupo
+                            </label>
+                            <input type="hidden" id="grupo_analisis" value="">
+                            <div class="relative">
+                                <input type="text" id="buscar_grupo_analisis" placeholder="Todos los grupos..."
+                                    autocomplete="off" oninput="filtrarGruposAnalisis()"
+                                    onfocus="mostrarOpcionesGrupoAnalisis()" disabled
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                                <button type="button" onclick="limpiarGrupoAnalisis()"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                            <div id="opciones_grupo_analisis"
+                                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+                            </div>
+                        </div>
+
+                        <!-- 3er Campo: Subgrupo -->
+                        <div class="relative" id="combo-subgrupo-analisis">
+                            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                                <i class="fa-solid fa-tags text-blue-600 mr-1"></i> Subgrupo
+                            </label>
+                            <input type="hidden" id="subgrupo_analisis" value="">
+                            <div class="relative">
+                                <input type="text" id="buscar_subgrupo_analisis" placeholder="Todos los subgrupos..."
+                                    autocomplete="off" oninput="filtrarSubgruposAnalisis()"
+                                    onfocus="mostrarOpcionesSubgrupoAnalisis()" disabled
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                                <button type="button" onclick="limpiarSubgrupoAnalisis()"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                            <div id="opciones_subgrupo_analisis"
+                                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+                            </div>
+                        </div>
+                        <!-- 4to Campo: Marca (No bloqueado) -->
+                        <div class="relative" id="combo-marca-analisis">
+                            <label class="block text-xs font-semibold text-slate-700 tracking-wider mb-1.5">
+                                <i class="fa-solid fa-copyright text-blue-600 mr-1"></i> Marca
+                            </label>
+                            <!-- Almacena la marca seleccionada -->
+                            <input type="hidden" id="marca_analisis" value="">
+                            <div class="relative">
+                                <!-- Campo de búsqueda no bloqueado por defecto -->
+                                <input type="text" id="buscar_marca_analisis" placeholder="Todas las marcas..."
+                                    autocomplete="off" oninput="filtrarMarcasAnalisis(); posicionarListaMarcaModal()"
+                                    onfocus="mostrarOpcionesMarcaAnalisis(); posicionarListaMarcaModal()"
+                                    class="w-full px-4 py-2 border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none pr-8 bg-slate-50 focus:bg-white transition disabled:bg-slate-100 disabled:cursor-default">
+                                <!-- Botón para deseleccionar/limpiar marca -->
+                                <button type="button" onclick="limpiarMarcaAnalisis()"
+                                    class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-rose-500">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                            <!-- Menú desplegable flotante de marcas -->
+                            <div id="opciones_marca_analisis"
+                                class="hidden absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-lg max-h-48 overflow-y-auto z-30">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <footer class="flex justify-end gap-2 border-t border-slate-200 px-5 py-4">
+                <button type="button" id="btn-cancelar-productos-proveedor" onclick="cerrarModalProductosProveedor()"
+                    class="rounded-lg border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40">
+                    Cancelar
+                </button>
+
+                <button type="button" id="btn_importar_productos" onclick="confirmarProductosProveedor()" disabled
+                    class="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-wait">
+                    <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+                    Importar
+                </button>
+            </footer>
+        </section>
+    </div>
     {% endblock %}

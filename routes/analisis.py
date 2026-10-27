@@ -14,9 +14,8 @@ import config
 from config import templates, obtener_usuario_actual  # Dependencias globales
 from models import (
     ProductoModificado,
-    CodigosVentasRequest,
     GuardarAnalisisRequest,
-)  # Modelos de validación para las API
+)
 
 router = APIRouter()
 
@@ -424,145 +423,6 @@ async def actualizar_productos_desde_analisis(
         print(f"ERROR EN /api/productos/actualizar-analisis: {str(e)}")
 
         raise HTTPException(status_code=500, detail="Error al actualizar productos.")
-
-
-# ============================================================
-# CARGA MASIVA DE VENTAS CSV
-# ============================================================
-@router.post("/analisis/cargar-ventas-csv")
-async def cargar_ventas_csv(
-    file: UploadFile = File(...),
-    access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None),
-):
-    # Valida sesión antes de escribir ventas.
-    user = await obtener_usuario_actual(access_token, refresh_token)
-
-    # Bloquea usuarios no autenticados.
-    if not user:
-        raise HTTPException(status_code=401, detail="No autorizado")
-
-    # Valida el nombre del archivo.
-    nombre = (file.filename or "").lower()
-
-    if not nombre.endswith(".csv"):
-        raise HTTPException(status_code=400, detail="El archivo debe ser formato .csv")
-
-    try:
-        # Lee el archivo una sola vez.
-        content = await file.read()
-
-        # Protege el endpoint frente a archivos excesivamente grandes.
-        if len(content) > 15 * 1024 * 1024:
-            raise HTTPException(
-                status_code=413, detail="El archivo CSV supera el límite de 15 MB."
-            )
-
-        # Abre CSV respetando UTF-8 con BOM.
-        stream = io.StringIO(content.decode("utf-8-sig"))
-
-        # Crea el lector de filas.
-        reader = csv.DictReader(stream)
-
-        registros = []
-
-        # Procesa cada fila del CSV.
-        for row in reader:
-            row_clean = {k.strip().lower(): v.strip() for k, v in row.items() if k}
-
-            # Normaliza sede y código.
-            sede = row_clean.get("sede", "").upper()
-            codigo = row_clean.get("codigo", "").upper()
-
-            # Busca la columna de demanda disponible.
-            demanda_raw = (
-                row_clean.get("demanda_diaria")
-                or row_clean.get("demanda diaria")
-                or row_clean.get("demanda")
-                or "0"
-            )
-
-            # Normaliza separador decimal.
-            demanda_str = demanda_raw.replace(",", ".")
-
-            # Descarta filas sin sede/código.
-            if sede and codigo:
-                try:
-                    demanda_val = float(demanda_str)
-                except ValueError:
-                    demanda_val = 0.0
-
-                registros.append(
-                    {"sede": sede, "codigo": codigo, "demanda_diaria": demanda_val}
-                )
-
-        # Valida el contenido antes de tocar la BD.
-        if not registros:
-            raise HTTPException(
-                status_code=400, detail="No se encontraron registros válidos en el CSV"
-            )
-
-        # Realiza un único UPSERT masivo.
-        await (
-            config.supabase_async.table("ventas_stellar")
-            .upsert(registros, on_conflict="sede,codigo")
-            .execute()
-        )
-
-        return {"status": "ok", "procesados": len(registros)}
-
-    except HTTPException:
-        # Mantiene los códigos 400/413 originales.
-        raise
-
-    except Exception as e:
-        # Devuelve un error controlado al frontend.
-        raise HTTPException(status_code=500, detail=f"Error procesando CSV: {str(e)}")
-
-
-# ============================================================
-# CONSULTA DE VENTAS SOLO PARA CÓDIGOS NECESARIOS
-# ============================================================
-@router.post("/analisis/obtener-ventas-stellar")
-async def obtener_ventas_stellar(
-    payload: CodigosVentasRequest,
-    access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None),
-):
-    # Valida al usuario antes de consultar ventas.
-    user = await obtener_usuario_actual(access_token, refresh_token)
-
-    # Bloquea consultas anónimas.
-    if not user:
-        raise HTTPException(status_code=401, detail="No autorizado")
-
-    # Normaliza y elimina códigos duplicados.
-    codigos = list(
-        dict.fromkeys(
-            str(codigo).strip() for codigo in payload.codigos if str(codigo).strip()
-        )
-    )
-
-    # Si no hay códigos, evita una consulta a Supabase.
-    if not codigos:
-        return {"status": "ok", "data": []}
-
-    try:
-        # Consulta únicamente ventas de los productos visibles.
-        res = await (
-            config.supabase_async.table("ventas_stellar")
-            .select("sede, codigo, demanda_diaria")
-            .in_("codigo", codigos)
-            .execute()
-        )
-
-        return {"status": "ok", "data": res.data or []}
-
-    except Exception as e:
-        # Devuelve un error controlado.
-        raise HTTPException(
-            status_code=500, detail=f"Error al consultar ventas: {str(e)}"
-        )
 
 
 # ============================================================
