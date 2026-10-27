@@ -22,7 +22,7 @@
         border-radius: 8px;
         background: transparent;
         color: #e2e8f0;
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 500;
         white-space: nowrap;
         cursor: pointer;
@@ -78,7 +78,7 @@
         background: transparent;
         color: #334155;
         text-align: left;
-        font-size: 12px;
+        font-size: 14px;
         font-weight: 500;
         cursor: pointer;
     }
@@ -105,7 +105,7 @@
         display: block;
         margin-top: 2px;
         color: #64748b;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 400;
     }
 
@@ -181,7 +181,7 @@
             </button>
 
             <button type="button" class="pedido-item" data-accion-pedido onclick="abrirModalImportarInventarios()">
-                <i class="fa-solid fa-boxes-packing" aria-hidden="true"></i>
+                <i class="fa-solid fa-file-import" aria-hidden="true"></i>
                 <span>Importar inventario</span>
             </button>
 
@@ -213,7 +213,7 @@
 
             <button type="button" class="pedido-item" data-accion-pedido
                 onclick="ejecutarAccionConCambios(() => abrirModalExportarSeparado())">
-                <i class="fa-solid fa-store" aria-hidden="true"></i>
+                <i class="fa-solid fa-file-export" aria-hidden="true"></i>
                 <span>
                     Exportar para Stellar
                     <small>Exportación individual por tienda</small>
@@ -222,7 +222,7 @@
 
             <button type="button" class="pedido-item" data-accion-pedido
                 onclick="ejecutarAccionConCambios(() => exportarConsolidado())">
-                <i class="fa-solid fa-boxes-stacked" aria-hidden="true"></i>
+                <i class="fa-solid fa-file-export" aria-hidden="true"></i>
                 <span>
                     Exportar consolidado
                     <small>Totales agrupados de todas las tiendas</small>
@@ -234,7 +234,7 @@
             <!-- Conserva el ID que utiliza el control de carga del XML. -->
             <button type="button" id="btn-exportar-demanda-xml" class="pedido-item" data-accion-pedido
                 onclick="exportarDemandaKardexXML()">
-                <i class="fa-solid fa-file-code" aria-hidden="true"></i>
+                <i class="fa-solid fa-file-export" aria-hidden="true"></i>
                 <span>Exportar demanda XML</span>
             </button>
         </div>
