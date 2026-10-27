@@ -475,40 +475,6 @@
                         oninput="if(this.value < 1 && this.value !== '') this.value = 1; recargarSugeridosEnTabla()"
                         class="w-16 px-2 py-1.5 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
                 </div>
-
-                <!-- Días adicionales de entrega -->
-                <div class="flex flex-col gap-1">
-                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                        <input type="checkbox" id="incluir_dias_entrega"
-                            class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                            onchange="actualizarVisibilidadDiasExtra(); recargarSugeridosEnTabla()">
-                        <span>Demora de despacho</span>
-                    </label>
-
-                    <div id="contenedor_dias_entrega" class="hidden">
-                        <label for="dias_entrega_extra" class="sr-only">Días adicionales de entrega</label>
-                        <input type="number" id="dias_entrega_extra" value="3" min="0" step="1"
-                            oninput="recargarSugeridosEnTabla()"
-                            class="w-20 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center">
-                    </div>
-                </div>
-
-                <!-- Días de reserva de seguridad -->
-                <div class="flex flex-col gap-1">
-                    <label class="flex items-center gap-2 text-xs font-semibold text-slate-700">
-                        <input type="checkbox" id="incluir_dias_seguridad"
-                            class="rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-                            onchange="actualizarVisibilidadDiasExtra(); recargarSugeridosEnTabla()">
-                        <span>Reserva de seguridad</span>
-                    </label>
-
-                    <div id="contenedor_dias_seguridad" class="hidden">
-                        <label for="dias_seguridad_extra" class="sr-only">Días de reserva de seguridad</label>
-                        <input type="number" id="dias_seguridad_extra" value="3" min="0" step="1"
-                            oninput="recargarSugeridosEnTabla()"
-                            class="w-20 px-2 py-1.5 border border-slate-300 rounded-lg text-xs text-center">
-                    </div>
-                </div>
             </div>
 
             <!-- Botón Calcular Sugerido con animación de Spinner y cambio de estado -->
@@ -3358,38 +3324,6 @@ ${nodosProductosXML.join('\n')}
             return unidadesProyectadas;
         }
 
-
-        function actualizarVisibilidadDiasExtra() {
-            const incluirEntrega = document.getElementById(
-                'incluir_dias_entrega'
-            )?.checked || false;
-
-            const incluirSeguridad = document.getElementById(
-                'incluir_dias_seguridad'
-            )?.checked || false;
-
-            document.getElementById(
-                'contenedor_dias_entrega'
-            )?.classList.toggle('hidden', !incluirEntrega);
-
-            document.getElementById(
-                'contenedor_dias_seguridad'
-            )?.classList.toggle('hidden', !incluirSeguridad);
-        }
-
-        function obtenerDiasExtraAnalisis(idCheckbox, idInput) {
-            const activado = document.getElementById(idCheckbox)?.checked;
-
-            if (!activado) return 0;
-
-            const valor = Number(
-                document.getElementById(idInput)?.value ?? 0
-            );
-
-            return Number.isFinite(valor) ? Math.max(0, valor) : 0;
-        }
-
-
         function ejecutarCalculoSugeridosSync() {
             guardarEstadoTablaEnMemoria(tiendaActivaPestana);
 
@@ -3401,18 +3335,7 @@ ${nodosProductosXML.join('\n')}
                 )
             );
 
-
-            const diasEntrega = obtenerDiasExtraAnalisis(
-                'incluir_dias_entrega',
-                'dias_entrega_extra'
-            );
-
-            const diasSeguridad = obtenerDiasExtraAnalisis(
-                'incluir_dias_seguridad',
-                'dias_seguridad_extra'
-            );
-
-            const diasHorizonte = diasCobertura + diasEntrega;
+            const diasHorizonte = diasCobertura;
 
 
             const fechaHoy = new Date();
@@ -3467,14 +3390,6 @@ ${nodosProductosXML.join('\n')}
                     // Inventario de almacén convertido a unidades individuales.
                     const inventarioUnidades = invEmp * pre;
 
-                    const demandaRegular = numeroDemandaAnalisis(
-                        datos.demandaRegular
-                    );
-
-                    const demandaAlta = numeroDemandaAnalisis(
-                        datos.demandaAlta
-                    );
-
                     let empaquesSugeridos = 0;
 
                     if (datos.demandaComercialDisponible) {
@@ -3484,15 +3399,9 @@ ${nodosProductosXML.join('\n')}
                             diasHorizonte
                         );
 
-                        // Reserva de seguridad equivalente a tres días
-                        // de demanda regular.
-                        const stockSeguridad = demandaRegular * diasSeguridad;
-
                         const necesidadUnidades = Math.max(
                             0,
-                            demandaProyectada
-                            + stockSeguridad
-                            - inventarioUnidades
+                            demandaProyectada - inventarioUnidades
                         );
 
                         if (pre > 0 && necesidadUnidades > 0) {
@@ -3578,7 +3487,6 @@ ${nodosProductosXML.join('\n')}
         // Recalcula los sugeridos instantáneamente al cambiar los días de cobertura
         function recargarSugeridosEnTabla() {
             ejecutarCalculoSugeridosSync();
-            actualizarVisibilidadDiasExtra();
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
