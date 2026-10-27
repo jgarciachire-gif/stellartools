@@ -823,6 +823,7 @@ async def obtener_cobertura_kardex(
 # MESES CON VENTAS DISPONIBLES PARA COMPARACIÓN
 # ============================================================
 
+
 @router.get("/analisis/meses-kardex")
 async def consultar_meses_kardex(
     sede: str,
@@ -838,18 +839,13 @@ async def consultar_meses_kardex(
     sede_normalizada = sede.strip().upper()
 
     if not sede_normalizada or len(sede_normalizada) > 80:
-        raise HTTPException(
-            status_code=400,
-            detail="Sede inválida."
-        )
+        raise HTTPException(status_code=400, detail="Sede inválida.")
 
     if anio < 2000 or anio > date.today().year:
-        raise HTTPException(
-            status_code=400,
-            detail="Año fuera del rango permitido."
-        )
+        raise HTTPException(status_code=400, detail="Año fuera del rango permitido.")
 
     try:
+
         def consultar():
             return config.supabase_admin.rpc(
                 "obtener_meses_disponibles_kardex",
@@ -872,17 +868,27 @@ async def consultar_meses_kardex(
         print("ERROR AL CONSULTAR MESES DEL KARDEX:", str(error))
 
         raise HTTPException(
-            status_code=500,
-            detail="No se pudieron consultar los meses del Kardex."
+            status_code=500, detail="No se pudieron consultar los meses del Kardex."
         )
+
 
 # ============================================================
 # TOOLTIP DE VENTAS: CUATRO SEMANAS COMPLETAS
 # ============================================================
 
 MESES_TOOLTIP = (
-    "Ene", "Feb", "Mar", "Abr", "May", "Jun",
-    "Jul", "Ago", "Sep", "Oct", "Nov", "Dic",
+    "Ene",
+    "Feb",
+    "Mar",
+    "Abr",
+    "May",
+    "Jun",
+    "Jul",
+    "Ago",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dic",
 )
 
 
@@ -895,13 +901,15 @@ def preparar_semanas_tooltip(filas):
         # El jueves identifica el mes con más días en esa semana.
         mes = (inicio + timedelta(days=3)).month
 
-        semanas.append({
-            "etiqueta": f"{MESES_TOOLTIP[mes - 1]} {numero}",
-            "inicio": fila["fecha_inicio"],
-            "fin": fila["fecha_fin"],
-            "unidades": float(fila["unidades_vendidas"]),
-            "puesto": 0,
-        })
+        semanas.append(
+            {
+                "etiqueta": f"{MESES_TOOLTIP[mes - 1]} {numero}",
+                "inicio": fila["fecha_inicio"],
+                "fin": fila["fecha_fin"],
+                "unidades": float(fila["unidades_vendidas"]),
+                "puesto": 0,
+            }
+        )
 
     # En empate gana la semana más reciente.
     mejores = sorted(
@@ -919,10 +927,7 @@ def preparar_semanas_tooltip(filas):
             semanas[indice]["puesto"] = puesto
 
     demanda = sum(
-        (
-            Decimal(str(filas[i]["unidades_vendidas"]))
-            for i in mejores
-        ),
+        (Decimal(str(filas[i]["unidades_vendidas"])) for i in mejores),
         Decimal("0"),
     ) / Decimal("14")
 
@@ -958,6 +963,7 @@ async def obtener_ventas_semanales_tooltip(
     lunes = hoy - timedelta(days=hoy.weekday())
 
     try:
+
         def consultar():
             return config.supabase_admin.rpc(
                 "obtener_ventas_semanales_tooltip",
@@ -972,9 +978,7 @@ async def obtener_ventas_semanales_tooltip(
         filas = respuesta.data or []
 
         if len(filas) != 4:
-            raise ValueError(
-                "La consulta semanal debe devolver cuatro intervalos."
-            )
+            raise ValueError("La consulta semanal debe devolver cuatro intervalos.")
 
         semanas, demanda = preparar_semanas_tooltip(filas)
 
@@ -992,6 +996,7 @@ async def obtener_ventas_semanales_tooltip(
             detail="No se pudieron consultar las ventas.",
         )
 
+
 # ============================================================
 # DEMANDA CALCULADA A PARTIR DEL KARDEX
 # ============================================================
@@ -1001,19 +1006,16 @@ async def obtener_ventas_semanales_tooltip(
 async def obtener_demanda_kardex(
     fecha_inicio: date,
     fecha_fin: date,
-    
     codigos: Optional[List[str]] = Query(None),
     modo: str = Query("ventas"),
     access_token: str = Cookie(None),
-
     refresh_token: str = Cookie(None),
 ):
     user = await obtener_usuario_actual(access_token, refresh_token)
 
     if modo not in ("ventas", "intervalo"):
         raise HTTPException(
-            status_code=400,
-            detail="Modo de cálculo de demanda inválido."
+            status_code=400, detail="Modo de cálculo de demanda inválido."
         )
 
     if not user:
@@ -1056,7 +1058,6 @@ async def obtener_demanda_kardex(
                 },
             ).execute()
 
-        
         respuesta = await asyncio.to_thread(consultar)
 
         # Intervalo calendario inclusivo.
@@ -1073,15 +1074,11 @@ async def obtener_demanda_kardex(
             for item in datos:
                 registro = dict(item)
 
-                unidades = Decimal(
-                    str(registro.get("unidades_vendidas") or 0)
-                )
+                unidades = Decimal(str(registro.get("unidades_vendidas") or 0))
 
                 # Nuevo cálculo:
                 # Demanda diaria = unidades / días calendario.
-                registro["demanda_diaria"] = float(
-                    unidades / Decimal(dias_intervalo)
-                )
+                registro["demanda_diaria"] = float(unidades / Decimal(dias_intervalo))
 
                 # Conservamos los días reales con ventas
                 # y agregamos la duración del intervalo.
@@ -1099,7 +1096,6 @@ async def obtener_demanda_kardex(
             "dias_intervalo": dias_intervalo,
             "data": datos,
         }
-
 
     except Exception as error:
         print("ERROR AL CALCULAR DEMANDA DEL KARDEX:", str(error))
@@ -1174,128 +1170,6 @@ async def consultar_demanda_comercial_kardex(
             status_code=500,
             detail="No se pudo calcular la demanda comercial del Kardex.",
         )
-
-
-# ============================================================
-# COMPARACIÓN DE DEMANDA COMERCIAL ACTUAL Y AJUSTADA
-# No modifica las cantidades sugeridas.
-# ============================================================
-
-@router.get("/analisis/comparar-demanda-comercial-kardex")
-async def comparar_demanda_comercial_kardex(
-    fecha_inicio: date,
-    fecha_fin: date,
-    codigos: Optional[List[str]] = Query(None),
-    fecha_observacion: Optional[date] = None,
-    access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None),
-):
-    user = await obtener_usuario_actual(access_token, refresh_token)
-
-    if not user:
-        raise HTTPException(status_code=401, detail="No autorizado")
-
-    hoy = date.today()
-    observacion = fecha_observacion or hoy
-
-    if (
-        fecha_inicio > fecha_fin
-        or (fecha_fin - fecha_inicio).days > 30
-        or fecha_fin > hoy
-        or observacion < fecha_fin
-        or observacion > hoy
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail="Fechas inválidas. Utiliza un período de hasta 31 días.",
-        )
-
-    codigos_normalizados = list(
-        dict.fromkeys(
-            _normalizar_codigo_kardex(codigo)
-            for codigo in (codigos or [])
-            if _normalizar_codigo_kardex(codigo)
-        )
-    )
-
-    if not codigos_normalizados:
-        raise HTTPException(
-            status_code=400,
-            detail="Debes enviar al menos un código de producto.",
-        )
-
-    if len(codigos_normalizados) > 12:
-        raise HTTPException(
-            status_code=400,
-            detail="La comparación admite hasta 12 productos por consulta.",
-        )
-
-    parametros = {
-        "p_fecha_inicio": fecha_inicio.isoformat(),
-        "p_fecha_fin": fecha_fin.isoformat(),
-        "p_codigos": codigos_normalizados,
-    }
-
-    try:
-        def consultar():
-            actual = config.supabase_admin.rpc(
-                "obtener_demanda_comercial_kardex",
-                parametros,
-            ).execute()
-
-            ajustada = config.supabase_admin.rpc(
-                "obtener_demanda_comercial_ajustada_kardex",
-                {
-                    **parametros,
-                    "p_fecha_observacion": observacion.isoformat(),
-                },
-            ).execute()
-
-            
-            episodios = config.supabase_admin.rpc(
-                "detectar_episodios_multisede_kardex",
-                parametros,
-            ).execute()
-
-            return (
-                actual.data or [],
-                ajustada.data or [],
-                episodios.data or [],
-            )
-
-
-        
-        (
-            datos_actual,
-            datos_ajustada,
-            datos_episodios,
-        ) = await asyncio.to_thread(consultar)
-
-
-        return {
-            "status": "ok",
-            "modo": "solo_comparacion",
-            "fecha_inicio": fecha_inicio.isoformat(),
-            "fecha_fin": fecha_fin.isoformat(),
-            "fecha_observacion": observacion.isoformat(),
-            "calendario_actual": "lunes-domingo",
-            "calendario_ajustado": "domingo-sabado",
-            "data_actual": datos_actual,
-            "data_ajustada": datos_ajustada,
-            "data_episodios_multi_sede": datos_episodios,
-
-        }
-
-    except Exception as error:
-        print(
-            "ERROR AL COMPARAR DEMANDA COMERCIAL KARDEX:",
-            str(error),
-        )
-        raise HTTPException(
-            status_code=500,
-            detail="No se pudo comparar la demanda comercial del Kardex.",
-        )
-
 
 
 # ============================================================
