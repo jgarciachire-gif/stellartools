@@ -296,7 +296,14 @@
             if (
                 !Array.isArray(datos.semanas) ||
                 datos.semanas.length !== 4 ||
-                !Number.isFinite(datos.demanda_diaria)
+                !Number.isFinite(datos.demanda_diaria) ||
+                datos.semanas.some(semana =>
+                    !Array.isArray(semana.dias_con_venta) ||
+                    semana.dias_con_venta.length !== 7 ||
+                    semana.dias_con_venta.some(
+                        valor => typeof valor !== 'boolean'
+                    )
+                )
             ) {
                 throw new Error('Respuesta semanal inválida.');
             }
@@ -356,34 +363,78 @@
             for (const semana of datos.semanas) {
                 const fila = document.createElement('div');
 
-                // textContent evita interpretar los datos como HTML.
-                fila.textContent =
-                    `${semana.etiqueta} → ${fecha(semana.inicio)} al ` +
-                    `${fecha(semana.fin)} = ${numero.format(semana.unidades)}`;
+                // La segunda columna contiene el rango y sus siete puntos.
+                fila.style.cssText =
+                    'display:grid;' +
+                    'grid-template-columns:max-content max-content max-content;' +
+                    'column-gap:4px;row-gap:3px;' +
+                    'margin-bottom:6px;align-items:start';
 
+                const etiqueta = document.createElement('span');
+                etiqueta.textContent = `${semana.etiqueta} →`;
+
+                const rango = document.createElement('span');
+                rango.textContent =
+                    `${fecha(semana.inicio)} al ${fecha(semana.fin)}`;
+
+                const total = document.createElement('span');
+                total.textContent = `= ${numero.format(semana.unidades)}`;
+
+                // Conserva los indicadores de las dos mejores semanas.
                 if (semana.puesto === 1 || semana.puesto === 2) {
-                    const punto = document.createElement('span');
+                    const indicador = document.createElement('span');
 
-                    punto.setAttribute(
+                    indicador.setAttribute(
                         'aria-label',
                         semana.puesto === 1
                             ? 'Mayor venta'
                             : 'Segunda mayor venta'
                     );
 
-                    // Punto de 5 px, elevado como un exponente.
-                    punto.style.cssText =
+                    indicador.style.cssText =
                         'display:inline-block;width:5px;height:5px;' +
                         'border-radius:50%;margin-left:3px;' +
                         'vertical-align:super;' +
-                        `background:${semana.puesto === 1
-                            ? '#10B981'
-                            : '#F59E0B'
+                        `background:${semana.puesto === 1 ? '#10B981' : '#F59E0B'
                         }`;
 
-                    fila.appendChild(punto);
+                    total.appendChild(indicador);
                 }
 
+                fila.append(etiqueta, rango, total);
+
+                const dias = document.createElement('div');
+
+                dias.style.cssText =
+                    'grid-column:2;display:grid;' +
+                    'grid-template-columns:repeat(7,1fr);' +
+                    'justify-items:center;padding:0 2px';
+
+                const nombresDias = [
+                    'Lunes', 'Martes', 'Miércoles', 'Jueves',
+                    'Viernes', 'Sábado', 'Domingo'
+                ];
+
+                semana.dias_con_venta.forEach((conVenta, indice) => {
+                    const punto = document.createElement('span');
+
+                    punto.style.cssText =
+                        'display:block;width:5px;height:5px;' +
+                        'border-radius:50%;' +
+                        `background:${conVenta ? '#3B82F6' : '#bd2722'}`;
+
+                    // Descripción accesible, sin añadir texto visible.
+                    punto.setAttribute('role', 'img');
+                    punto.setAttribute(
+                        'aria-label',
+                        `${nombresDias[indice]}: ${conVenta ? 'con ventas' : 'sin ventas registradas'
+                        }`
+                    );
+
+                    dias.appendChild(punto);
+                });
+
+                fila.appendChild(dias);
                 cuadro.appendChild(fila);
             }
 

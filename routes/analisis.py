@@ -761,12 +761,23 @@ def preparar_semanas_tooltip(filas):
         # El jueves identifica el mes con más días en esa semana.
         mes = (inicio + timedelta(days=3)).month
 
+                # Valida los siete indicadores antes de enviarlos al tooltip.
+        dias_con_venta = fila.get("dias_con_venta")
+
+        if (
+            not isinstance(dias_con_venta, list)
+            or len(dias_con_venta) != 7
+            or any(type(valor) is not bool for valor in dias_con_venta)
+        ):
+            raise ValueError("Los indicadores diarios de ventas no son válidos.")
+
         semanas.append(
             {
                 "etiqueta": f"{MESES_TOOLTIP[mes - 1]} {numero}",
                 "inicio": fila["fecha_inicio"],
                 "fin": fila["fecha_fin"],
                 "unidades": float(fila["unidades_vendidas"]),
+                "dias_con_venta": dias_con_venta,
                 "puesto": 0,
             }
         )
