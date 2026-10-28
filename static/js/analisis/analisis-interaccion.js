@@ -416,12 +416,19 @@
 
     document.addEventListener('keydown', e => {
         if (e.key !== 'Shift') {
-            // Las flechas y demás teclas conservan su funcionamiento.
+            // Conserva el cierre al navegar o comenzar a escribir.
             ocultarTooltipVentas();
             return;
         }
 
+        // Mantener Shift pulsado no alterna repetidamente el tooltip.
         if (e.repeat || e.ctrlKey || e.altKey || e.metaKey) return;
+
+        // Una segunda pulsación cierra el tooltip, incluso durante la carga.
+        if (sesionTooltipVentas) {
+            ocultarTooltipVentas();
+            return;
+        }
 
         const contexto = contextoTooltipVentas();
 
@@ -435,21 +442,16 @@
             return;
         }
 
-        ocultarTooltipVentas();
         sesionTooltipVentas = contexto;
 
-        // Evita consultar por un toque fugaz o por Shift + flechas.
+        // Permite cancelar la apertura si se utiliza Shift + flechas.
         contexto.temporizador = setTimeout(
             () => abrirTooltipVentas(contexto),
             180
         );
     }, true);
 
-    document.addEventListener('keyup', e => {
-        if (e.key === 'Shift' && !e.shiftKey) {
-            ocultarTooltipVentas();
-        }
-    }, true);
+    // No se cierra al soltar Shift.
 
     document.addEventListener(
         'pointerdown', ocultarTooltipVentas, true
