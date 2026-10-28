@@ -979,11 +979,8 @@ async def crear_inventarios_multitienda(
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
-    # Verificar la sesión autenticada.
-    user = await obtener_usuario_actual(
-        access_token,
-        refresh_token
-    )
+    # Solo normales y administradores pueden crear inventarios multitienda.
+    user = await config.exigir_permiso_backend()
 
     if not user:
         return JSONResponse(
@@ -2030,9 +2027,10 @@ async def guardar_inventario(
 
 @router.delete("/api/inventario/{inventario_id}/descartar")
 async def descartar_inventario_nuevo(
+    request: Request,  # Necesario para consultar el perfil de la solicitud.
     inventario_id: int,
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
     # --------------------------------------------------------
     # 1. VALIDAR SESIÓN

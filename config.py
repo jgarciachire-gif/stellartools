@@ -14,6 +14,7 @@ from supabase import AsyncClientOptions  # Opciones asíncronas correctas.
 from contextvars import ContextVar  # Contexto independiente por solicitud.
 from supabase_auth.errors import AuthApiError, AuthRetryableError
 from postgrest.exceptions import APIError
+from fastapi import HTTPException
 
 # Ajuste de rutas globales del sistema
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -287,7 +288,45 @@ async def obtener_usuario_actual(
     # La sesión ya fue verificada por el middleware.
     estado = _sesion_actual.get()
     return estado["user"] if estado is not None else None
+async def exigir_permiso_backend(
+    tipos_permitidos: tuple[str, ...] = ("normal", "administrador"),
+):
+    # Usa exclusivamente la identidad verificada de esta solicitud.
+    estado = _sesion_actual.get()
+    user = estado.get("user") if estado else None
 
+    if user is None:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    try:
+        # Comprueba el permiso actual antes de usar el cliente privilegiado.
+        resultado = await (
+            estado["cliente"]
+            .table("perfiles")
+            .select("usuario_id, tipo_usuario")
+            .eq("usuario_id", str(user.id))
+            .maybe_single()
+            .execute()
+        )
+    except (APIError, httpx.HTTPError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudieron verificar los permisos. Reintenta.",
+        ) from error
+
+    perfil = resultado.data if resultado else None
+
+    if (
+        not isinstance(perfil, dict)
+        or str(perfil.get("usuario_id")) != str(user.id)
+        or perfil.get("tipo_usuario") not in tipos_permitidos
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos.",
+        )
+
+    return user
 # Configuración del motor de plantillas HTML
 # Configuración del motor de plantillas HTML
 # Configuración del motor de plantillas HTML

@@ -188,7 +188,7 @@ async def crear_programacion_api(
     client = await config.obtener_supabase_async()
 
 
-    # Busca el proveedor seleccionado en la base de datos.
+    # Guarda la respuesta con el nombre utilizado después.
     proveedor_res = await (
         client
         .table("proveedores")
@@ -244,7 +244,7 @@ async def crear_programacion_api(
 
     client = await config.obtener_supabase_async()
 
-        # Busca una programación previa del mismo usuario y proveedor.
+        # Recupera la programación propia que podría actualizarse.
     existente = await (
         client
         .table("programacion_reposicion")

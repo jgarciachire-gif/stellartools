@@ -436,7 +436,8 @@ async def cargar_kardex_ventas(
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    # Verifica identidad y rol antes de acceder al Kardex privilegiado.
+    user = await config.exigir_permiso_backend()
 
     if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -657,7 +658,8 @@ async def cargar_kardex_ventas(
 async def obtener_cobertura_kardex(
     access_token: str = Cookie(None), refresh_token: str = Cookie(None)
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    # Verifica identidad y rol antes de acceder al Kardex privilegiado.
+    user = await config.exigir_permiso_backend()
 
     if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -691,7 +693,8 @@ async def consultar_meses_kardex(
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    # Verifica identidad y rol antes de acceder al Kardex privilegiado.
+    user = await config.exigir_permiso_backend()
 
     if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -812,7 +815,8 @@ async def obtener_ventas_semanales_tooltip(
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    # Verifica identidad y rol antes de acceder al Kardex privilegiado.
+    user = await config.exigir_permiso_backend()
 
     if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
@@ -882,7 +886,8 @@ async def obtener_demanda_kardex(
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    # Verifica identidad y rol antes de acceder al Kardex privilegiado.
+    user = await config.exigir_permiso_backend()
 
     if modo not in ("ventas", "intervalo"):
         raise HTTPException(
@@ -989,7 +994,8 @@ async def consultar_demanda_comercial_kardex(
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None),
 ):
-    user = await obtener_usuario_actual(access_token, refresh_token)
+    # Verifica identidad y rol antes de acceder al Kardex privilegiado.
+    user = await config.exigir_permiso_backend()
 
     if not user:
         raise HTTPException(status_code=401, detail="No autorizado")
