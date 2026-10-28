@@ -2,7 +2,8 @@ import os
 from fastapi import FastAPI, Request  # Framework principal web
 from fastapi.responses import (
     RedirectResponse,
-    FileResponse
+    FileResponse,
+    JSONResponse,
 )
 from fastapi.staticfiles import StaticFiles  # Soporte de archivos estáticos
 from starlette.middleware.sessions import SessionMiddleware  # Middleware para manejo de sesiones
@@ -41,11 +42,6 @@ async def service_worker():
         media_type="application/javascript"
     )
 
-@app.on_event("startup")
-async def startup_event():
-    # Garantiza la preparación de la instancia asíncrona al levantar FastAPI
-    await config.obtener_supabase_async()
-
 # Middleware global de autenticación y control de caché
 @app.middleware("http")
 async def autenticacion_y_cache_middleware(request: Request, call_next):
@@ -71,8 +67,8 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
         or path.startswith("/.well-known/")
     )
     
-    # Si intenta entrar escribiendo la URL a una vista privada sin credenciales, redirige al login
-    if not es_publica and not user and not access_token:
+    # Una cookie presente pero inválida no autoriza el acceso.
+    if not es_publica and not user:
         return RedirectResponse(
             url="/login",
             status_code=303
@@ -193,6 +189,58 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
     return response
 
 # 2. DESPUÉS agregamos SessionMiddleware (se ejecutará primero en cada petición)
+@app.middleware("http")
+async def sesion_supabase_middleware(request: Request, call_next):
+    path = request.url.path
+
+    if (
+        path.startswith("/static/")
+        or path.startswith("/.well-known/")
+        or path == "/service-worker.js"
+    ):
+        return await call_next(request)
+
+    try:
+        async with config.sesion_supabase(request) as estado:
+            respuesta = await call_next(request)
+            renovada = estado["renovada"]
+
+            if renovada:
+                # Guarda los dos tokens nuevos en el navegador.
+                opciones = {
+                    "httponly": True,
+                    "secure": auth.COOKIE_SECURE,
+                    "samesite": "lax",
+                    "path": "/",
+                    "max_age": 3600 * 24 * 7,
+                }
+
+                respuesta.set_cookie(
+                    "access_token",
+                    renovada.access_token,
+                    **opciones,
+                )
+                respuesta.set_cookie(
+                    "refresh_token",
+                    renovada.refresh_token,
+                    **opciones,
+                )
+
+            if estado["borrar_cookies"]:
+                respuesta.delete_cookie("access_token", path="/")
+                respuesta.delete_cookie("refresh_token", path="/")
+
+            return respuesta
+
+    except config.SesionTemporalmenteNoDisponible:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "error": "No se pudo validar la sesión. Reintenta."
+            },
+            headers={"Cache-Control": "no-store"},
+        )
+        
 SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta_para_sesiones_local")
 app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 

@@ -3,6 +3,7 @@ from fastapi import APIRouter, Request, Form, Cookie, Response  # Componentes we
 from fastapi.responses import RedirectResponse  # Redirecciones HTTP
 import traceback
 import config  # Importa el módulo de configuración para acceder al cliente asíncrono
+from starlette.concurrency import run_in_threadpool
 from config import supabase, templates, obtener_usuario_actual, script_alerta_modal, script_alerta_error  # Importación de contexto global
 
 router = APIRouter()
@@ -33,26 +34,47 @@ async def vista_login(request: Request, access_token: str = Cookie(None), refres
 @router.post("/login")
 async def procesar_login(request: Request, email: str = Form(...), password: str = Form(...)):
     try:
-        # Obtiene el cliente asíncrono resuelto
-        client_async = await config.obtener_supabase_async()
-        
-        # Inicio de sesión asíncrono
-        auth_res = await client_async.auth.sign_in_with_password({"email": email.strip(), "password": password})
-        user = auth_res.user
-        
-        # Consulta de perfil asíncrona
-        res_perfil = await (
-            client_async
-            .table("perfiles")
-            .select(
-                "usuario_id, nombre_comprador, cargo, "
-                "tipo_usuario, tienda"
+                # Este cliente pertenece únicamente a este intento de login.
+        async with config.cliente_auth_aislado() as client_async:
+            auth_res = await client_async.auth.sign_in_with_password({
+                "email": email.strip(),
+                "password": password,
+            })
+
+            if not auth_res.user or not auth_res.session:
+                raise ValueError("No se obtuvo una sesión válida.")
+
+            user = auth_res.user
+
+            # Consulta el perfil con el token del usuario recién autenticado.
+            client_async.postgrest.auth(auth_res.session.access_token)
+
+            res_perfil = await (
+                client_async.table("perfiles")
+                .select(
+                    "usuario_id, nombre_comprador, cargo, "
+                    "tipo_usuario, tienda"
+                )
+                .eq("usuario_id", user.id)
+                .maybe_single()
+                .execute()
             )
-            .eq("usuario_id", user.id)
-            .maybe_single()
-            .execute()
-        )
-        perfil_data = res_perfil.data if res_perfil and res_perfil.data else None
+
+            perfil_data = res_perfil.data if res_perfil else None
+
+            # Deniega cuentas sin perfil válido.
+            if (
+                not isinstance(perfil_data, dict)
+                or perfil_data.get("tipo_usuario")
+                not in {"administrador", "normal", "provisional"}
+                or (
+                    perfil_data.get("tipo_usuario") == "provisional"
+                    and not str(perfil_data.get("tienda") or "").strip()
+                )
+            ):
+                raise ValueError(
+                    "La cuenta no tiene un perfil habilitado."
+                )
 
         # Almacenamiento en sesión cifrada
         request.session["user"] = {"id": user.id, "email": user.email}
@@ -97,19 +119,22 @@ async def procesar_login(request: Request, email: str = Form(...), password: str
         )
         return response
     except Exception as e:
-        print("\n================ DETALLE EXACTO DEL ERROR ================")
-        traceback.print_exc()  # Muestra en la terminal el archivo, la línea exacta y la causa del fallo
-        print("==========================================================\n")
-        
-        res_error = script_alerta_modal(
-            tipo="error", 
-            titulo="Error de Acceso", 
-            mensaje=f"Supabase rechazó la entrada: {str(e)}"
-        )
-        res_error.delete_cookie("access_token")
-        res_error.delete_cookie("refresh_token")
+        # No imprime tokens, contraseñas ni detalles internos.
+        print(f"ERROR EN LOGIN: {type(e).__name__}")
         request.session.clear()
-        return res_error
+
+        respuesta = script_alerta_modal(
+            tipo="error",
+            titulo="Error de acceso",
+            mensaje=(
+                "No se pudo iniciar sesión. "
+                "Verifica tus datos o contacta al administrador."
+            ),
+        )
+
+        respuesta.delete_cookie("access_token", path="/")
+        respuesta.delete_cookie("refresh_token", path="/")
+        return respuesta
         
 
 # Envía el correo de recuperación de contraseña.
@@ -289,45 +314,114 @@ async def vista_perfil(request: Request, access_token: str = Cookie(None)):
         "categorias": categorias
     })
 
-# Guardar información personal del perfil
 @router.post("/perfil/guardar")
 async def guardar_perfil(
     nombre_comprador: str = Form(""),
     cargo: str = Form(""),
-    access_token: str = Cookie(None)
+    access_token: str = Cookie(None),
 ):
     user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res = supabase.table("perfiles").select("id").eq("usuario_id", user.id).execute()
-    
-    if res.data:
-        supabase.table("perfiles").update({
-            "nombre_comprador": nombre_comprador,
-            "cargo": cargo
-        }).eq("usuario_id", user.id).execute()
-    else:
-        supabase.table("perfiles").insert({
-            "usuario_id": user.id,
-            "nombre_comprador": nombre_comprador,
-            "cargo": cargo
-        }).execute()
+    try:
+        # Solo actualiza campos personales del perfil existente.
+        resultado = await run_in_threadpool(
+            lambda: supabase.table("perfiles")
+            .update({
+                "nombre_comprador": nombre_comprador.strip(),
+                "cargo": cargo.strip(),
+            })
+            .eq("usuario_id", user.id)
+            .execute()
+        )
 
-    return RedirectResponse(url="/perfil", status_code=303)
+        if not resultado.data:
+            raise ValueError("No se encontró un perfil editable.")
+
+        return script_alerta_modal(
+            tipo="exito",
+            titulo="Perfil actualizado",
+            mensaje="Tus datos se guardaron correctamente.",
+            redireccionar="/perfil",
+        )
+
+    except Exception as error:
+        print(f"ERROR AL GUARDAR PERFIL: {type(error).__name__}")
+        return script_alerta_modal(
+            tipo="error",
+            titulo="No se pudo guardar",
+            mensaje="No pudimos actualizar tu perfil. Inténtalo nuevamente.",
+            redireccionar="/perfil",
+        )
 
 # Cambio de contraseña desde la vista de perfil
 @router.post("/perfil/cambiar-clave")
-async def cambiar_clave(nueva_password: str = Form(...), access_token: str = Cookie(None)):
+async def cambiar_clave(
+    nueva_password: str = Form(..., min_length=6),
+    access_token: str = Cookie(None),
+):
     user = await obtener_usuario_actual(access_token)
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
+    estado = config._sesion_actual.get()
+
     try:
-        supabase.auth.update_user({"password": nueva_password})
-        return script_alerta_error("¡Contraseña actualizada con éxito!", redireccionar="/perfil")
-    except Exception as e:
-        return script_alerta_error(f"Error al cambiar contraseña: {str(e)}")
+        # La sesión se guarda solo en memoria de este cliente independiente.
+        async with config.cliente_auth_aislado(
+            persistir_sesion=True
+        ) as cliente:
+            autenticacion = await cliente.auth.set_session(
+                estado["access_token"],
+                estado["refresh_token"] or "",
+            )
+
+            if (
+                not autenticacion.user
+                or not autenticacion.session
+                or autenticacion.user.id != user.id
+            ):
+                raise ValueError(
+                    "La sesión no corresponde al usuario actual."
+                )
+
+            # Devuelve cookies nuevas si el SDK necesitó renovar la sesión.
+            if (
+                autenticacion.session.access_token
+                != estado["access_token"]
+                or autenticacion.session.refresh_token
+                != (estado["refresh_token"] or "")
+            ):
+                estado["renovada"] = autenticacion.session
+
+            await cliente.auth.update_user({
+                "password": nueva_password
+            })
+
+        return script_alerta_modal(
+            tipo="exito",
+            titulo="Contraseña actualizada",
+            mensaje="Tu contraseña se actualizó correctamente.",
+            redireccionar="/perfil",
+        )
+
+    except Exception as error:
+        # No registra contraseñas, tokens ni detalles internos.
+        print(
+            "ERROR AL CAMBIAR CONTRASEÑA: "
+            f"{type(error).__name__}"
+        )
+
+        return script_alerta_modal(
+            tipo="error",
+            titulo="No se pudo actualizar",
+            mensaje=(
+                "No pudimos cambiar la contraseña. "
+                "Inténtalo nuevamente."
+            ),
+            redireccionar="/perfil",
+        )
 
 # Creación de nueva categoría
 @router.post("/perfil/categorias/crear")

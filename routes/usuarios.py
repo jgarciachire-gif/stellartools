@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import JSONResponse
 
 import config
-
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter()
 
@@ -26,19 +26,16 @@ TIENDAS_PERMITIDAS = [
 # ============================================================
 
 def usuario_es_administrador(request: Request) -> bool:
-    """
-    Verifica que el usuario autenticado sea administrador.
-    """
+    # Usa la identidad verificada para esta solicitud.
+    estado = config._sesion_actual.get()
+    user = estado.get("user") if estado else None
     perfil = request.session.get("perfil")
 
-    if not isinstance(perfil, dict):
-        return False
-
-    return (
-        str(
-            perfil.get("tipo_usuario", "")
-        ).strip().lower()
-        == "administrador"
+    return bool(
+        user
+        and isinstance(perfil, dict)
+        and str(perfil.get("usuario_id")) == str(user.id)
+        and perfil.get("tipo_usuario") == "administrador"
     )
 
 
@@ -214,17 +211,13 @@ async def crear_usuario(
             "tienda": tienda
         }
 
-        resultado_perfil = await (
-            config.supabase_async
+        # La creación del perfil requiere el cliente administrativo.
+        resultado_perfil = await run_in_threadpool(
+            lambda: config.supabase_admin
             .table("perfiles")
             .insert(perfil)
             .execute()
         )
-
-        if not resultado_perfil.data:
-            raise RuntimeError(
-                "No se pudo crear el perfil del usuario."
-            )
 
         return JSONResponse(
             status_code=201,
