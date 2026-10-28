@@ -240,9 +240,15 @@ async def sesion_supabase_middleware(request: Request, call_next):
             },
             headers={"Cache-Control": "no-store"},
         )
-        
-SECRET_KEY = os.getenv("SECRET_KEY", "clave_secreta_para_sesiones_local")
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=config.SECRET_KEY,
+    session_cookie="session",
+    max_age=3600 * 24 * 7,
+    same_site="lax",
+    https_only=config.COOKIE_SECURE,
+)
 
 # Registro de rutas modulares
 app.include_router(auth.router)

@@ -8,11 +8,8 @@ from config import supabase, templates, obtener_usuario_actual, script_alerta_mo
 
 router = APIRouter()
 
-# En local HTTP permanece false; en Vercel puedes activarlo con COOKIE_SECURE=true.
-COOKIE_SECURE = (
-    os.getenv("COOKIE_SECURE", "false").lower()
-    == "true"
-)
+# Login y renovación utilizan la misma configuración.
+COOKIE_SECURE = config.COOKIE_SECURE
 
 @router.get("/.well-known/appspecific/com.chrome.devtools.json", include_in_schema=False)
 async def chrome_devtools_silencer():

@@ -16,6 +16,32 @@ from supabase_auth.errors import AuthApiError, AuthRetryableError
 from postgrest.exceptions import APIError
 from fastapi import HTTPException
 
+# En Vercel, producción y preview utilizan HTTPS.
+ES_PRODUCCION = (
+    os.getenv("APP_ENV", "development").strip().lower() == "production"
+    or os.getenv("VERCEL", "").strip() == "1"
+    or os.getenv("VERCEL_ENV", "").strip().lower()
+    in {"production", "preview"}
+)
+
+# En producción no permite desactivar Secure accidentalmente.
+COOKIE_SECURE = ES_PRODUCCION or (
+    os.getenv("COOKIE_SECURE", "false").strip().lower() == "true"
+)
+
+SECRET_KEY = os.getenv("SECRET_KEY", "").strip()
+
+# Detiene el arranque si falta una clave privada válida.
+if (
+    len(SECRET_KEY) < 32
+    or SECRET_KEY == "clave_secreta_para_sesiones_local"
+    or SECRET_KEY.startswith("PEGA_AQUI")
+):
+    raise RuntimeError(
+        "Configura SECRET_KEY con una clave aleatoria privada "
+        "de al menos 32 caracteres."
+    )
+
 # Ajuste de rutas globales del sistema
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
