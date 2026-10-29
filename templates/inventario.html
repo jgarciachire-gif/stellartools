@@ -114,22 +114,33 @@
     }
 
     @media (min-width: 640px) {
-        .inventario-header-menu .inventario-menu { position: relative; }
-        .inventario-header-menu .inventario-trigger { padding: 8px 12px; }
+        .inventario-header-menu .inventario-menu {
+            position: relative;
+        }
+
+        .inventario-header-menu .inventario-trigger {
+            padding: 8px 12px;
+        }
     }
 
     @media (min-width: 1024px) {
-        .inventario-header-menu { order: 0; width: auto; flex: 1; }
+        .inventario-header-menu {
+            order: 0;
+            width: auto;
+            flex: 1;
+        }
     }
 </style>
 {% endblock %}
 
 {% block header_actions %}
-{% if perfil and (perfil.tipo_usuario|string|lower|trim) in ['administrador', 'normal'] %}
-<nav id="menus-header-inventarios" class="inventario-header-menu" aria-label="Acciones de inventario">
+{% if perfil and (perfil.tipo_usuario|string|lower|trim) in ['administrador', 'normal', 'provisional'] %}
+<nav id="menus-header-inventarios"
+    class="inventario-header-menu {% if (perfil.tipo_usuario|string|lower|trim) == 'provisional' %}hidden lg:flex{% endif %}"
+    aria-label="Acciones de inventario">
     <div id="menu-archivo-inventarios" class="inventario-menu">
-        <button type="button" id="btn-menu-archivo-inventarios" class="inventario-trigger"
-            aria-expanded="false" aria-controls="opciones-archivo-inventarios">
+        <button type="button" id="btn-menu-archivo-inventarios" class="inventario-trigger" aria-expanded="false"
+            aria-controls="opciones-archivo-inventarios">
             Archivo
             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
         </button>
@@ -140,10 +151,10 @@
             </button>
         </div>
     </div>
-
+    {% if (perfil.tipo_usuario|string|lower|trim) in ['administrador', 'normal'] %}
     <div id="menu-seleccion-inventarios" class="inventario-menu">
-        <button type="button" id="btn-menu-seleccion-inventarios" class="inventario-trigger"
-            aria-expanded="false" aria-controls="opciones-seleccion-inventarios">
+        <button type="button" id="btn-menu-seleccion-inventarios" class="inventario-trigger" aria-expanded="false"
+            aria-controls="opciones-seleccion-inventarios">
             Administrar Listas
             <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
         </button>
@@ -163,6 +174,7 @@
             </button>
         </div>
     </div>
+    {% endif %}
 </nav>
 {% endif %}
 {% endblock %}
@@ -202,115 +214,90 @@
     </div>
 
     {% if es_provisional %}
-    <button type="button" onclick="abrirModalNuevoInventario()"
-        class="mb-5 inline-flex w-full items-center justify-center gap-2 rounded-xl
+    <button type="button" onclick="abrirModalNuevoInventario()" class="mb-5 inline-flex w-full items-center justify-center gap-2 rounded-xl
                bg-slate-900 px-3 py-2 font-semibold text-white shadow-sm
-               transition-all hover:bg-slate-800 hover:shadow-md active:scale-[0.98] md:hidden">
+               transition-all hover:bg-slate-800 hover:shadow-md active:scale-[0.98] lg:hidden">
         <i class="fa-solid fa-plus" aria-hidden="true"></i>
         Crear lista
     </button>
     {% endif %}
 
-    <!-- BUSCADOR Y FILTROS -->
-<!-- BUSCADOR INTELIGENTE SIN CONTENEDOR EXTERIOR -->
-<div id="buscador-inventarios" class="mx-auto mb-5 w-full max-w-[720px]">
 
-    <!-- Barra única: lupa, badges, escritura y selectores -->
-    <div id="barra-buscador-inventarios"
-         class="flex min-h-11 items-center gap-2 rounded-xl
+    <!-- BUSCADOR INTELIGENTE SIN CONTENEDOR EXTERIOR -->
+    <div id="buscador-inventarios" class="mx-auto mb-5 w-full max-w-[720px]"
+        data-es-provisional="{{ 'true' if es_provisional else 'false' }}"
+        data-tienda-asignada="{{ perfil.tienda if es_provisional else '' }}">
+
+        <!-- Barra única: lupa, badges, escritura y selectores -->
+        <div id="barra-buscador-inventarios" class="flex min-h-11 items-center gap-2 rounded-xl
                 border border-slate-300 bg-white px-3 py-1.5
                 transition-colors focus-within:border-indigo-500
                 focus-within:ring-2 focus-within:ring-indigo-100">
 
-        <!-- Lupa exclusivamente visual -->
-        <i class="fa-solid fa-magnifying-glass shrink-0 text-sm text-slate-400"
-           aria-hidden="true"></i>
+            <!-- Lupa exclusivamente visual -->
+            <i class="fa-solid fa-magnifying-glass shrink-0 text-sm text-slate-400" aria-hidden="true"></i>
 
-        <!-- Badges acumulados dentro de la barra -->
-        <div id="criterios-buscador-inventarios"
-             class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+            <!-- Badges acumulados dentro de la barra -->
+            <div id="criterios-buscador-inventarios" class="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
 
-            <div id="badges-buscador-inventarios"
-                 class="flex flex-wrap items-center gap-1"></div>
+                <div id="badges-buscador-inventarios" class="flex flex-wrap items-center gap-1"></div>
 
-            <input id="input-buscador-inventarios"
-                   type="text"
-                   maxlength="150"
-                   autocomplete="off"
-                   spellcheck="false"
-                   aria-label="Buscar inventarios"
-                   placeholder="Buscar inventarios..."
-                   class="min-w-[115px] flex-1 border-0 bg-transparent
+                <input id="input-buscador-inventarios" type="text" maxlength="150" autocomplete="off" spellcheck="false"
+                    aria-label="Buscar inventarios" placeholder="Buscar inventarios..." class="min-w-[115px] flex-1 border-0 bg-transparent
                           py-1 text-sm text-slate-700 outline-none
                           placeholder:text-slate-400">
-        </div>
+            </div>
 
-        <!-- Indicador de carga -->
-        <i id="spinner-buscador-inventarios"
-           class="fa-solid fa-circle-notch fa-spin hidden
-                  shrink-0 text-xs text-indigo-500"
-           role="status"
-           aria-label="Buscando inventarios"></i>
+            <!-- Indicador de carga -->
+            <i id="spinner-buscador-inventarios" class="fa-solid fa-circle-notch fa-spin hidden
+                  shrink-0 text-xs text-indigo-500" role="status" aria-label="Buscando inventarios"></i>
 
-        <!-- Selector de tiendas -->
-        <div class="relative shrink-0" id="selector-tiendas-buscador">
-            <button id="btn-tiendas-buscador" type="button"
-                    aria-label="Seleccionar tienda"
-                    aria-expanded="false"
-                    title="Filtrar por tienda"
-                    class="flex h-8 w-8 items-center justify-center
+            <!-- Selector de tiendas -->
+            <div class="relative shrink-0" id="selector-tiendas-buscador">
+                <button id="btn-tiendas-buscador" type="button" aria-label="Seleccionar tienda" aria-expanded="false"
+                    title="Filtrar por tienda" class="flex h-8 w-8 items-center justify-center
                            rounded-lg text-slate-500 hover:bg-slate-100
                            hover:text-indigo-600">
-                <i class="fa-solid fa-store"></i>
-            </button>
+                    <i class="fa-solid fa-store"></i>
+                </button>
 
-            <div id="menu-tiendas-buscador"
-                 class="absolute right-0 top-full z-40 mt-2 hidden
+                <div id="menu-tiendas-buscador" class="absolute right-0 top-full z-40 mt-2 hidden
                         w-48 rounded-xl border border-slate-200
                         bg-white p-1 shadow-xl">
-                <!-- Opciones insertadas mediante JavaScript -->
+                    <!-- Opciones insertadas mediante JavaScript -->
+                </div>
             </div>
-        </div>
 
-        <!-- Selector de fecha -->
-        <div class="relative shrink-0">
-            <button id="btn-fecha-buscador" type="button"
-                    aria-label="Seleccionar fecha"
-                    title="Filtrar por fecha"
+            <!-- Selector de fecha -->
+            <div class="relative shrink-0">
+                <button id="btn-fecha-buscador" type="button" aria-label="Seleccionar fecha" title="Filtrar por fecha"
                     class="relative z-10 flex h-8 w-8 items-center
                            justify-center rounded-lg text-slate-500
                            hover:bg-slate-100 hover:text-indigo-600">
-                <i class="fa-regular fa-calendar"></i>
-            </button>
+                    <i class="fa-regular fa-calendar"></i>
+                </button>
 
-            <input id="fecha-buscador-inventarios"
-                   type="date"
-                   tabindex="-1"
-                   aria-label="Fecha del inventario"
-                   class="pointer-events-none absolute right-0 top-0
+                <input id="fecha-buscador-inventarios" type="date" tabindex="-1" aria-label="Fecha del inventario"
+                    class="pointer-events-none absolute right-0 top-0
                           h-8 w-8 opacity-0">
+            </div>
+        </div>
+
+        <!-- Estado compacto fuera de la barra -->
+        <div class="mt-1.5 flex items-center justify-between gap-3 px-1">
+            <p id="estado-buscador-inventarios" class="text-xs text-slate-400" aria-live="polite">
+                {{ total_inventarios }} inventario(s) encontrados
+            </p>
+
+            <button id="limpiar-buscador-inventarios" type="button" class="hidden text-xs font-medium text-slate-500
+                       hover:text-rose-600">
+                Limpiar
+            </button>
         </div>
     </div>
 
-    <!-- Estado compacto fuera de la barra -->
-    <div class="mt-1.5 flex items-center justify-between gap-3 px-1">
-        <p id="estado-buscador-inventarios"
-           class="text-xs text-slate-400" aria-live="polite">
-            {{ total_inventarios }} inventario(s) encontrados
-        </p>
-
-        <button id="limpiar-buscador-inventarios"
-                type="button"
-                class="hidden text-xs font-medium text-slate-500
-                       hover:text-rose-600">
-            Limpiar
-        </button>
-    </div>
-</div>
-
     <!-- LISTADO -->
-    <div id="listado-inventarios"
-         class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div id="listado-inventarios" class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
 
         {% if inventarios %}
 
@@ -568,8 +555,7 @@
 
                 {% if pagina_actual > 1 %}
 
-                <a href="{{ request.url.include_query_params(page=pagina_actual - 1) }}"
-                    class="inline-flex items-center justify-center
+                <a href="{{ request.url.include_query_params(page=pagina_actual - 1) }}" class="inline-flex items-center justify-center
                           w-9 h-9 rounded-lg
                           border border-slate-200
                           text-slate-600
@@ -609,8 +595,7 @@
 
 
                 {% if pagina_actual < total_paginas %} <a
-                    href="{{ request.url.include_query_params(page=pagina_actual + 1) }}"
-                    class="inline-flex items-center justify-center
+                    href="{{ request.url.include_query_params(page=pagina_actual + 1) }}" class="inline-flex items-center justify-center
                           w-9 h-9 rounded-lg
                           border border-slate-200
                           text-slate-600
@@ -2200,66 +2185,66 @@
      */
     window.formatearFechasInventarios = function () {
 
-            document
-                .querySelectorAll('#listado-inventarios [data-fecha]')
-                .forEach(function (elemento) {
+        document
+            .querySelectorAll('#listado-inventarios [data-fecha]')
+            .forEach(function (elemento) {
 
-                    const fechaISO =
-                        elemento.dataset.fecha;
+                const fechaISO =
+                    elemento.dataset.fecha;
 
-                    if (!fechaISO) {
-                        return;
-                    }
+                if (!fechaISO) {
+                    return;
+                }
 
-                    const fecha =
-                        new Date(fechaISO);
+                const fecha =
+                    new Date(fechaISO);
 
-                    if (
-                        Number.isNaN(
-                            fecha.getTime()
-                        )
-                    ) {
-                        return;
-                    }
+                if (
+                    Number.isNaN(
+                        fecha.getTime()
+                    )
+                ) {
+                    return;
+                }
 
-                    const dia =
-                        String(
-                            fecha.getDate()
-                        ).padStart(2, '0');
+                const dia =
+                    String(
+                        fecha.getDate()
+                    ).padStart(2, '0');
 
-                    const mes =
-                        String(
-                            fecha.getMonth() + 1
-                        ).padStart(2, '0');
+                const mes =
+                    String(
+                        fecha.getMonth() + 1
+                    ).padStart(2, '0');
 
-                    const año =
-                        fecha.getFullYear();
+                const año =
+                    fecha.getFullYear();
 
-                    let horas =
-                        fecha.getHours();
+                let horas =
+                    fecha.getHours();
 
-                    const minutos =
-                        String(
-                            fecha.getMinutes()
-                        ).padStart(2, '0');
+                const minutos =
+                    String(
+                        fecha.getMinutes()
+                    ).padStart(2, '0');
 
-                    const periodo =
-                        horas >= 12
-                            ? 'PM'
-                            : 'AM';
+                const periodo =
+                    horas >= 12
+                        ? 'PM'
+                        : 'AM';
 
-                    horas =
-                        horas % 12 || 12;
+                horas =
+                    horas % 12 || 12;
 
-                    const horasFormateadas =
-                        String(horas)
-                            .padStart(2, '0');
+                const horasFormateadas =
+                    String(horas)
+                        .padStart(2, '0');
 
-                    elemento.textContent =
-                        `${dia}-${mes}-${año} ` +
-                        `${horasFormateadas}:${minutos} ` +
-                        `${periodo}`;
-                });
+                elemento.textContent =
+                    `${dia}-${mes}-${año} ` +
+                    `${horasFormateadas}:${minutos} ` +
+                    `${periodo}`;
+            });
     };
     document.addEventListener('DOMContentLoaded', window.formatearFechasInventarios);
 </script>
@@ -3086,8 +3071,6 @@
 <script>
     (function () {
         const menusHeader = document.getElementById('menus-header-inventarios');
-        if (!menusHeader) return;
-
         const menuArchivo = document.getElementById('menu-archivo-inventarios');
         const btnArchivo = document.getElementById('btn-menu-archivo-inventarios');
         const opcionesArchivo = document.getElementById('opciones-archivo-inventarios');
@@ -3105,15 +3088,8 @@
             !menuArchivo ||
             !btnArchivo ||
             !opcionesArchivo ||
-            !btnNuevaLista ||
-            !menu ||
-            !btnMenu ||
-            !opciones ||
-            !btnActivar ||
-            !btnCancelar ||
-            !btnEliminar
+            !btnNuevaLista
         ) {
-            console.error('No se encontraron todos los controles de selección de inventarios.');
             return;
         }
 
@@ -3122,8 +3098,8 @@
         function cerrarMenusInventarios() {
             opcionesArchivo.classList.add('hidden');
             btnArchivo.setAttribute('aria-expanded', 'false');
-            opciones.classList.add('hidden');
-            btnMenu.setAttribute('aria-expanded', 'false');
+            opciones?.classList.add('hidden');
+            btnMenu?.setAttribute('aria-expanded', 'false');
         }
 
         btnArchivo.addEventListener('click', function () {
@@ -3142,7 +3118,7 @@
             if (evento.key !== 'Escape') return;
             const activo = btnArchivo.getAttribute('aria-expanded') === 'true'
                 ? btnArchivo
-                : btnMenu.getAttribute('aria-expanded') === 'true' ? btnMenu : null;
+                : btnMenu?.getAttribute('aria-expanded') === 'true' ? btnMenu : null;
             if (!activo) return;
             evento.preventDefault();
             evento.stopPropagation();
@@ -3154,680 +3130,696 @@
             if (!menusHeader.contains(evento.relatedTarget)) cerrarMenusInventarios();
         });
 
-        function obtenerCasillas() {
-            return Array.from(document.querySelectorAll('.checkbox-inventario'));
-        }
-
-        function actualizarSeleccion() {
-            const casillas = obtenerCasillas();
-            const marcadas = casillas.filter(c => c.checked);
-            const idsMarcados = new Set(marcadas.map(c => c.value));
-
-            // Sincroniza las casillas de escritorio y móvil del mismo documento.
-            casillas.forEach(c => {
-                c.checked = idsMarcados.has(c.value);
-            });
-
-            const idsUnicos = new Set(marcadas.map(c => c.value));
-
-            btnEliminar.disabled = idsUnicos.size === 0;
-
-            if (seleccionarPagina) {
-                const visibles = Array.from(
-                    document.querySelectorAll(
-                        'tbody .checkbox-inventario, .md\\:hidden .checkbox-inventario'
-                    )
-                );
-
-                const todasMarcadas = visibles.length > 0 &&
-                    visibles.every(c => c.checked);
-
-                seleccionarPagina.checked = todasMarcadas;
+        // Cerrar Archivo al pulsar fuera, también para Provisional.
+        document.addEventListener('click', function (evento) {
+            if (!menusHeader.contains(evento.target)) {
+                cerrarMenusInventarios();
             }
-        }
+        });
+
+        // Administrar Listas solo existe para Normal y Administrador.
+        if (
+            menu &&
+            btnMenu &&
+            opciones &&
+            btnActivar &&
+            btnCancelar &&
+            btnEliminar
+        ) {
 
 
-
-        function cambiarModoSeleccion(activar) {
-            modoSeleccion = activar;
-
-            // Mostrar u ocultar la columna completa de selección.
-            document.querySelectorAll(
-                '#columna-seleccion-encabezado, .columna-seleccion-inventario'
-            ).forEach(celda => {
-                celda.classList.toggle('hidden', !activar);
-            });
-
-            // Mostrar u ocultar la barra y las acciones.
-            btnActivar.classList.toggle('hidden', activar);
-            btnCancelar.classList.toggle('hidden', !activar);
-            btnEliminar.classList.toggle('hidden', !activar);
-
-            // Mostrar u ocultar las casillas individuales.
-            obtenerCasillas().forEach(casilla => {
-                casilla.classList.toggle('hidden', !activar);
-            });
-
-            // Mostrar u ocultar el selector de la cabecera.
-            if (seleccionarPagina) {
-                seleccionarPagina.classList.toggle('hidden', !activar);
+            function obtenerCasillas() {
+                return Array.from(document.querySelectorAll('.checkbox-inventario'));
             }
 
-            const flecha = document.getElementById(
-                'flecha-seleccionar-pagina-inventarios'
-            );
+            function actualizarSeleccion() {
+                const casillas = obtenerCasillas();
+                const marcadas = casillas.filter(c => c.checked);
+                const idsMarcados = new Set(marcadas.map(c => c.value));
 
-            if (flecha) {
-                flecha.classList.toggle('hidden', !activar);
-            }
-
-            // Conservar la esquina superior izquierda redondeada.
-            const encabezadoSeleccion = document.getElementById(
-                'columna-seleccion-encabezado'
-            );
-            const encabezadoNombre = document.getElementById(
-                'encabezado-nombre-inventario'
-            );
-
-            if (encabezadoSeleccion) {
-                encabezadoSeleccion.classList.toggle('rounded-tl-2xl', activar);
-            }
-
-            if (encabezadoNombre) {
-                encabezadoNombre.classList.toggle('rounded-tl-2xl', !activar);
-            }
-
-            // Limpiar la selección al salir del modo.
-            if (!activar) {
-                obtenerCasillas().forEach(casilla => {
-                    casilla.checked = false;
+                // Sincroniza las casillas de escritorio y móvil del mismo documento.
+                casillas.forEach(c => {
+                    c.checked = idsMarcados.has(c.value);
                 });
 
+                const idsUnicos = new Set(marcadas.map(c => c.value));
+
+                btnEliminar.disabled = idsUnicos.size === 0;
+
                 if (seleccionarPagina) {
-                    seleccionarPagina.checked = false;
-                    seleccionarPagina.indeterminate = false;
+                    const visibles = Array.from(
+                        document.querySelectorAll(
+                            'tbody .checkbox-inventario, .md\\:hidden .checkbox-inventario'
+                        )
+                    );
+
+                    const todasMarcadas = visibles.length > 0 &&
+                        visibles.every(c => c.checked);
+
+                    seleccionarPagina.checked = todasMarcadas;
                 }
             }
 
-            actualizarSeleccion();
-
-            opciones.classList.add('hidden');
-            btnMenu.setAttribute('aria-expanded', 'false');
-        }
 
 
+            function cambiarModoSeleccion(activar) {
+                modoSeleccion = activar;
 
-        btnMenu.addEventListener('click', function (e) {
-            e.stopPropagation();
-            const abrir = opciones.classList.contains('hidden');
-            cerrarMenusInventarios();
-            opciones.classList.toggle('hidden', !abrir);
-            btnMenu.setAttribute('aria-expanded', String(abrir));
-        });
-
-        btnActivar.addEventListener('click', function () {
-            cambiarModoSeleccion(true);
-        });
-
-        btnCancelar.addEventListener('click', function () {
-            cambiarModoSeleccion(false);
-        });
-
-        // Reconectar las casillas cuando cambien los resultados.
-        window.reconectarSeleccionInventarios = function () {
-            seleccionarPagina = document.getElementById(
-                'seleccionar-pagina-inventarios'
-            );
-
-            obtenerCasillas().forEach(casilla => {
-                casilla.addEventListener('click', evento => {
-                    evento.stopPropagation();
+                // Mostrar u ocultar la columna completa de selección.
+                document.querySelectorAll(
+                    '#columna-seleccion-encabezado, .columna-seleccion-inventario'
+                ).forEach(celda => {
+                    celda.classList.toggle('hidden', !activar);
                 });
 
-                casilla.addEventListener('change', () => {
-                    if (!modoSeleccion) {
+                // Mostrar u ocultar la barra y las acciones.
+                btnActivar.classList.toggle('hidden', activar);
+                btnCancelar.classList.toggle('hidden', !activar);
+                btnEliminar.classList.toggle('hidden', !activar);
+
+                // Mostrar u ocultar las casillas individuales.
+                obtenerCasillas().forEach(casilla => {
+                    casilla.classList.toggle('hidden', !activar);
+                });
+
+                // Mostrar u ocultar el selector de la cabecera.
+                if (seleccionarPagina) {
+                    seleccionarPagina.classList.toggle('hidden', !activar);
+                }
+
+                const flecha = document.getElementById(
+                    'flecha-seleccionar-pagina-inventarios'
+                );
+
+                if (flecha) {
+                    flecha.classList.toggle('hidden', !activar);
+                }
+
+                // Conservar la esquina superior izquierda redondeada.
+                const encabezadoSeleccion = document.getElementById(
+                    'columna-seleccion-encabezado'
+                );
+                const encabezadoNombre = document.getElementById(
+                    'encabezado-nombre-inventario'
+                );
+
+                if (encabezadoSeleccion) {
+                    encabezadoSeleccion.classList.toggle('rounded-tl-2xl', activar);
+                }
+
+                if (encabezadoNombre) {
+                    encabezadoNombre.classList.toggle('rounded-tl-2xl', !activar);
+                }
+
+                // Limpiar la selección al salir del modo.
+                if (!activar) {
+                    obtenerCasillas().forEach(casilla => {
                         casilla.checked = false;
-                        return;
+                    });
+
+                    if (seleccionarPagina) {
+                        seleccionarPagina.checked = false;
+                        seleccionarPagina.indeterminate = false;
                     }
+                }
 
-                    const valor = casilla.value;
-                    const marcado = casilla.checked;
+                actualizarSeleccion();
 
-                    obtenerCasillas().forEach(otra => {
-                        if (otra.value === valor) otra.checked = marcado;
+                opciones.classList.add('hidden');
+                btnMenu.setAttribute('aria-expanded', 'false');
+            }
+
+
+
+            btnMenu.addEventListener('click', function (e) {
+                e.stopPropagation();
+                const abrir = opciones.classList.contains('hidden');
+                cerrarMenusInventarios();
+                opciones.classList.toggle('hidden', !abrir);
+                btnMenu.setAttribute('aria-expanded', String(abrir));
+            });
+
+            btnActivar.addEventListener('click', function () {
+                cambiarModoSeleccion(true);
+            });
+
+            btnCancelar.addEventListener('click', function () {
+                cambiarModoSeleccion(false);
+            });
+
+            // Reconectar las casillas cuando cambien los resultados.
+            window.reconectarSeleccionInventarios = function () {
+                seleccionarPagina = document.getElementById(
+                    'seleccionar-pagina-inventarios'
+                );
+
+                obtenerCasillas().forEach(casilla => {
+                    casilla.addEventListener('click', evento => {
+                        evento.stopPropagation();
+                    });
+
+                    casilla.addEventListener('change', () => {
+                        if (!modoSeleccion) {
+                            casilla.checked = false;
+                            return;
+                        }
+
+                        const valor = casilla.value;
+                        const marcado = casilla.checked;
+
+                        obtenerCasillas().forEach(otra => {
+                            if (otra.value === valor) otra.checked = marcado;
+                        });
+
+                        actualizarSeleccion();
+                    });
+                });
+
+                seleccionarPagina?.addEventListener('change', () => {
+                    if (!modoSeleccion) return;
+
+                    obtenerCasillas().forEach(casilla => {
+                        casilla.checked = seleccionarPagina.checked;
                     });
 
                     actualizarSeleccion();
                 });
-            });
 
-            seleccionarPagina?.addEventListener('change', () => {
-                if (!modoSeleccion) return;
+                // Mantener visibles las casillas si la selección está activa.
+                if (modoSeleccion) {
+                    document.querySelectorAll(
+                        '#columna-seleccion-encabezado, .columna-seleccion-inventario'
+                    ).forEach(celda => celda.classList.remove('hidden'));
 
-                obtenerCasillas().forEach(casilla => {
-                    casilla.checked = seleccionarPagina.checked;
-                });
+                    obtenerCasillas().forEach(casilla => {
+                        casilla.classList.remove('hidden');
+                    });
 
-                actualizarSeleccion();
-            });
-
-            // Mantener visibles las casillas si la selección está activa.
-            if (modoSeleccion) {
-                document.querySelectorAll(
-                    '#columna-seleccion-encabezado, .columna-seleccion-inventario'
-                ).forEach(celda => celda.classList.remove('hidden'));
-
-                obtenerCasillas().forEach(casilla => {
-                    casilla.classList.remove('hidden');
-                });
-
-                seleccionarPagina?.classList.remove('hidden');
-            }
-
-            actualizarSeleccion();
-        };
-
-        // Conectar los elementos existentes al cargar la página.
-        window.reconectarSeleccionInventarios();
-
-        document.addEventListener('click', function (e) {
-            if (!menusHeader.contains(e.target)) cerrarMenusInventarios();
-        });
-
-
-
-        btnEliminar.addEventListener('click', async function () {
-            cerrarMenusInventarios();
-            // Obtener IDs únicos seleccionados.
-            const ids = [
-                ...new Set(
-                    obtenerCasillas()
-                        .filter(casilla => casilla.checked)
-                        .map(casilla => casilla.value)
-                )
-            ];
-
-            if (ids.length === 0) {
-                await window.mostrarConfirmacion({
-                    tipo: 'warning',
-                    titulo: 'Sin inventarios seleccionados',
-                    mensaje: 'Selecciona al menos un inventario.',
-                    textoAceptar: 'Entendido',
-                    textoCancelar: ''
-                });
-                return;
-            }
-
-            const confirmar = await window.mostrarConfirmacion({
-                tipo: 'warning',
-                titulo: '¿Eliminar documentos?',
-                mensaje:
-                    `Hay ${ids.length} documento(s) seleccionado(s) para eliminar.\n\n` +
-                    'Esta acción no se puede deshacer.',
-                textoAceptar: 'Eliminar',
-                textoCancelar: 'Cancelar'
-            });
-
-            if (!confirmar) return;
-
-            const textoOriginal = btnEliminar.innerHTML;
-
-            btnEliminar.disabled = true;
-            btnEliminar.textContent = 'Eliminando...';
-
-            try {
-                const response = await fetch(
-                    '/api/inventarios/eliminar-masivo',
-                    {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify({ ids })
-                    }
-                );
-
-                const data = await response.json().catch(() => ({}));
-
-                if (!response.ok || !data.ok) {
-                    // Reflejar eliminaciones parciales, si el servidor las reporta.
-                    if (
-                        Array.isArray(data.eliminados) &&
-                        data.eliminados.length > 0
-                    ) {
-                        await window.mostrarConfirmacion({
-                            tipo: 'warning',
-                            titulo: 'Eliminación incompleta',
-                            mensaje:
-                                (data.error || 'La eliminación no se completó.') +
-                                '\nLa lista se actualizará para reflejar los cambios.',
-                            textoAceptar: 'Entendido',
-                            textoCancelar: ''
-                        });
-
-                        window.location.reload();
-                        return;
-                    }
-
-                    throw new Error(
-                        data.error || 'No se pudieron eliminar los inventarios.'
-                    );
+                    seleccionarPagina?.classList.remove('hidden');
                 }
 
-                await window.mostrarConfirmacion({
-                    tipo: 'success',
-                    titulo: 'Eliminación completada',
+                actualizarSeleccion();
+            };
+
+            // Conectar los elementos existentes al cargar la página.
+            window.reconectarSeleccionInventarios();
+
+            btnEliminar.addEventListener('click', async function () {
+                cerrarMenusInventarios();
+                // Obtener IDs únicos seleccionados.
+                const ids = [
+                    ...new Set(
+                        obtenerCasillas()
+                            .filter(casilla => casilla.checked)
+                            .map(casilla => casilla.value)
+                    )
+                ];
+
+                if (ids.length === 0) {
+                    await window.mostrarConfirmacion({
+                        tipo: 'warning',
+                        titulo: 'Sin inventarios seleccionados',
+                        mensaje: 'Selecciona al menos un inventario.',
+                        textoAceptar: 'Entendido',
+                        textoCancelar: ''
+                    });
+                    return;
+                }
+
+                const confirmar = await window.mostrarConfirmacion({
+                    tipo: 'warning',
+                    titulo: '¿Eliminar documentos?',
                     mensaje:
-                        `Se eliminaron ${data.cantidad} inventario(s) correctamente.`,
-                    textoAceptar: 'Entendido',
-                    textoCancelar: ''
+                        `Hay ${ids.length} documento(s) seleccionado(s) para eliminar.\n\n` +
+                        'Esta acción no se puede deshacer.',
+                    textoAceptar: 'Eliminar',
+                    textoCancelar: 'Cancelar'
                 });
 
-                window.location.reload();
+                if (!confirmar) return;
 
-            } catch (error) {
-                console.error('Error en eliminación múltiple:', error);
+                const textoOriginal = btnEliminar.innerHTML;
 
-                await window.mostrarConfirmacion({
-                    tipo: 'error',
-                    titulo: 'No se pudo eliminar',
-                    mensaje:
-                        error.message ||
-                        'Ocurrió un error al eliminar los inventarios.',
-                    textoAceptar: 'Entendido',
-                    textoCancelar: ''
-                });
+                btnEliminar.disabled = true;
+                btnEliminar.textContent = 'Eliminando...';
 
-            } finally {
-                btnEliminar.disabled = false;
-                btnEliminar.innerHTML = textoOriginal;
-            }
-        });
+                try {
+                    const response = await fetch(
+                        '/api/inventarios/eliminar-masivo',
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({ ids })
+                        }
+                    );
 
+                    const data = await response.json().catch(() => ({}));
+
+                    if (!response.ok || !data.ok) {
+                        // Reflejar eliminaciones parciales, si el servidor las reporta.
+                        if (
+                            Array.isArray(data.eliminados) &&
+                            data.eliminados.length > 0
+                        ) {
+                            await window.mostrarConfirmacion({
+                                tipo: 'warning',
+                                titulo: 'Eliminación incompleta',
+                                mensaje:
+                                    (data.error || 'La eliminación no se completó.') +
+                                    '\nLa lista se actualizará para reflejar los cambios.',
+                                textoAceptar: 'Entendido',
+                                textoCancelar: ''
+                            });
+
+                            window.location.reload();
+                            return;
+                        }
+
+                        throw new Error(
+                            data.error || 'No se pudieron eliminar los inventarios.'
+                        );
+                    }
+
+                    await window.mostrarConfirmacion({
+                        tipo: 'success',
+                        titulo: 'Eliminación completada',
+                        mensaje:
+                            `Se eliminaron ${data.cantidad} inventario(s) correctamente.`,
+                        textoAceptar: 'Entendido',
+                        textoCancelar: ''
+                    });
+
+                    window.location.reload();
+
+                } catch (error) {
+                    console.error('Error en eliminación múltiple:', error);
+
+                    await window.mostrarConfirmacion({
+                        tipo: 'error',
+                        titulo: 'No se pudo eliminar',
+                        mensaje:
+                            error.message ||
+                            'Ocurrió un error al eliminar los inventarios.',
+                        textoAceptar: 'Entendido',
+                        textoCancelar: ''
+                    });
+
+                } finally {
+                    btnEliminar.disabled = false;
+                    btnEliminar.innerHTML = textoOriginal;
+                }
+            });
+
+        }
 
     })();
 </script>
 
 
 <script>
-(() => {
-    'use strict';
+    (() => {
+        'use strict';
 
-    const raiz = document.getElementById('buscador-inventarios');
-    if (!raiz) return;
+        const raiz = document.getElementById('buscador-inventarios');
+        if (!raiz) return;
 
-    const input = document.getElementById('input-buscador-inventarios');
-    const badges = document.getElementById('badges-buscador-inventarios');
-    const lista = document.getElementById('listado-inventarios');
-    const estado = document.getElementById('estado-buscador-inventarios');
-    const spinner = document.getElementById('spinner-buscador-inventarios');
-    const limpiar = document.getElementById('limpiar-buscador-inventarios');
-    const btnTienda = document.getElementById('btn-tiendas-buscador');
-    const menuTienda = document.getElementById('menu-tiendas-buscador');
-    const btnFecha = document.getElementById('btn-fecha-buscador');
-    const inputFecha = document.getElementById('fecha-buscador-inventarios');
+        const input = document.getElementById('input-buscador-inventarios');
+        const badges = document.getElementById('badges-buscador-inventarios');
+        const lista = document.getElementById('listado-inventarios');
+        const estado = document.getElementById('estado-buscador-inventarios');
+        const spinner = document.getElementById('spinner-buscador-inventarios');
+        const limpiar = document.getElementById('limpiar-buscador-inventarios');
+        const btnTienda = document.getElementById('btn-tiendas-buscador');
+        const menuTienda = document.getElementById('menu-tiendas-buscador');
+        const btnFecha = document.getElementById('btn-fecha-buscador');
+        const inputFecha = document.getElementById('fecha-buscador-inventarios');
 
-    if (!input || !badges || !lista || !estado) return;
+        if (!input || !badges || !lista || !estado) return;
 
-    const TIENDAS = [
-        'CENTRO', 'NAGUANAGUA', 'ISABELICA',
-        'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'
-    ];
+        const TIENDAS = [
+            'CENTRO', 'NAGUANAGUA', 'ISABELICA',
+            'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'
+        ];
 
-    const esProvisional = {{ 'true' if es_provisional else 'false' }};
-    const tiendaAsignada = {{ (perfil.tienda if es_provisional else '') | tojson }};
+        const esProvisional = raiz.dataset.esProvisional === 'true';
+        const tiendaAsignada = raiz.dataset.tiendaAsignada || '';
 
-    let criterios = [];
-    let tienda = '';
-    let fecha = '';
-    let fechaHasta = '';
-    let filtrosAdicionales = new URLSearchParams();
-    let temporizador = null;
-    let temporizadorSpinner = null;
-    let controlador = null;
-    let secuencia = 0;
+        let criterios = [];
+        let tienda = '';
+        let fecha = '';
+        let fechaHasta = '';
+        let filtrosAdicionales = new URLSearchParams();
+        let temporizador = null;
+        let temporizadorSpinner = null;
+        let controlador = null;
+        let secuencia = 0;
 
-    const normalizar = valor => String(valor || '')
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .trim()
-        .toLowerCase();
+        const normalizar = valor => String(valor || '')
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .trim()
+            .toLowerCase();
 
-    // Validar y convertir dd/mm, dd-mm-aa y dd-mm-aaaa.
-    function interpretarFecha(valor) {
-        const m = String(valor).trim()
-            .match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2}|\d{4}))?$/);
+        // Validar y convertir dd/mm, dd-mm-aa y dd-mm-aaaa.
+        function interpretarFecha(valor) {
+            const m = String(valor).trim()
+                .match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2}|\d{4}))?$/);
 
-        if (!m) return null;
+            if (!m) return null;
 
-        const dia = Number(m[1]);
-        const mes = Number(m[2]);
-        const actual = new Date().getFullYear();
-        const anio = !m[3] ? actual :
-            m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
+            const dia = Number(m[1]);
+            const mes = Number(m[2]);
+            const actual = new Date().getFullYear();
+            const anio = !m[3] ? actual :
+                m[3].length === 2 ? 2000 + Number(m[3]) : Number(m[3]);
 
-        const comprobacion = new Date(anio, mes - 1, dia);
+            const comprobacion = new Date(anio, mes - 1, dia);
 
-        if (comprobacion.getFullYear() !== anio ||
-            comprobacion.getMonth() !== mes - 1 ||
-            comprobacion.getDate() !== dia) return null;
+            if (comprobacion.getFullYear() !== anio ||
+                comprobacion.getMonth() !== mes - 1 ||
+                comprobacion.getDate() !== dia) return null;
 
-        return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
-    }
-
-    function fechaVisible(iso) {
-        const [anio, mes, dia] = iso.split('-');
-        return `${dia}/${mes}/${anio}`;
-    }
-
-    // Reconstruir criterios al volver a la página o usar paginación.
-    function recuperarURL() {
-        const params = new URLSearchParams(location.search);
-        criterios = params.getAll('tags').slice(0, 12)
-            .map(t => t.trim().slice(0, 150)).filter(Boolean);
-        tienda = esProvisional ? tiendaAsignada : (params.get('tienda') || '');
-        fecha = params.get('fecha_desde') || '';
-        fechaHasta = params.get('fecha_hasta') || '';
-        filtrosAdicionales = new URLSearchParams();
-        ['realizado_por', 'estado'].forEach(clave => {
-            if (params.get(clave)) filtrosAdicionales.set(clave, params.get(clave));
-        });
-        input.value = params.get('q') || '';
-        inputFecha.value = fecha;
-        dibujarBadges();
-    }
-
-    // Crear badges seguros, sin inyectar HTML recibido del usuario.
-    function crearBadge(texto, tipo, eliminar) {
-        const badge = document.createElement('span');
-        badge.className = 'inline-flex max-w-full items-center gap-1 rounded-md ' +
-            'border border-indigo-200 bg-indigo-50 px-2 py-1 ' +
-            'text-[11px] font-semibold text-indigo-700';
-
-        const etiqueta = document.createElement('span');
-        etiqueta.className = 'max-w-[180px] truncate';
-        etiqueta.textContent = texto;
-
-        const boton = document.createElement('button');
-        boton.type = 'button';
-        boton.className = 'ml-0.5 text-indigo-400 hover:text-rose-600';
-        boton.textContent = '×';
-        boton.setAttribute('aria-label', `Quitar ${texto}`);
-        boton.addEventListener('click', eliminar);
-
-        badge.appendChild(etiqueta);
-        if (tipo !== 'fija') badge.appendChild(boton);
-        badges.appendChild(badge);
-    }
-
-    function dibujarBadges() {
-        badges.replaceChildren();
-
-        criterios.forEach((texto, indice) => {
-            crearBadge(texto, 'texto', () => {
-                criterios.splice(indice, 1);
-                dibujarBadges();
-                programarBusqueda(0);
-            });
-        });
-
-        if (tienda) {
-            crearBadge(tienda, esProvisional ? 'fija' : 'tienda', () => {
-                if (esProvisional) return;
-                tienda = '';
-                dibujarBadges();
-                programarBusqueda(0);
-            });
+            return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
         }
 
-        filtrosAdicionales.forEach((valor, clave) => {
-            crearBadge(valor, clave, () => {
-                filtrosAdicionales.delete(clave);
-                programarBusqueda(0);
-            });
-        });
-
-        if (fecha || fechaHasta) {
-            const etiquetaFecha = fecha && fechaHasta && fecha !== fechaHasta
-                ? `${fechaVisible(fecha)} – ${fechaVisible(fechaHasta)}`
-                : fechaVisible(fecha || fechaHasta);
-            crearBadge(etiquetaFecha, 'fecha', () => {
-                fecha = '';
-                fechaHasta = '';
-                inputFecha.value = '';
-                dibujarBadges();
-                programarBusqueda(0);
-            });
+        function fechaVisible(iso) {
+            const [anio, mes, dia] = iso.split('-');
+            return `${dia}/${mes}/${anio}`;
         }
 
-        limpiar.classList.toggle(
-            'hidden',
-            !(criterios.length || (!esProvisional && tienda) || fecha || fechaHasta ||
-                filtrosAdicionales.size || input.value.trim())
-        );
-    }
-
-    function agregarCriterio() {
-        const valor = input.value.trim();
-        if (!valor) return;
-
-        const fechaDetectada = interpretarFecha(valor);
-
-        if (fechaDetectada) {
-            fecha = fechaDetectada;
-            fechaHasta = fechaDetectada;
+        // Reconstruir criterios al volver a la página o usar paginación.
+        function recuperarURL() {
+            const params = new URLSearchParams(location.search);
+            criterios = params.getAll('tags').slice(0, 12)
+                .map(t => t.trim().slice(0, 150)).filter(Boolean);
+            tienda = esProvisional ? tiendaAsignada : (params.get('tienda') || '');
+            fecha = params.get('fecha_desde') || '';
+            fechaHasta = params.get('fecha_hasta') || '';
+            filtrosAdicionales = new URLSearchParams();
+            ['realizado_por', 'estado'].forEach(clave => {
+                if (params.get(clave)) filtrosAdicionales.set(clave, params.get(clave));
+            });
+            input.value = params.get('q') || '';
             inputFecha.value = fecha;
-        } else if (
-            criterios.length < 12 &&
-            !criterios.some(t => normalizar(t) === normalizar(valor))
-        ) {
-            criterios.push(valor);
-        } else if (criterios.length >= 12) {
-            estado.textContent = 'Puedes agregar hasta 12 criterios.';
-            return;
+            dibujarBadges();
         }
 
-        input.value = '';
-        dibujarBadges();
-        programarBusqueda(0);
-    }
+        // Crear badges seguros, sin inyectar HTML recibido del usuario.
+        function crearBadge(texto, tipo, eliminar) {
+            const badge = document.createElement('span');
+            badge.className = 'inline-flex max-w-full items-center gap-1 rounded-md ' +
+                'border border-indigo-200 bg-indigo-50 px-2 py-1 ' +
+                'text-[11px] font-semibold text-indigo-700';
 
-    // Preparar parámetros compatibles con inventario.py.
-    function construirURL(pagina = 1) {
-        const url = new URL('/inventario', location.origin);
-        const p = url.searchParams;
+            const etiqueta = document.createElement('span');
+            etiqueta.className = 'max-w-[180px] truncate';
+            etiqueta.textContent = texto;
 
-        if (input.value.trim()) p.set('q', input.value.trim());
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.className = 'ml-0.5 text-indigo-400 hover:text-rose-600';
+            boton.textContent = '×';
+            boton.setAttribute('aria-label', `Quitar ${texto}`);
+            boton.addEventListener('click', eliminar);
 
-        criterios.forEach(t => p.append('tags', t));
+            badge.appendChild(etiqueta);
+            if (tipo !== 'fija') badge.appendChild(boton);
+            badges.appendChild(badge);
+        }
 
-        if (tienda) p.set('tienda', tienda);
+        function dibujarBadges() {
+            badges.replaceChildren();
 
-        if (fecha) p.set('fecha_desde', fecha);
-        if (fechaHasta) p.set('fecha_hasta', fechaHasta);
-        filtrosAdicionales.forEach((valor, clave) => p.set(clave, valor));
-
-        p.set('page', String(pagina));
-        return url;
-    }
-
-    function programarBusqueda(demora = 250) {
-        clearTimeout(temporizador);
-        clearTimeout(temporizadorSpinner);
-        controlador?.abort();
-        secuencia++;
-        spinner.classList.add('hidden');
-        dibujarBadges();
-        temporizador = setTimeout(() => buscar(), demora);
-    }
-
-    async function buscar(pagina = 1, actualizarURL = true) {
-        clearTimeout(temporizador);
-        clearTimeout(temporizadorSpinner);
-
-        controlador?.abort();
-        controlador = new AbortController();
-        const turno = ++secuencia;
-        const url = construirURL(pagina);
-
-        temporizadorSpinner = setTimeout(() => {
-            if (turno === secuencia) {
-                spinner.classList.remove('hidden');
-                estado.textContent = 'Buscando inventarios...';
-            }
-        }, 120);
-
-        try {
-            const respuesta = await fetch(url, {
-                signal: controlador.signal,
-                credentials: 'same-origin',
-                headers: { 'Accept': 'text/html' }
+            criterios.forEach((texto, indice) => {
+                crearBadge(texto, 'texto', () => {
+                    criterios.splice(indice, 1);
+                    dibujarBadges();
+                    programarBusqueda(0);
+                });
             });
 
-            if (!respuesta.ok || respuesta.redirected) {
-                throw new Error('No se pudo actualizar la búsqueda.');
+            if (tienda) {
+                crearBadge(tienda, esProvisional ? 'fija' : 'tienda', () => {
+                    if (esProvisional) return;
+                    tienda = '';
+                    dibujarBadges();
+                    programarBusqueda(0);
+                });
             }
 
-            const documento = new DOMParser().parseFromString(
-                await respuesta.text(), 'text/html'
+            filtrosAdicionales.forEach((valor, clave) => {
+                crearBadge(valor, clave, () => {
+                    filtrosAdicionales.delete(clave);
+                    programarBusqueda(0);
+                });
+            });
+
+            if (fecha || fechaHasta) {
+                const etiquetaFecha = fecha && fechaHasta && fecha !== fechaHasta
+                    ? `${fechaVisible(fecha)} – ${fechaVisible(fechaHasta)}`
+                    : fechaVisible(fecha || fechaHasta);
+                crearBadge(etiquetaFecha, 'fecha', () => {
+                    fecha = '';
+                    fechaHasta = '';
+                    inputFecha.value = '';
+                    dibujarBadges();
+                    programarBusqueda(0);
+                });
+            }
+
+            limpiar.classList.toggle(
+                'hidden',
+                !(criterios.length || (!esProvisional && tienda) || fecha || fechaHasta ||
+                    filtrosAdicionales.size || input.value.trim())
             );
-
-            const nuevoListado = documento.getElementById('listado-inventarios');
-            const nuevoEstado = documento.getElementById('estado-buscador-inventarios');
-
-            if (!nuevoListado || !nuevoEstado) {
-                throw new Error('Respuesta de inventarios no válida.');
-            }
-
-            if (turno !== secuencia) return;
-
-            // Sustituir resultados sin recargar toda la página.
-            const listadoActual = document.getElementById('listado-inventarios');
-            if (!listadoActual) throw new Error('No se encontró el listado actual.');
-            listadoActual.replaceWith(nuevoListado);
-            window.formatearFechasInventarios?.();
-
-            // Restaurar eventos de selección de filas.
-            window.reconectarSeleccionInventarios?.();
-
-            estado.textContent = nuevoEstado.textContent.trim();
-
-            if (actualizarURL) {
-                history.replaceState(null, '', url.pathname + url.search);
-            }
-        } catch (error) {
-            if (error.name !== 'AbortError' && turno === secuencia) {
-                estado.textContent = 'Error de conexión. Intenta nuevamente.';
-                console.error('Error buscando inventarios:', error);
-            }
-        } finally {
-            if (turno === secuencia) {
-                clearTimeout(temporizadorSpinner);
-                spinner.classList.add('hidden');
-            }
         }
-    }
 
-    // Consultar al escribir, sin bloquear el teclado.
-    input.addEventListener('input', () => programarBusqueda());
+        function agregarCriterio() {
+            const valor = input.value.trim();
+            if (!valor) return;
 
-    input.addEventListener('keydown', evento => {
-        if (evento.isComposing) return;
-        if (evento.key === 'Enter') {
-            evento.preventDefault();
-            agregarCriterio();
-        } else if (
-            evento.key === 'Backspace' &&
-            !input.value &&
-            criterios.length
-        ) {
-            criterios.pop();
+            const fechaDetectada = interpretarFecha(valor);
+
+            if (fechaDetectada) {
+                fecha = fechaDetectada;
+                fechaHasta = fechaDetectada;
+                inputFecha.value = fecha;
+            } else if (
+                criterios.length < 12 &&
+                !criterios.some(t => normalizar(t) === normalizar(valor))
+            ) {
+                criterios.push(valor);
+            } else if (criterios.length >= 12) {
+                estado.textContent = 'Puedes agregar hasta 12 criterios.';
+                return;
+            }
+
+            input.value = '';
+            dibujarBadges();
             programarBusqueda(0);
         }
-    });
 
-    // Selector de tiendas.
-    TIENDAS.forEach(nombre => {
-        if (esProvisional && nombre !== tiendaAsignada) return;
+        // Preparar parámetros compatibles con inventario.py.
+        function construirURL(pagina = 1) {
+            const url = new URL('/inventario', location.origin);
+            const p = url.searchParams;
 
-        const opcion = document.createElement('button');
-        opcion.type = 'button';
-        opcion.className = 'block w-full rounded-lg px-3 py-2 ' +
-            'text-left text-xs text-slate-700 hover:bg-indigo-50';
-        opcion.textContent = nombre;
+            if (input.value.trim()) p.set('q', input.value.trim());
 
-        opcion.addEventListener('click', () => {
-            tienda = nombre;
-            menuTienda.classList.add('hidden');
-            btnTienda.setAttribute('aria-expanded', 'false');
+            criterios.forEach(t => p.append('tags', t));
+
+            if (tienda) p.set('tienda', tienda);
+
+            if (fecha) p.set('fecha_desde', fecha);
+            if (fechaHasta) p.set('fecha_hasta', fechaHasta);
+            filtrosAdicionales.forEach((valor, clave) => p.set(clave, valor));
+
+            p.set('page', String(pagina));
+            return url;
+        }
+
+        function programarBusqueda(demora = 250) {
+            clearTimeout(temporizador);
+            clearTimeout(temporizadorSpinner);
+            controlador?.abort();
+            secuencia++;
+            spinner.classList.add('hidden');
+            dibujarBadges();
+            temporizador = setTimeout(() => buscar(), demora);
+        }
+
+        async function buscar(pagina = 1, actualizarURL = true) {
+            clearTimeout(temporizador);
+            clearTimeout(temporizadorSpinner);
+
+            controlador?.abort();
+            controlador = new AbortController();
+            const turno = ++secuencia;
+            const url = construirURL(pagina);
+
+            temporizadorSpinner = setTimeout(() => {
+                if (turno === secuencia) {
+                    spinner.classList.remove('hidden');
+                    estado.textContent = 'Buscando inventarios...';
+                }
+            }, 120);
+
+            try {
+                const respuesta = await fetch(url, {
+                    signal: controlador.signal,
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'text/html' }
+                });
+
+                if (!respuesta.ok || respuesta.redirected) {
+                    throw new Error('No se pudo actualizar la búsqueda.');
+                }
+
+                const documento = new DOMParser().parseFromString(
+                    await respuesta.text(), 'text/html'
+                );
+
+                const nuevoListado = documento.getElementById('listado-inventarios');
+                const nuevoEstado = documento.getElementById('estado-buscador-inventarios');
+
+                if (!nuevoListado || !nuevoEstado) {
+                    throw new Error('Respuesta de inventarios no válida.');
+                }
+
+                if (turno !== secuencia) return;
+
+                // Sustituir resultados sin recargar toda la página.
+                const listadoActual = document.getElementById('listado-inventarios');
+                if (!listadoActual) throw new Error('No se encontró el listado actual.');
+                listadoActual.replaceWith(nuevoListado);
+                window.formatearFechasInventarios?.();
+
+                // Restaurar eventos de selección de filas.
+                window.reconectarSeleccionInventarios?.();
+
+                estado.textContent = nuevoEstado.textContent.trim();
+
+                if (actualizarURL) {
+                    history.replaceState(null, '', url.pathname + url.search);
+                }
+            } catch (error) {
+                if (error.name !== 'AbortError' && turno === secuencia) {
+                    estado.textContent = 'Error de conexión. Intenta nuevamente.';
+                    console.error('Error buscando inventarios:', error);
+                }
+            } finally {
+                if (turno === secuencia) {
+                    clearTimeout(temporizadorSpinner);
+                    spinner.classList.add('hidden');
+                }
+            }
+        }
+
+        // Consultar al escribir, sin bloquear el teclado.
+        input.addEventListener('input', () => programarBusqueda());
+
+        input.addEventListener('keydown', evento => {
+            if (evento.isComposing) return;
+            if (evento.key === 'Enter') {
+                evento.preventDefault();
+                agregarCriterio();
+            } else if (
+                evento.key === 'Backspace' &&
+                !input.value &&
+                criterios.length
+            ) {
+                criterios.pop();
+                programarBusqueda(0);
+            }
+        });
+
+        // Selector de tiendas.
+        TIENDAS.forEach(nombre => {
+            if (esProvisional && nombre !== tiendaAsignada) return;
+
+            const opcion = document.createElement('button');
+            opcion.type = 'button';
+            opcion.className = 'block w-full rounded-lg px-3 py-2 ' +
+                'text-left text-xs text-slate-700 hover:bg-indigo-50';
+            opcion.textContent = nombre;
+
+            opcion.addEventListener('click', () => {
+                tienda = nombre;
+                menuTienda.classList.add('hidden');
+                btnTienda.setAttribute('aria-expanded', 'false');
+                programarBusqueda(0);
+            });
+
+            menuTienda.appendChild(opcion);
+        });
+
+        btnTienda.addEventListener('click', () => {
+            const abierto = menuTienda.classList.toggle('hidden') === false;
+            btnTienda.setAttribute('aria-expanded', String(abierto));
+        });
+
+        document.addEventListener('click', evento => {
+            if (!document.getElementById('selector-tiendas-buscador')
+                .contains(evento.target)) {
+                menuTienda.classList.add('hidden');
+                btnTienda.setAttribute('aria-expanded', 'false');
+            }
+        });
+
+        // Calendario nativo.
+        btnFecha.addEventListener('click', () => {
+            if (typeof inputFecha.showPicker === 'function') {
+                try { inputFecha.showPicker(); } catch { inputFecha.focus(); inputFecha.click(); }
+            } else {
+                inputFecha.click();
+            }
+        });
+
+        inputFecha.addEventListener('change', () => {
+            fecha = inputFecha.value;
+            fechaHasta = fecha;
             programarBusqueda(0);
         });
 
-        menuTienda.appendChild(opcion);
-    });
+        limpiar.addEventListener('click', () => {
+            criterios = [];
+            tienda = esProvisional ? tiendaAsignada : '';
+            fecha = '';
+            fechaHasta = '';
+            filtrosAdicionales = new URLSearchParams();
+            input.value = '';
+            inputFecha.value = '';
+            programarBusqueda(0);
+            input.focus();
+        });
 
-    btnTienda.addEventListener('click', () => {
-        const abierto = menuTienda.classList.toggle('hidden') === false;
-        btnTienda.setAttribute('aria-expanded', String(abierto));
-    });
+        // Conservar la actualización automática en la paginación.
+        document.addEventListener('click', evento => {
+            const enlace = evento.target.closest('#listado-inventarios a[href]');
+            if (!enlace || evento.defaultPrevented || evento.button !== 0 ||
+                evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
 
-    document.addEventListener('click', evento => {
-        if (!document.getElementById('selector-tiendas-buscador')
-            .contains(evento.target)) {
-            menuTienda.classList.add('hidden');
-            btnTienda.setAttribute('aria-expanded', 'false');
-        }
-    });
+            const url = new URL(enlace.href, location.origin);
+            if (url.pathname !== '/inventario') return;
 
-    // Calendario nativo.
-    btnFecha.addEventListener('click', () => {
-        if (typeof inputFecha.showPicker === 'function') {
-            try { inputFecha.showPicker(); } catch { inputFecha.focus(); inputFecha.click(); }
-        } else {
-            inputFecha.click();
-        }
-    });
+            evento.preventDefault();
+            const pagina = Math.max(Number(url.searchParams.get('page')) || 1, 1);
+            buscar(pagina);
+        });
 
-    inputFecha.addEventListener('change', () => {
-        fecha = inputFecha.value;
-        fechaHasta = fecha;
-        programarBusqueda(0);
-    });
-
-    limpiar.addEventListener('click', () => {
-        criterios = [];
-        tienda = esProvisional ? tiendaAsignada : '';
-        fecha = '';
-        fechaHasta = '';
-        filtrosAdicionales = new URLSearchParams();
-        input.value = '';
-        inputFecha.value = '';
-        programarBusqueda(0);
-        input.focus();
-    });
-
-    // Conservar la actualización automática en la paginación.
-    document.addEventListener('click', evento => {
-        const enlace = evento.target.closest('#listado-inventarios a[href]');
-        if (!enlace || evento.defaultPrevented || evento.button !== 0 ||
-            evento.ctrlKey || evento.metaKey || evento.shiftKey || evento.altKey) return;
-
-        const url = new URL(enlace.href, location.origin);
-        if (url.pathname !== '/inventario') return;
-
-        evento.preventDefault();
-        const pagina = Math.max(Number(url.searchParams.get('page')) || 1, 1);
-        buscar(pagina);
-    });
-
-    recuperarURL();
-
-    window.addEventListener('popstate', () => {
         recuperarURL();
-        buscar(Number(new URLSearchParams(location.search).get('page')) || 1, false);
-    });
-})();
+
+        window.addEventListener('popstate', () => {
+            recuperarURL();
+            buscar(Number(new URLSearchParams(location.search).get('page')) || 1, false);
+        });
+
+        // Fin de la inicialización de Administrar Listas.
+
+    })();
 </script>
 
 {% endblock %}
