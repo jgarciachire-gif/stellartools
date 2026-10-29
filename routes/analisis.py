@@ -807,6 +807,107 @@ def preparar_semanas_tooltip(filas):
 
     return semanas, float(demanda)
 
+@router.post("/analisis/sugeridos-tooltip-lote")
+async def consultar_sugeridos_tooltip_lote(request: Request):
+    # Comprueba permisos antes de utilizar el cliente administrativo.
+    user = await config.exigir_permiso_backend()
+
+    if not user:
+        raise HTTPException(status_code=401, detail="No autorizado")
+
+    try:
+        cuerpo = await request.json()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="JSON inválido.")
+
+    codigos = cuerpo.get("codigos") if isinstance(cuerpo, dict) else None
+
+    # Cada solicitud admite hasta 50 productos.
+    if (
+        not isinstance(codigos, list)
+        or not 1 <= len(codigos) <= 50
+        or any(
+            not isinstance(codigo, str)
+            or not 1 <= len(codigo.strip()) <= 100
+            for codigo in codigos
+        )
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Envía entre 1 y 50 códigos válidos.",
+        )
+
+    codigos = list(dict.fromkeys(
+        _normalizar_codigo_kardex(codigo) for codigo in codigos
+    ))
+
+    sedes = {
+        "CENTRO", "NAGUANAGUA", "ISABELICA",
+        "CIUDAD ALIANZA", "GARIBALDI", "SAN DIEGO",
+    }
+
+    hoy = datetime.now(ZoneInfo("America/Caracas")).date()
+    lunes = hoy - timedelta(days=hoy.weekday())
+
+    try:
+        def consultar():
+            return config.supabase_admin.rpc(
+                "obtener_ventas_semanales_sugeridos_lote",
+                {
+                    "p_codigos": codigos,
+                    "p_lunes_actual": lunes.isoformat(),
+                },
+            ).execute()
+
+        respuesta = await asyncio.to_thread(consultar)
+        filas = respuesta.data or []
+
+        esperados = {
+            (sede, codigo)
+            for sede in sedes
+            for codigo in codigos
+        }
+
+        recibidos = {
+            (fila["sede"], fila["codigo"]) for fila in filas
+        }
+
+        # Una respuesta incompleta nunca se interpreta como ventas cero.
+        if recibidos != esperados or len(filas) != len(esperados):
+            raise ValueError("La consulta semanal está incompleta.")
+
+        datos = []
+
+        for fila in filas:
+            semanas = fila["semanas"]
+
+            if not isinstance(semanas, list) or len(semanas) != 4:
+                raise ValueError("Se esperaban cuatro semanas completas.")
+
+            # Comparte exactamente el cálculo utilizado por el tooltip.
+            _, demanda = preparar_semanas_tooltip(semanas)
+
+            if not Decimal(str(demanda)).is_finite() or demanda < 0:
+                raise ValueError("Demanda diaria inválida.")
+
+            datos.append({
+                "sede": fila["sede"],
+                "codigo": fila["codigo"],
+                "demanda_diaria": demanda,
+            })
+
+        return {
+            "fecha_referencia": hoy.isoformat(),
+            "data": datos,
+        }
+
+    except Exception as error:
+        print("ERROR EN SUGERIDOS TOOLTIP:", str(error))
+
+        raise HTTPException(
+            status_code=500,
+            detail="No se pudo consultar la demanda semanal.",
+        )
 
 @router.get("/analisis/ventas-semanales-tooltip")
 async def obtener_ventas_semanales_tooltip(

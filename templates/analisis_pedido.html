@@ -332,12 +332,12 @@
 <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs mb-6 space-y-4">
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
 
-        <!-- Contenedor estructurado en 3 columnas verticales independientes -->
+        <!-- Proveedor, contacto, días y controles de cálculo -->
         <div
-            class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2.5 text-1.5xs pb-1 items-start">
+            class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(0,28rem)_minmax(0,22rem)_max-content_minmax(0,1fr)] gap-x-4 gap-y-4 text-1.5xs pb-1 items-start">
 
             <!-- Columna 1: Buscador de Proveedor (arriba) y Etiquetas (abajo, mismo ancho) -->
-            <div class="flex flex-col gap-2.5 min-w-0 sm:col-span-2 lg:col-span-1">
+            <div class="flex flex-col gap-2.5 min-w-0 w-full max-w-[28rem] sm:col-span-2 lg:col-span-1">
 
                 <!-- Fila Superior: Buscador con línea inferior -->
                 <div class="relative min-w-0" id="combo-proveedor-analisis">
@@ -429,7 +429,7 @@
                     </span>
                     <!-- Sin respuesta al evento click/focus -->
                     <input type="text" id="prov_dias_credito" readonly tabindex="-1" placeholder="-"
-                        class="bg-transparent border-0 p-0 text-1.5xs text-slate-800 font-medium focus:ring-0 w-full cursor-default truncate pointer-events-none select-none">
+                        class="bg-transparent border-0 p-0 text-1.5xs text-slate-800 font-medium focus:ring-0 w-8 shrink-0 cursor-default pointer-events-none select-none">
                 </div>
 
                 <!-- Fila Inferior: Días Inventario -->
@@ -439,10 +439,71 @@
                     </span>
                     <!-- Sin respuesta al evento click/focus -->
                     <input type="text" id="prov_frecuencia" readonly tabindex="-1" placeholder="-"
-                        class="bg-transparent border-0 p-0 text-1.5xs text-slate-800 font-medium focus:ring-0 w-full cursor-default truncate pointer-events-none select-none">
+                        class="bg-transparent border-0 p-0 text-1.5xs text-slate-800 font-medium focus:ring-0 w-8 shrink-0 cursor-default pointer-events-none select-none">
                 </div>
             </div>
+            <!-- Contenedor único: cobertura, crecimiento y cálculo -->
+            <div class="sm:col-span-2 lg:col-span-3 xl:col-span-1 xl:justify-self-end
+                flex flex-col gap-3 p-3
+                bg-slate-50 border border-slate-200 rounded-xl">
 
+                <div class="grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-2">
+
+                    <label for="dias_cobertura" class="flex items-center gap-1 text-xs font-semibold text-slate-700">
+                        <i class="fa-solid fa-calendar-days text-blue-600" aria-hidden="true"></i>
+                        Cobertura:
+                    </label>
+
+                    <div class="flex items-baseline gap-1 text-xs text-slate-700">
+                        <!-- Selecciona el valor completo para reemplazarlo al escribir -->
+                        <input type="text" onfocus="this.dataset.reemplazar = '1'"
+                            onclick="this.dataset.reemplazar = '1'" id="dias_cobertura" inputmode="numeric"
+                            pattern="[0-9]+" value="7" autocomplete="off" aria-label="Días de cobertura"
+                            onbeforeinput="prepararParametroSugerido(this, event)"
+                            oninput="normalizarParametroSugerido(this)" class="w-[3ch] px-0 pt-0 pb-0.5
+                                   !bg-transparent !shadow-none
+                                   border-0 border-b border-solid border-slate-400 rounded-none
+                                   text-xs text-right font-semibold text-slate-800
+                                   focus:ring-0 focus:outline-none focus:border-blue-500">
+
+                        <span>días</span>
+                    </div>
+
+                    <label for="porcentaje_crecimiento"
+                        class="flex items-center gap-1 text-xs font-semibold text-slate-700">
+                        <i class="fa-solid fa-arrow-trend-up text-emerald-600" aria-hidden="true"></i>
+                        Crecimiento:
+                    </label>
+
+                    <div class="flex items-baseline gap-1 text-xs text-slate-700">
+                        <!-- Solo dos dígitos enteros; el símbolo queda fuera del valor -->
+                        <input type="text" onfocus="this.dataset.reemplazar = '1'"
+                            onclick="this.dataset.reemplazar = '1'" id="porcentaje_crecimiento" inputmode="numeric"
+                            pattern="[0-9]{1,2}" maxlength="2" value="0" autocomplete="off"
+                            aria-label="Crecimiento en porcentaje"
+                            onbeforeinput="prepararParametroSugerido(this, event)"
+                            oninput="normalizarParametroSugerido(this, 2)" class="w-[3ch] px-0 pt-0 pb-0.5
+                                   !bg-transparent !shadow-none
+                                   border-0 border-b border-solid border-slate-400 rounded-none
+                                   text-xs text-right font-semibold text-slate-800
+                                   focus:ring-0 focus:outline-none focus:border-blue-500">
+
+                        <span>%</span>
+                    </div>
+                </div>
+
+                <!-- Botón debajo de ambas variables -->
+                <button type="button" id="btn-calcular-sugerido" onclick="ejecutarCalculoSugeridoConSpinner()" class="w-full px-4 py-2
+                           bg-gradient-to-r from-amber-500 to-amber-600
+                           hover:from-amber-600 hover:to-amber-700
+                           text-white font-semibold rounded-xl text-xs
+                           shadow-xs transition flex items-center justify-center
+                           gap-2 whitespace-nowrap cursor-pointer
+                           disabled:opacity-50 disabled:cursor-default">
+                    <i class="fa-solid fa-bolt" id="icono-btn-calcular"></i>
+                    <span id="texto-btn-calcular">Calcular Sugerido</span>
+                </button>
+            </div>
         </div>
     </div>
 
@@ -456,32 +517,6 @@
                 <i class="fa-solid fa-store mr-1.5"></i>{{ tienda }}
             </button>
             {% endfor %}
-        </div>
-
-        <!-- Días de Cobertura y Botón Calcular Sugerido a la derecha -->
-        <div class="flex items-center gap-3 shrink-0 ml-auto">
-            <!-- Parámetros del motor de sugeridos -->
-            <div class="flex flex-wrap items-end gap-3 shrink-0 ml-auto">
-
-                <!-- Cobertura base -->
-                <div class="flex items-center gap-2">
-                    <label for="dias_cobertura" class="text-xs font-semibold text-slate-700 whitespace-nowrap">
-                        <i class="fa-solid fa-calendar-days text-blue-600 mr-1"></i>
-                        Cobertura:
-                    </label>
-
-                    <input type="number" id="dias_cobertura" value="7" min="1" step="1"
-                        oninput="if(this.value < 1 && this.value !== '') this.value = 1; recargarSugeridosEnTabla()"
-                        class="w-16 px-2 py-1.5 border border-slate-300 rounded-xl text-xs text-center font-bold focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white transition [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none">
-                </div>
-            </div>
-
-            <!-- Botón Calcular Sugerido con animación de Spinner y cambio de estado -->
-            <button type="button" id="btn-calcular-sugerido" onclick="ejecutarCalculoSugeridoConSpinner()"
-                class="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-semibold rounded-xl text-xs shadow-xs transition flex items-center justify-center gap-2 whitespace-nowrap cursor-pointer disabled:opacity-50 disabled:cursor-default">
-                <i class="fa-solid fa-bolt" id="icono-btn-calcular"></i>
-                <span id="texto-btn-calcular">Calcular Sugerido</span>
-            </button>
         </div>
     </div>
 
@@ -3116,376 +3151,270 @@ ${nodosProductosXML.join('\n')}
             return `${anio}-${mes}-${dia}`;
         }
 
-        function esSemanaComercialAlta(fecha) {
-            const inicioSemana = (fecha) => {
-                const copia = new Date(
-                    fecha.getFullYear(),
-                    fecha.getMonth(),
-                    fecha.getDate()
-                );
+        const SEDES_SUGERIDOS = [
+            'CENTRO', 'NAGUANAGUA', 'ISABELICA',
+            'CIUDAD ALIANZA', 'GARIBALDI', 'SAN DIEGO'
+        ];
 
-                const desplazamiento = (copia.getDay() + 6) % 7;
-                copia.setDate(copia.getDate() - desplazamiento);
-
-                return copia;
-            };
-
-            const inicioFecha = inicioSemana(fecha);
-
-            const diaQuince = new Date(
-                fecha.getFullYear(),
-                fecha.getMonth(),
-                15
-            );
-
-            const ultimoDiaMes = new Date(
-                fecha.getFullYear(),
-                fecha.getMonth() + 1,
-                0
-            );
-
-            return (
-                inicioFecha.getTime() === inicioSemana(diaQuince).getTime()
-                || inicioFecha.getTime() === inicioSemana(ultimoDiaMes).getTime()
-            );
-        }
+        let demandasTooltip = new Map();
+        let fechaDemandaTooltip = '';
+        let calculandoSugeridos = false;
 
         function numeroDemandaAnalisis(valor) {
-            const numero = Number(
-                String(valor ?? 0).replace(',', '.')
-            );
-
-            return Number.isFinite(numero) && numero > 0
-                ? numero
-                : 0;
+            const numero = Number(String(valor ?? 0).replace(',', '.'));
+            return Number.isFinite(numero) && numero > 0 ? numero : 0;
         }
 
-        async function cargarDemandaComercialKardexEnMemoria(codigos = []) {
-            const codigosNormalizados = [
-                ...new Set(
-                    codigos
-                        .map(codigo => normalizarCodigoAnalisis(codigo))
-                        .filter(Boolean)
-                )
-            ];
+        function fechaCaracasSugeridos() {
+            return new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'America/Caracas'
+            }).format(new Date());
+        }
 
-            if (!codigosNormalizados.length) {
-                throw new Error('No hay códigos válidos para calcular.');
+        function claveDemandaTooltip(sede, codigo) {
+            return JSON.stringify([sede, codigo]);
+        }
+
+        async function cargarDemandasTooltip(codigos) {
+            if (!codigos.length) {
+                throw new Error('Agrega productos para calcular.');
             }
 
-            // Mes calendario anterior completo.
-            const hoy = new Date();
+            // Solo reemplaza la memoria cuando todos los lotes están completos.
+            const nuevas = new Map();
+            const fechaSolicitud = fechaCaracasSugeridos();
 
-            const fechaInicio = new Date(
-                hoy.getFullYear(),
-                hoy.getMonth() - 1,
-                1
-            );
+            for (let inicio = 0; inicio < codigos.length; inicio += 50) {
+                const lote = codigos.slice(inicio, inicio + 50);
 
-            const fechaFin = new Date(
-                hoy.getFullYear(),
-                hoy.getMonth(),
-                0
-            );
-
-            const parametros = new URLSearchParams({
-                fecha_inicio: fechaISOAnalisis(fechaInicio),
-                fecha_fin: fechaISOAnalisis(fechaFin)
-            });
-
-            codigosNormalizados.forEach(codigo => {
-                parametros.append('codigos', codigo);
-            });
-
-            const response = await fetch(
-                `/analisis/demanda-comercial-kardex?${parametros.toString()}`
-            );
-
-            const resultado = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    resultado.detail
-                    || 'No se pudo cargar la demanda comercial del Kardex.'
-                );
-            }
-
-            const sedes = [
-                'CENTRO',
-                'NAGUANAGUA',
-                'ISABELICA',
-                'CIUDAD ALIANZA',
-                'GARIBALDI',
-                'SAN DIEGO'
-            ];
-
-            const normalizarSede = (sede) => {
-                const nombre = String(sede || '').trim().toUpperCase();
-
-                return (
-                    nombre === 'ALIANZA'
-                    || nombre === 'C. ALIANZA'
-                )
-                    ? 'CIUDAD ALIANZA'
-                    : nombre;
-            };
-
-            // Inicializa la información comercial de los códigos consultados.
-            sedes.forEach(sede => {
-                asegurarEstructuraTienda(sede);
-
-                codigosNormalizados.forEach(codigo => {
-                    const actual = matrizTiendas[sede][codigo] || {};
-
-                    matrizTiendas[sede][codigo] = {
-                        ...actual,
-                        demandaRegular: 0,
-                        demandaAlta: 0,
-                        demandaPromedioMes: 0,
-                        diasCubiertosKardex: 0,
-                        semanasRegulares: 0,
-                        semanasAlta: 0,
-                        demandaComercialDisponible: false
-                    };
+                const respuesta = await fetch('/analisis/sugeridos-tooltip-lote', {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    cache: 'no-store',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ codigos: lote }),
+                    signal: AbortSignal.timeout(60000)
                 });
-            });
 
-            (resultado.data || []).forEach(item => {
-                const sede = normalizarSede(item.sede);
-                const codigo = normalizarCodigoAnalisis(item.codigo);
+                const resultado = await respuesta.json();
 
-                if (
-                    !sedes.includes(sede)
-                    || !codigosNormalizados.includes(codigo)
-                ) {
-                    return;
+                if (!respuesta.ok) {
+                    throw new Error(
+                        resultado.detail || 'No se pudo consultar la demanda.'
+                    );
                 }
 
-                const diasCubiertos = Number(item.dias_cubiertos) || 0;
-                const unidadesMes = numeroDemandaAnalisis(item.unidades_mes);
-                const promedioMes = diasCubiertos > 0
-                    ? unidadesMes / diasCubiertos
-                    : 0;
+                if (
+                    resultado.fecha_referencia !== fechaSolicitud ||
+                    !Array.isArray(resultado.data)
+                ) {
+                    throw new Error('Respuesta de demanda inválida o desactualizada.');
+                }
 
-                const semanasRegulares = Number(item.semanas_regulares) || 0;
-                const semanasAlta = Number(item.semanas_alta) || 0;
+                const clavesLote = new Set();
 
-                // Si la categoría tiene poca muestra, se usa el promedio
-                // observado del mes como respaldo, sin inventar un aumento.
-                const regular = semanasRegulares >= 2
-                    ? numeroDemandaAnalisis(item.demanda_regular)
-                    : promedioMes;
+                for (const item of resultado.data) {
+                    const clave = claveDemandaTooltip(item.sede, item.codigo);
 
-                const alta = semanasAlta >= 1
-                    ? numeroDemandaAnalisis(item.demanda_alta)
-                    : regular;
+                    if (
+                        !SEDES_SUGERIDOS.includes(item.sede) ||
+                        !lote.includes(item.codigo) ||
+                        clavesLote.has(clave) ||
+                        typeof item.demanda_diaria !== 'number' ||
+                        !Number.isFinite(item.demanda_diaria) ||
+                        item.demanda_diaria < 0
+                    ) {
+                        throw new Error('Se recibieron datos de demanda inválidos.');
+                    }
 
-                const actual = matrizTiendas[sede][codigo] || {};
+                    clavesLote.add(clave);
+                    nuevas.set(clave, item.demanda_diaria);
+                }
 
-                matrizTiendas[sede][codigo] = {
-                    ...actual,
-                    demandaRegular: regular,
-                    demandaAlta: alta,
-                    demandaPromedioMes: promedioMes,
-                    diasCubiertosKardex: diasCubiertos,
-                    semanasRegulares,
-                    semanasAlta,
-                    demandaComercialDisponible: diasCubiertos > 0
-                };
-            });
-        }
-
-        function proyectarDemandaComercial(datos, fechaInicio, diasHorizonte) {
-            let unidadesProyectadas = 0;
-
-            for (let i = 0; i < diasHorizonte; i++) {
-                const fecha = new Date(
-                    fechaInicio.getFullYear(),
-                    fechaInicio.getMonth(),
-                    fechaInicio.getDate() + i
-                );
-
-                const regular = numeroDemandaAnalisis(datos.demandaRegular);
-                const alta = numeroDemandaAnalisis(datos.demandaAlta);
-
-                // Solo se aplica la demanda alta si las ventas reales
-                // del producto fueron mayores en esas semanas.
-                const demandaDelDia = (
-                    esSemanaComercialAlta(fecha)
-                    && alta > regular
-                )
-                    ? alta
-                    : regular;
-
-                unidadesProyectadas += demandaDelDia;
+                if (clavesLote.size !== lote.length * SEDES_SUGERIDOS.length) {
+                    throw new Error('La consulta devolvió información incompleta.');
+                }
             }
 
-            return unidadesProyectadas;
+            if (fechaSolicitud !== fechaCaracasSugeridos()) {
+                throw new Error('Cambió la fecha. Vuelve a calcular.');
+            }
+
+            demandasTooltip = nuevas;
+            fechaDemandaTooltip = fechaSolicitud;
         }
 
         function ejecutarCalculoSugeridosSync() {
+            // No modifica cantidades antes de cargar la demanda del día.
+            if (fechaDemandaTooltip !== fechaCaracasSugeridos()) return;
+
+            const dias = Number(
+                document.getElementById('dias_cobertura').value
+            );
+
+            const texto = document.getElementById(
+                'porcentaje_crecimiento'
+            ).value;
+
+            if (
+                !Number.isSafeInteger(dias) ||
+                dias < 1 ||
+                !/^\d{0,2}$/.test(texto)
+            ) {
+                return;
+            }
+
+            const crecimiento = Number(texto || 0);
+
             guardarEstadoTablaEnMemoria(tiendaActivaPestana);
 
-            const diasCobertura = Math.max(
-                1,
-                parseInt(
-                    document.getElementById('dias_cobertura')?.value || '7',
-                    10
-                )
-            );
+            // Prepara todos los resultados antes de modificar cantidades.
+            const cambios = [];
 
-            const diasHorizonte = diasCobertura;
-
-
-            const fechaHoy = new Date();
-
-            const filas = document.querySelectorAll(
-                '#filas-tabla-analisis tr'
-            );
-
-            const sedes = [
-                'CENTRO',
-                'NAGUANAGUA',
-                'ISABELICA',
-                'CIUDAD ALIANZA',
-                'GARIBALDI',
-                'SAN DIEGO'
-            ];
-
-            filas.forEach(tr => {
-                const inpCodigo = tr.querySelector('.inp-codigo');
-
-                if (!inpCodigo) return;
-
-                const codigo = normalizarCodigoAnalisis(inpCodigo.value);
+            document.querySelectorAll('#filas-tabla-analisis tr').forEach(tr => {
+                const codigo = normalizarCodigoAnalisis(
+                    tr.querySelector('.inp-codigo')?.value || ''
+                );
 
                 if (!codigo) return;
 
-                inpCodigo.value = codigo;
+                // Los productos aún no consultados conservan sus cantidades.
+                if (SEDES_SUGERIDOS.some(sede =>
+                    !demandasTooltip.has(claveDemandaTooltip(sede, codigo))
+                )) {
+                    return;
+                }
 
-                const preIngresado = parseFloat(
-                    tr.querySelector('.inp-pre')?.value
-                );
+                const pre = Number(tr.querySelector('.inp-pre')?.value);
 
-                const pre = (
-                    Number.isFinite(preIngresado) && preIngresado > 0
-                )
-                    ? preIngresado
-                    : 1;
+                if (!Number.isFinite(pre) || pre <= 0) {
+                    throw new Error(
+                        `Revisa la presentación del producto ${codigo}.`
+                    );
+                }
 
-                sedes.forEach(sede => {
-                    asegurarEstructuraTienda(sede);
+                SEDES_SUGERIDOS.forEach(sede => {
+                    const datos = matrizTiendas[sede]?.[codigo] || {};
+                    const invEmp = numeroDemandaAnalisis(datos.invEmp);
 
-                    const datos = matrizTiendas[sede][codigo] || {
-                        invEmp: 0,
-                        emp: 0
-                    };
-
-                    const invEmp = Math.max(
-                        0,
-                        numeroDemandaAnalisis(datos.invEmp)
+                    const demanda = demandasTooltip.get(
+                        claveDemandaTooltip(sede, codigo)
                     );
 
-                    // Inventario de almacén convertido a unidades individuales.
-                    const inventarioUnidades = invEmp * pre;
+                    // Descuenta inventario antes de aplicar crecimiento.
+                    const necesidad = Math.max(
+                        0,
+                        demanda * dias - invEmp * pre
+                    );
 
-                    let empaquesSugeridos = 0;
+                    const cantidad = necesidad *
+                        (1 + crecimiento / 100) / pre;
 
-                    if (datos.demandaComercialDisponible) {
-                        const demandaProyectada = proyectarDemandaComercial(
-                            datos,
-                            fechaHoy,
-                            diasHorizonte
+                    // Redondea hacia arriba evitando errores decimales mínimos.
+                    const emp = cantidad > 0
+                        ? Math.max(1, Math.ceil(
+                            cantidad -
+                            Number.EPSILON * Math.max(1, cantidad) * 4
+                        ))
+                        : 0;
+
+                    if (!Number.isSafeInteger(emp)) {
+                        throw new Error(
+                            `Cantidad fuera de rango para ${codigo}.`
                         );
-
-                        const necesidadUnidades = Math.max(
-                            0,
-                            demandaProyectada - inventarioUnidades
-                        );
-
-                        if (pre > 0 && necesidadUnidades > 0) {
-                            empaquesSugeridos = Math.ceil(
-                                necesidadUnidades / pre
-                            );
-                        }
                     }
 
-                    matrizTiendas[sede][codigo] = {
-                        ...datos,
-                        invEmp,
-                        pre,
-                        emp: empaquesSugeridos
-                    };
+                    cambios.push({
+                        sede,
+                        codigo,
+                        datos: { ...datos, invEmp, pre, emp }
+                    });
                 });
+            });
+
+            cambios.forEach(({ sede, codigo, datos }) => {
+                asegurarEstructuraTienda(sede);
+                matrizTiendas[sede][codigo] = datos;
             });
 
             cargarEstadoTablaDesdeMemoria(tiendaActivaPestana);
         }
 
-
         async function calcularSugeridoSedeActual() {
-            const btn = document.getElementById(
-                'btn-calcular-sugerido'
-            );
+            if (calculandoSugeridos) return;
 
-            const icono = document.getElementById(
-                'icono-btn-calcular'
-            );
+            calculandoSugeridos = true;
 
-            // Deshabilita el botón mientras se procesa.
-            if (btn) {
-                btn.disabled = true;
-            }
+            const controles = [
+                'dias_cobertura',
+                'porcentaje_crecimiento'
+            ].map(id => document.getElementById(id));
 
-            // Cambia el icono por spinner.
-            if (icono) {
-                icono.className =
-                    'fa-solid fa-spinner fa-spin';
-            }
+            controles.forEach(input => { input.disabled = true; });
 
             try {
-                // Busca códigos visibles que todavía no tengan ventas cargadas.
-                const codigos =
-                    obtenerCodigosTablaAnalisis();
-
-                // Carga la demanda comercial del Kardex para el mes anterior.
-                await cargarDemandaComercialKardexEnMemoria(
-                    codigos
-                );
-
-                // El cálculo se realiza completamente en RAM.
+                await cargarDemandasTooltip(obtenerCodigosTablaAnalisis());
                 ejecutarCalculoSugeridosSync();
 
             } catch (error) {
-                // Registra cualquier fallo.
-                console.error(
-                    'Error al calcular sugeridos:',
-                    error
-                );
+                console.error('Error al calcular sugeridos:', error);
 
-                // Informa al usuario.
                 mostrarNotificacion({
                     tipo: 'error',
-                    mensaje: 'No se pudieron cargar las ventas para calcular.'
+                    mensaje: error.message || 'No se pudo calcular el sugerido.'
                 });
 
             } finally {
-                // Reactiva el botón.
-                if (btn) {
-                    btn.disabled = false;
-                }
-
-                // Restaura el icono.
-                if (icono) {
-                    icono.className =
-                        'fa-solid fa-bolt';
-                }
+                calculandoSugeridos = false;
+                controles.forEach(input => { input.disabled = false; });
             }
         }
 
-        // Recalcula los sugeridos instantáneamente al cambiar los días de cobertura
+        function prepararParametroSugerido(input, evento) {
+            const insertando = evento.inputType?.startsWith('insert');
+
+            // La primera escritura reemplaza el valor anterior.
+            if (
+                insertando &&
+                (input.dataset.reemplazar === '1' || input.value === '0')
+            ) {
+                input.value = '';
+                input.setSelectionRange(0, 0);
+            }
+
+            // Los siguientes dígitos completan la nueva cantidad.
+            input.dataset.reemplazar = '0';
+        }
+
+        function normalizarParametroSugerido(input, limite = 0) {
+            // Conserva únicamente dígitos y elimina ceros iniciales.
+            let valor = input.value
+                .replace(/\D/g, '')
+                .replace(/^0+(?=\d)/, '');
+
+            if (limite > 0) {
+                valor = valor.slice(0, limite);
+            }
+
+            // Borrar todo deja el campo en cero.
+            input.value = valor || '0';
+
+            recargarSugeridosEnTabla();
+        }
+
         function recargarSugeridosEnTabla() {
-            ejecutarCalculoSugeridosSync();
+            if (calculandoSugeridos) return;
+
+            try {
+                // Reutiliza la demanda en memoria, sin consultar nuevamente.
+                ejecutarCalculoSugeridosSync();
+
+            } catch (error) {
+                mostrarNotificacion({
+                    tipo: 'error',
+                    mensaje: error.message
+                });
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async () => {

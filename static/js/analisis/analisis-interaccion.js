@@ -2507,6 +2507,17 @@
              */
             cerrarEdicionAlCambiarCelda(td);
 
+            // Libera el foco del botón de tienda al seleccionar una celda.
+            const elementoConFoco = document.activeElement;
+
+            if (
+                elementoConFoco instanceof HTMLElement &&
+                elementoConFoco !== document.body &&
+                !td.contains(elementoConFoco)
+            ) {
+                elementoConFoco.blur();
+            }
+
             const shift =
                 e.shiftKey === true;
 
