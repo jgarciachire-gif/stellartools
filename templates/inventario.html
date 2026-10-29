@@ -662,10 +662,9 @@
 <!-- MODAL NUEVO INVENTARIO -->
 <!-- ========================================================= -->
 
-<div id="modal-nuevo-inventario" class="fixed inset-0 z-50 hidden
-           items-end sm:items-center justify-center
-           bg-slate-900/50 backdrop-blur-sm
-           px-0 sm:px-4">
+<div id="modal-nuevo-inventario" class="fixed inset-0 z-[100] hidden
+           items-center justify-center
+           bg-slate-900/50 backdrop-blur-sm p-4">
 
     <div class="w-full max-w-lg
            bg-white
@@ -900,8 +899,9 @@
 
 {% if perfil and perfil.tipo_usuario|lower in ['normal', 'administrador', 'admin'] %}
 <!-- MODAL: CREAR INVENTARIOS EN VARIAS TIENDAS -->
-<div id="modal-multitienda" class="fixed inset-0 z-[60] hidden items-end sm:items-center justify-center
-            bg-slate-900/50 backdrop-blur-sm px-0 sm:px-4">
+<div id="modal-multitienda" class="fixed inset-0 z-[110] hidden
+           items-center justify-center
+           bg-slate-900/50 backdrop-blur-sm p-4">
 
     <div class="w-full max-w-2xl max-h-[92vh] overflow-y-auto ocultar-scrollbar
                 rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl">
@@ -3821,5 +3821,23 @@
 
     })();
 </script>
+<script>
+    (() => {
+        // Saca los modales del contenedor con desenfoque.
+        const idsModales = [
+            'modal-nuevo-inventario',
+            'modal-multitienda'
+        ];
 
+        idsModales.forEach(id => {
+            const modal = document.getElementById(id);
+
+            // Multitienda solo existe para los perfiles autorizados.
+            if (modal && modal.parentElement !== document.body) {
+                // Conserva el elemento original, sus datos y sus eventos.
+                document.body.appendChild(modal);
+            }
+        });
+    })();
+</script>
 {% endblock %}
