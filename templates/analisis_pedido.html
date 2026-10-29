@@ -333,8 +333,10 @@
     <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4 items-end">
 
         <!-- Proveedor, contacto, días y controles de cálculo -->
-        <div
-            class="col-span-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-[minmax(0,28rem)_minmax(0,22rem)_max-content_minmax(0,1fr)] gap-x-4 gap-y-4 text-1.5xs pb-1 items-start">
+        <div class="col-span-full grid grid-cols-1 sm:grid-cols-2
+                   lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)_max-content_max-content]
+                   xl:grid-cols-[minmax(0,28rem)_minmax(0,22rem)_max-content_minmax(0,1fr)]
+                   gap-x-4 gap-y-4 text-1.5xs pb-1 items-start">
 
             <!-- Columna 1: Buscador de Proveedor (arriba) y Etiquetas (abajo, mismo ancho) -->
             <div class="flex flex-col gap-2.5 min-w-0 w-full max-w-[28rem] sm:col-span-2 lg:col-span-1">
@@ -443,9 +445,10 @@
                 </div>
             </div>
             <!-- Contenedor único: cobertura, crecimiento y cálculo -->
-            <div class="sm:col-span-2 lg:col-span-3 xl:col-span-1 xl:justify-self-end
-                flex flex-col gap-3 p-3
-                bg-slate-50 border border-slate-200 rounded-xl">
+            <div class="sm:col-span-2 lg:col-span-1
+                        w-max max-w-full justify-self-end
+                        flex flex-col gap-3 p-3
+                        bg-slate-50 border border-slate-200 rounded-xl">
 
                 <div class="grid grid-cols-[auto_auto] items-center gap-x-3 gap-y-2">
 
