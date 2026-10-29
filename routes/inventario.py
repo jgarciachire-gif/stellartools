@@ -3,7 +3,8 @@ from fastapi import (
     Request,
     Cookie,
     Form,
-    HTTPException
+    HTTPException,
+    Query
 )
 from fastapi.responses import (
     RedirectResponse,
@@ -13,6 +14,7 @@ from fastapi.responses import (
 import config
 from config import templates, obtener_usuario_actual
 from uuid import UUID, uuid4
+import re
 
 
 router = APIRouter()
@@ -253,6 +255,7 @@ async def vista_inventario(
     request: Request,
     page: int = 1,
     q: str = "",
+    tags: list[str] = Query(default=[]),
     tienda: str = "",
     realizado_por: str = "",
     estado: str = "",
@@ -285,6 +288,12 @@ async def vista_inventario(
         tienda = tienda.strip()[:150]
         realizado_por = realizado_por.strip()[:150]
         estado = estado.strip().lower()
+        # Limitar cantidad y longitud de los criterios recibidos.
+        tags = [
+            str(valor).strip()[:150]
+            for valor in tags[:12]
+            if str(valor).strip()
+        ]
 
         estados_validos = {
             "borrador",
@@ -386,24 +395,17 @@ async def vista_inventario(
                 )
 
 
-            if q:
-                termino = (
-                    q.replace("%", "")
-                    .replace("_", "")
-                    .replace(",", " ")
-                    .strip()
+            # Cada criterio coincide con algún campo; entre criterios se exige AND.
+            for valor in tags + ([q] if q else []):
+                termino = re.sub(r"[^\w\s\-]", " ", valor, flags=re.UNICODE).strip()
+                if not termino:
+                    continue
+                consulta = consulta.or_(
+                    f"nombre.ilike.%{termino}%,"
+                    f"tienda.ilike.%{termino}%,"
+                    f"realizado_por.ilike.%{termino}%,"
+                    f"estado.ilike.%{termino}%"
                 )
-
-                if termino:
-                    consulta = consulta.or_(
-                        "nombre.ilike.%"
-                        + termino
-                        + "%,tienda.ilike.%"
-                        + termino
-                        + "%,realizado_por.ilike.%"
-                        + termino
-                        + "%"
-                    )
 
             return consulta
 
@@ -475,6 +477,7 @@ async def vista_inventario(
                 "total_paginas": total_paginas,
                 "total_inventarios": total_inventarios,
                 "filtro_q": q,
+                "filtro_tags": tags,
                 "filtro_tienda": tienda,
                 "filtro_realizado_por": realizado_por,
                 "filtro_estado": estado,
