@@ -908,19 +908,14 @@
             pre
         };
 
-        // Si ya existe demanda comercial del Kardex, recalcula usando
-        // el motor nuevo y conserva los parámetros seleccionados.
-        if (
-            datosPrevios.demandaComercialDisponible
-            && typeof ejecutarCalculoSugeridosSync === 'function'
-        ) {
-            ejecutarCalculoSugeridosSync();
-            return;
-        }
-
-        // Si todavía no se ha calculado la demanda comercial,
-        // conserva el sugerido actual en lugar de sustituirlo por cero.
+        // Actualiza unidades y subtotal con los valores actuales.
         calcularFila(elem);
+
+        // Recalcula EMP. usando la demanda del tooltip ya cargada.
+        // Sin demanda disponible, conserva las cantidades existentes.
+        if (typeof recargarSugeridosEnTabla === 'function') {
+            recargarSugeridosEnTabla();
+        }
     }
 
 

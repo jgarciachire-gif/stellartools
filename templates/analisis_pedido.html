@@ -5154,6 +5154,29 @@ ${nodosProductosXML.join('\n')}
     </div>
     <script>
         (() => {
+            // Coloca los modales fuera del contenedor que tiene desenfoque.
+            const idsModales = [
+                'modal-meses-comparacion-kardex',
+                'modal-exportar-tiendas',
+                'modal-cambios-productos',
+                'modal-importar-inventarios',
+                'modal-confirmar-importacion-inventario',
+                'modal-productos-proveedor',
+                'modal-exportar-demanda-xml'
+            ];
+
+            idsModales.forEach(id => {
+                const modal = document.getElementById(id);
+
+                if (modal && modal.parentElement !== document.body) {
+                    // Mueve el elemento original, conservando sus eventos y datos.
+                    document.body.appendChild(modal);
+                }
+            });
+        })();
+    </script>
+    <script>
+        (() => {
             function iniciarCabecerasFijas() {
                 // Evita registrar el comportamiento más de una vez.
                 if (document.getElementById('cabecera-fija-pedido')) return;
