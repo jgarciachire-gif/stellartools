@@ -512,6 +512,8 @@ async def cargar_kardex_ventas(
 
         col_descargos = buscar_columna("descargos", "descargo")
 
+        col_cargos = buscar_columna("cargos", "cargo")
+
         col_fecha = buscar_columna(
             "fecha", "fecha_movimiento", "fecha_documento", "fecha_venta"
         )
@@ -535,46 +537,55 @@ async def cargar_kardex_ventas(
                 ),
             )
 
-        # Consolida líneas repetidas del mismo producto
-        # dentro de la misma transacción y fecha.
+                # Consolida por la misma clave única utilizada en Supabase.
         acumulados = {}
         filas_venta = 0
+        filas_recepcion = 0
         filas_ignoradas = 0
 
         for numero_fila, fila in enumerate(lector, start=2):
             movimiento = str(fila.get(col_movimiento) or "").strip().upper()
 
-            # Solo se admiten ventas.
-            if movimiento != "VEN":
+            # Ignora ajustes, traslados y otros movimientos.
+            if movimiento not in {"VEN", "REC"}:
                 filas_ignoradas += 1
                 continue
 
-            sede = str(fila.get(col_sede) or "").strip().upper()
-
-            codigo = _normalizar_codigo_kardex(fila.get(col_codigo))
-
-            documento = str(fila.get(col_documento) or "").strip()
-
-            fecha_venta = _parsear_fecha_kardex(fila.get(col_fecha))
-
-            try:
-                cantidad = _parsear_cantidad_kardex(fila.get(col_descargos))
-            except ValueError as error:
+            if movimiento == "REC" and not col_cargos:
                 raise HTTPException(
-                    status_code=400, detail=(f"Fila {numero_fila}: {error}")
+                    status_code=400,
+                    detail=(
+                        f"Fila {numero_fila}: el archivo contiene recepciones "
+                        "REC, pero falta la columna Cargos."
+                    ),
                 )
+
+            sede = str(fila.get(col_sede) or "").strip().upper()
+            codigo = _normalizar_codigo_kardex(fila.get(col_codigo))
+            documento = str(fila.get(col_documento) or "").strip()
+            fecha_venta = _parsear_fecha_kardex(fila.get(col_fecha))
 
             if not sede or not codigo or not documento or fecha_venta is None:
                 raise HTTPException(
                     status_code=400,
                     detail=(
-                        "Fila "
-                        f"{numero_fila}: falta sede, código, "
+                        f"Fila {numero_fila}: falta sede, código, "
                         "documento o fecha válida."
                     ),
                 )
 
-            # Las filas con cantidad cero no aportan demanda.
+            # VEN toma únicamente descargos; REC toma únicamente cargos.
+            campo = "descargos" if movimiento == "VEN" else "cargos"
+            columna = col_descargos if movimiento == "VEN" else col_cargos
+
+            try:
+                cantidad = _parsear_cantidad_kardex(fila.get(columna))
+            except ValueError as error:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Fila {numero_fila}, {campo}: {error}",
+                )
+
             if cantidad == 0:
                 filas_ignoradas += 1
                 continue
@@ -587,25 +598,33 @@ async def cargar_kardex_ventas(
                     "codigo": codigo,
                     "fecha_venta": fecha_venta.isoformat(),
                     "documento": documento,
-                    "descargos": cantidad,
                 }
-            else:
-                acumulados[clave]["descargos"] += cantidad
 
-            filas_venta += 1
+            registro = acumulados[clave]
+            registro[campo] = registro.get(campo, Decimal("0")) + cantidad
+
+            if movimiento == "VEN":
+                filas_venta += 1
+            else:
+                filas_recepcion += 1
 
         if not acumulados:
             raise HTTPException(
                 status_code=400,
                 detail=(
-                    "No se encontraron ventas VEN válidas " "con cantidad positiva."
+                    "No se encontraron ventas VEN ni recepciones REC "
+                    "válidas con cantidad positiva."
                 ),
             )
 
         registros = []
 
         for registro in acumulados.values():
-            registro["descargos"] = float(registro["descargos"])
+            # Envía decimales como texto para conservar su precisión.
+            for campo in ("descargos", "cargos"):
+                if campo in registro:
+                    registro[campo] = str(registro[campo])
+
             registros.append(registro)
 
         # Se utiliza el cliente administrativo síncrono
@@ -615,11 +634,11 @@ async def cargar_kardex_ventas(
         procesados = 0
 
         def guardar_lote(lote):
-            return (
-                config.supabase_admin.table("ventas_kardex")
-                .upsert(lote, on_conflict=("sede,fecha_venta,documento,codigo"))
-                .execute()
-            )
+            # Actualiza solo la cantidad enviada y conserva el otro movimiento.
+            return config.supabase_admin.rpc(
+                "importar_movimientos_kardex",
+                {"p_registros": lote},
+            ).execute()
 
         for inicio in range(0, len(registros), tamanio_lote):
             lote = registros[inicio : inicio + tamanio_lote]
@@ -631,6 +650,7 @@ async def cargar_kardex_ventas(
         return {
             "status": "ok",
             "filas_venta": filas_venta,
+            "filas_recepcion": filas_recepcion,
             "registros_consolidados": procesados,
             "filas_ignoradas": filas_ignoradas,
         }
@@ -957,6 +977,24 @@ async def obtener_ventas_semanales_tooltip(
             raise ValueError("La consulta semanal debe devolver cuatro intervalos.")
 
         semanas, demanda = preparar_semanas_tooltip(filas)
+                # Agrega recepciones solo al tooltip; conserva el cálculo compartido.
+        for semana, fila in zip(semanas, filas):
+            dias_con_recepcion = fila.get("dias_con_recepcion")
+
+            # Una respuesta incompleta no se interpreta como ausencia de REC.
+            if (
+                not isinstance(dias_con_recepcion, list)
+                or len(dias_con_recepcion) != 7
+                or any(
+                    type(valor) is not bool
+                    for valor in dias_con_recepcion
+                )
+            ):
+                raise ValueError(
+                    "Los indicadores diarios de recepción no son válidos."
+                )
+
+            semana["dias_con_recepcion"] = dias_con_recepcion
 
         return {
             "status": "ok",

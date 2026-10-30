@@ -298,10 +298,13 @@
                 datos.semanas.length !== 4 ||
                 !Number.isFinite(datos.demanda_diaria) ||
                 datos.semanas.some(semana =>
-                    !Array.isArray(semana.dias_con_venta) ||
-                    semana.dias_con_venta.length !== 7 ||
-                    semana.dias_con_venta.some(
-                        valor => typeof valor !== 'boolean'
+                    !semana ||
+                    ['dias_con_venta', 'dias_con_recepcion'].some(campo =>
+                        !Array.isArray(semana[campo]) ||
+                        semana[campo].length !== 7 ||
+                        semana[campo].some(
+                            valor => typeof valor !== 'boolean'
+                        )
                     )
                 )
             ) {
@@ -417,18 +420,27 @@
 
                 semana.dias_con_venta.forEach((conVenta, indice) => {
                     const punto = document.createElement('span');
+                    const conRecepcion =
+                        semana.dias_con_recepcion[indice];
 
+                    // Conserva el centro azul o rojo y añade un aro blanco.
                     punto.style.cssText =
                         'display:block;width:5px;height:5px;' +
                         'border-radius:50%;' +
-                        `background:${conVenta ? '#3B82F6' : '#bd2722'}`;
+                        `background:${conVenta ? '#3B82F6' : '#bd2722'};` +
+                        `box-shadow:${conRecepcion
+                            ? '0 0 0 1px #FFFFFF'
+                            : 'none'};`;
 
-                    // Descripción accesible, sin añadir texto visible.
+                    // Descripción accesible, sin agregar texto visible.
                     punto.setAttribute('role', 'img');
                     punto.setAttribute(
                         'aria-label',
-                        `${nombresDias[indice]}: ${conVenta ? 'con ventas' : 'sin ventas registradas'
-                        }`
+                        `${nombresDias[indice]}: ` +
+                        `${conVenta
+                            ? 'con ventas'
+                            : 'sin ventas registradas'}` +
+                        `${conRecepcion ? ', con recepción' : ''}`
                     );
 
                     dias.appendChild(punto);

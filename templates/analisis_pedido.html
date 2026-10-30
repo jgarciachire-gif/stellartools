@@ -319,12 +319,11 @@
         <div id="menu-pedido-opciones" class="pedido-panel" x-show="abierto === 'opciones'" x-cloak
             x-transition.opacity.duration.120ms>
 
-            <button type="button" class="pedido-item" data-accion-pedido
-                onclick="document.getElementById('kardex-archivo-csv').click()">
+            <button type="button" class="pedido-item" data-accion-pedido onclick="abrirModalImportarKardex()">
                 <i class="fa-solid fa-file-import" aria-hidden="true"></i>
                 <span>
                     Importar Kardex
-                    <small>Histórico de ventas Stellar</small>
+                    <small>Ventas y recepciones Stellar</small>
                 </span>
             </button>
         </div>
@@ -602,9 +601,69 @@
         </table>
     </div>
 
-    <!-- Selector independiente del panel de comparación. -->
-    <input type="file" id="kardex-archivo-csv" accept=".csv,text/csv" class="hidden"
-        onchange="importarKardexDesdeAnalisis(event)">
+    <!-- Modal de importación de Kardex. -->
+    <dialog id="modal-importar-kardex"
+        class="m-auto w-full max-w-md rounded-xl border-0 bg-white p-6 shadow-2xl backdrop:bg-slate-900/50 backdrop:backdrop-blur-sm"
+        style="width:calc(100% - 2rem);max-height:90vh;" aria-labelledby="titulo-importar-kardex"
+        aria-describedby="descripcion-importar-kardex" onkeydown="event.stopPropagation()"
+        oncancel="event.preventDefault(); cerrarModalImportarKardex()">
+
+        <h3 id="titulo-importar-kardex" class="mb-2 flex items-center gap-2 text-lg font-bold text-slate-800">
+            <i class="fa-solid fa-file-import text-emerald-600" aria-hidden="true"></i>
+            Importar Kardex
+        </h3>
+
+        <p id="descripcion-importar-kardex" class="mb-4 text-xs text-slate-500">
+            Selecciona el CSV de Stellar. Se importarán las ventas VEN y las recepciones REC.
+        </p>
+
+        <form id="form-importar-kardex" onsubmit="importarKardexDesdeAnalisis(event)">
+            <div class="mb-4">
+                <label for="kardex-archivo-csv" class="mb-2 block text-sm font-medium text-gray-700">
+                    Seleccionar archivo(s) CSV del Kardex
+                </label>
+
+                <!-- La selección ya no inicia la importación automáticamente. -->
+                <input type="file" id="kardex-archivo-csv" name="file" accept=".csv,text/csv" multiple
+                    onchange="seleccionarArchivosKardex()"
+                    class="w-full rounded-lg border p-1 text-sm text-slate-500 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100">
+            </div>
+
+            <div id="contenedor-progreso-kardex" class="hidden mb-4 space-y-2.5">
+                <div class="flex items-center justify-between gap-3 text-xs font-semibold text-slate-600">
+                    <span id="texto-estado-progreso-kardex" role="status" aria-live="polite">
+                        Procesando archivo…
+                    </span>
+                    <span id="porcentaje-progreso-kardex">En proceso</span>
+                </div>
+
+                <div id="progreso-importar-kardex"
+                    class="h-3 w-full overflow-hidden rounded-full border border-slate-200 bg-slate-100"
+                    role="progressbar" aria-label="Importación del Kardex" aria-valuemin="0" aria-valuemax="100">
+                    <div id="barra-progreso-kardex"
+                        class="h-full w-full animate-pulse rounded-full bg-gradient-to-r from-emerald-400 to-teal-600">
+                    </div>
+                </div>
+            </div>
+
+            <!-- textContent evita interpretar datos del servidor como HTML. -->
+            <p id="resultado-importar-kardex" class="hidden mb-4 text-xs" role="status" aria-live="polite"></p>
+
+            <div class="mt-4 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                <button type="button" id="btn-cancelar-kardex" onclick="cerrarModalImportarKardex()"
+                    class="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-600 transition-all hover:bg-slate-200 disabled:cursor-wait disabled:opacity-50">
+                    Cancelar
+                </button>
+
+                <button type="submit" id="btn-procesar-kardex"
+                    class="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50">
+                    <span id="btn-texto-kardex">Aceptar</span>
+                    <i id="btn-spinner-kardex" class="fa-solid fa-circle-notch hidden animate-spin"
+                        aria-hidden="true"></i>
+                </button>
+            </div>
+        </form>
+    </dialog>
 
     <!-- Modal independiente para exportar demanda. -->
     <dialog id="modal-exportar-demanda-xml"
@@ -3644,62 +3703,236 @@ ${nodosProductosXML.join('\n')}
         }
 
 
+        let importacionKardexEnCurso = false;
+        let focoAnteriorImportarKardex = null;
+        let archivosKardex = [];
+
+        function elementoModalKardex(id) {
+            return document.getElementById(id);
+        }
+
+        function actualizarBotonesImportarKardex() {
+            const pendientes = archivosKardex.filter(item => item.estado !== 'ok');
+            const hayFallidos = pendientes.some(item => item.estado === 'error');
+
+            elementoModalKardex('kardex-archivo-csv').disabled = importacionKardexEnCurso;
+            elementoModalKardex('btn-procesar-kardex').disabled = importacionKardexEnCurso;
+            elementoModalKardex('btn-cancelar-kardex').disabled = importacionKardexEnCurso;
+            elementoModalKardex('btn-cancelar-kardex').textContent = 'Cancelar';
+
+            elementoModalKardex('btn-spinner-kardex')
+                .classList.toggle('hidden', !importacionKardexEnCurso);
+
+            // Determina el texto a partir del estado real de la carga.
+            elementoModalKardex('btn-texto-kardex').textContent =
+                importacionKardexEnCurso ? 'Procesando…'
+                    : pendientes.length === 0 ? 'Aceptar'
+                        : hayFallidos ? 'Reintentar fallidos'
+                            : 'Procesar';
+        }
+
+        function seleccionarArchivosKardex() {
+            if (importacionKardexEnCurso) return;
+
+            // Una nueva selección comienza un grupo independiente.
+            archivosKardex = Array.from(
+                elementoModalKardex('kardex-archivo-csv').files || []
+            ).map(archivo => ({
+                archivo,
+                estado: 'pendiente',
+                error: '',
+                resultado: null
+            }));
+
+            elementoModalKardex('contenedor-progreso-kardex').classList.add('hidden');
+            elementoModalKardex('resultado-importar-kardex').classList.add('hidden');
+
+            actualizarBotonesImportarKardex();
+        }
+
+        function abrirModalImportarKardex() {
+            const modal = elementoModalKardex('modal-importar-kardex');
+            if (!modal || modal.open || importacionKardexEnCurso) return;
+
+            focoAnteriorImportarKardex = document.activeElement;
+
+            if (modal.parentElement !== document.body) {
+                document.body.appendChild(modal);
+            }
+
+            elementoModalKardex('form-importar-kardex').reset();
+            seleccionarArchivosKardex();
+
+            modal.showModal();
+            elementoModalKardex('kardex-archivo-csv').focus();
+        }
+
+        function cerrarModalImportarKardex() {
+            // Cerrar no interrumpe solicitudes ni revierte registros importados.
+            if (importacionKardexEnCurso) return;
+
+            elementoModalKardex('modal-importar-kardex')?.close();
+            archivosKardex = [];
+            elementoModalKardex('form-importar-kardex').reset();
+            focoAnteriorImportarKardex?.focus();
+        }
+
+        function mostrarResumenImportarKardex() {
+            const correctos = archivosKardex.filter(item => item.estado === 'ok');
+            const fallidos = archivosKardex.filter(item => item.estado === 'error');
+
+            const sumar = campo => correctos.reduce(
+                (total, item) => total + Number(item.resultado?.[campo] ?? 0),
+                0
+            );
+
+            const lineas = [
+                `Archivos cargados: ${correctos.length} de ${archivosKardex.length}.`,
+                `Ventas: ${sumar('filas_venta')}. Recepciones: ${sumar('filas_recepcion')}.`,
+                `Registros procesados: ${sumar('registros_consolidados')}.`,
+                `Filas ignoradas: ${sumar('filas_ignoradas')}.`,
+                '',
+                ...archivosKardex.map(item =>
+                    item.estado === 'ok'
+                        ? `✓ ${item.archivo.name}: cargado.`
+                        : item.estado === 'error'
+                            ? `✗ ${item.archivo.name}: ${item.error}`
+                            : `• ${item.archivo.name}: pendiente.`
+                )
+            ];
+
+            if (fallidos.length) {
+                lineas.push(
+                    '',
+                    'Reintentar fallidos enviará únicamente los archivos con error.',
+                    'Cancelar cerrará el modal y conservará lo ya importado.'
+                );
+            }
+
+            const elemento = elementoModalKardex('resultado-importar-kardex');
+
+            // Muestra nombres y errores como texto para evitar inyección de HTML.
+            elemento.textContent = lineas.join('\n');
+            elemento.className =
+                'mb-4 max-h-52 overflow-y-auto whitespace-pre-line break-words text-xs ' +
+                (fallidos.length ? 'text-rose-600' : 'text-emerald-700');
+        }
+
         async function importarKardexDesdeAnalisis(event) {
-            const input = event.target;
-            const archivo = input.files?.[0];
+            event.preventDefault();
+            if (importacionKardexEnCurso) return;
 
-            if (!archivo) return;
+            // Los archivos correctos nunca se vuelven a enviar al reintentar.
+            const pendientes = archivosKardex.filter(item => item.estado !== 'ok');
 
-            if (!archivo.name.toLowerCase().endsWith('.csv')) {
-                mostrarMensajeKardex('Selecciona un archivo CSV válido.', true);
-                input.value = '';
+            if (pendientes.length === 0) {
+                cerrarModalImportarKardex();
                 return;
             }
 
-            const datos = new FormData();
-            datos.append('file', archivo);
+            const input = elementoModalKardex('kardex-archivo-csv');
+            const contenedor = elementoModalKardex('contenedor-progreso-kardex');
+            const progreso = elementoModalKardex('progreso-importar-kardex');
+            const barra = elementoModalKardex('barra-progreso-kardex');
+            const porcentaje = elementoModalKardex('porcentaje-progreso-kardex');
+            const estado = elementoModalKardex('texto-estado-progreso-kardex');
 
-            mostrarMensajeKardex('Importando el kardex. Espera un momento...');
+            importacionKardexEnCurso = true;
+            actualizarBotonesImportarKardex();
+
+            contenedor.classList.remove('hidden');
+            barra.classList.add('animate-pulse');
+            barra.style.width = '0%';
+            progreso.setAttribute('aria-valuenow', '0');
+            porcentaje.textContent = '0%';
+            elementoModalKardex('resultado-importar-kardex').classList.add('hidden');
+
+            let huboSolicitud = false;
 
             try {
-                const respuesta = await fetch(
-                    '/analisis/cargar-kardex-ventas',
-                    {
-                        method: 'POST',
-                        body: datos,
-                        credentials: 'same-origin'
+                for (const [indice, item] of pendientes.entries()) {
+                    const archivo = item.archivo;
+
+                    item.estado = 'pendiente';
+                    item.error = '';
+                    item.resultado = null;
+
+                    estado.textContent =
+                        `Procesando ${indice + 1} de ${pendientes.length}: ${archivo.name}`;
+
+                    try {
+                        if (!archivo.name.toLowerCase().endsWith('.csv')) {
+                            throw new Error('El archivo debe estar en formato CSV.');
+                        }
+
+                        if (archivo.size > 50 * 1024 * 1024) {
+                            throw new Error('El archivo supera el límite de 50 MB.');
+                        }
+
+                        const datos = new FormData();
+                        datos.append('file', archivo);
+
+                        huboSolicitud = true;
+
+                        // Conserva el endpoint actual: recibe un archivo por solicitud.
+                        const respuesta = await fetch('/analisis/cargar-kardex-ventas', {
+                            method: 'POST',
+                            body: datos,
+                            credentials: 'same-origin'
+                        });
+
+                        const resultado = await respuesta.json().catch(() => null);
+
+                        if (!respuesta.ok || resultado?.status !== 'ok') {
+                            throw new Error(
+                                typeof resultado?.detail === 'string'
+                                    ? resultado.detail
+                                    : `No se pudo confirmar la carga (HTTP ${respuesta.status}).`
+                            );
+                        }
+
+                        item.estado = 'ok';
+                        item.resultado = resultado;
+                    } catch (error) {
+                        // Un error individual no detiene el resto de los archivos.
+                        item.estado = 'error';
+                        item.error = error.message || 'No se pudo cargar el archivo.';
+                        console.error(`Importación de ${archivo.name}:`, error);
                     }
-                );
 
-                const resultado = await respuesta.json();
-
-                if (!respuesta.ok) {
-                    throw new Error(
-                        resultado.detail || 'No se pudo importar el kardex.'
+                    // El porcentaje mide archivos revisados, incluidos los fallidos.
+                    const avance = Math.round(
+                        ((indice + 1) / pendientes.length) * 100
                     );
+
+                    barra.style.width = `${avance}%`;
+                    porcentaje.textContent = `${avance}%`;
+                    progreso.setAttribute('aria-valuenow', String(avance));
+                    mostrarResumenImportarKardex();
                 }
 
-                mostrarMensajeKardex(
-                    `Importación completada. Filas de venta: ${resultado.filas_venta}. ` +
-                    `Registros consolidados: ${resultado.registros_consolidados}. ` +
-                    `Filas ignoradas: ${resultado.filas_ignoradas}.`
-                );
+                const fallidos = archivosKardex.filter(item => item.estado === 'error');
 
-                // Actualiza el tooltip después de importar nuevas ventas.
-                document.dispatchEvent(
-                    new Event('kardex-ventas-actualizado')
-                );
+                estado.textContent = fallidos.length
+                    ? `Revisión finalizada. Archivos con error: ${fallidos.length}.`
+                    : '¡Carga completada correctamente!';
 
-                await actualizarCoberturaKardexDesdeAnalisis(true, true);
-
-            } catch (error) {
-                console.error('Error al importar el kardex:', error);
-                mostrarMensajeKardex(
-                    error.message || 'Error al importar el archivo.',
-                    true
-                );
-            } finally {
                 input.value = '';
+            } finally {
+                barra.classList.remove('animate-pulse');
+
+                try {
+                    if (huboSolicitud) {
+                        // Refresca también si un archivo pudo guardarse parcialmente.
+                        document.dispatchEvent(new Event('kardex-ventas-actualizado'));
+                        await actualizarCoberturaKardexDesdeAnalisis(true, true);
+                    }
+                } catch (error) {
+                    console.error('Error al actualizar la cobertura:', error);
+                } finally {
+                    importacionKardexEnCurso = false;
+                    actualizarBotonesImportarKardex();
+                }
             }
         }
 
@@ -4464,115 +4697,161 @@ ${nodosProductosXML.join('\n')}
             pintarMesesKardex();
         }
 
-        function actualizarFechasModalMesesKardex() {
-            const inicio = document.getElementById(
-                'meses-comparacion-inicio'
-            );
-            const fin = document.getElementById(
-                'meses-comparacion-fin'
-            );
-
-            const meses = mesesElegidosOrdenadosKardex();
-
-            if (!meses.length) {
-                inicio.disabled = true;
-                fin.disabled = true;
-                inicio.value = '';
-                fin.value = '';
-                mostrarResumenMesesKardex();
-                return;
+        function obtenerLimitesDiasComparacionKardex(meses) {
+            if (!meses.length || meses.length > 3) {
+                throw new Error('Selecciona entre 1 y 3 meses con ventas.');
             }
 
-            const base = meses[0];
-            const prefijo = claveMesesKardex(base);
+            let primero = 1;
+            let ultimo = 31;
 
-            const totalDias = new Date(
-                Date.UTC(base.anio, base.mes, 0)
-            ).getUTCDate();
+            for (const mes of meses) {
+                const prefijo = claveMesesKardex(mes);
+                const minimo = String(mes.fecha_minima || '');
+                const maximo = String(mes.fecha_maxima || '');
 
-            const desdeDia = Number(inicio.value.slice(-2)) || 1;
-            const hastaDia = Number(fin.value.slice(-2)) ||
-                Math.min(15, totalDias);
+                // Comprueba que las fechas pertenezcan al mes seleccionado.
+                if (
+                    !/^\d{4}-\d{2}-\d{2}$/.test(minimo) ||
+                    !/^\d{4}-\d{2}-\d{2}$/.test(maximo) ||
+                    minimo.slice(0, 7) !== prefijo ||
+                    maximo.slice(0, 7) !== prefijo ||
+                    minimo > maximo
+                ) {
+                    throw new Error('Fechas de ventas no disponibles.');
+                }
 
-            inicio.disabled = false;
-            fin.disabled = false;
+                // Obtiene el intervalo común entre todos los meses.
+                primero = Math.max(primero, Number(minimo.slice(-2)));
+                ultimo = Math.min(
+                    ultimo,
+                    Number(maximo.slice(-2)),
+                    new Date(Date.UTC(mes.anio, mes.mes, 0)).getUTCDate()
+                );
+            }
 
-            inicio.min = fin.min = `${prefijo}-01`;
-            inicio.max = fin.max =
-                `${prefijo}-${dosDigitosMesesKardex(totalDias)}`;
+            if (primero > ultimo) {
+                throw new Error(
+                    'Los meses seleccionados no tienen un intervalo de días ' +
+                    'en común con datos cargados.'
+                );
+            }
 
-            inicio.value =
-                `${prefijo}-${dosDigitosMesesKardex(Math.min(desdeDia, totalDias))}`;
+            return { primero, ultimo };
+        }
 
-            fin.value =
-                `${prefijo}-${dosDigitosMesesKardex(Math.min(hastaDia, totalDias))}`;
+        function actualizarFechasModalMesesKardex() {
+            const inicio = document.getElementById('meses-comparacion-inicio');
+            const fin = document.getElementById('meses-comparacion-fin');
+            const meses = mesesElegidosOrdenadosKardex();
+
+            try {
+                const { primero, ultimo } =
+                    obtenerLimitesDiasComparacionKardex(meses);
+
+                const prefijo = claveMesesKardex(meses[0]);
+                const minimo = `${prefijo}-${dosDigitosMesesKardex(primero)}`;
+                const maximo = `${prefijo}-${dosDigitosMesesKardex(ultimo)}`;
+
+                // Conserva la selección anterior dentro del rango permitido.
+                const ajustarDia = dia =>
+                    Math.max(primero, Math.min(dia, ultimo));
+
+                const diaInicio = ajustarDia(
+                    Number(inicio.value.slice(-2)) || primero
+                );
+
+                const diaFin = Math.max(
+                    diaInicio,
+                    ajustarDia(Number(fin.value.slice(-2)) || Math.min(15, ultimo))
+                );
+
+                for (const calendario of [inicio, fin]) {
+                    calendario.disabled = false;
+
+                    // El calendario bloquea fechas anteriores y posteriores.
+                    calendario.min = minimo;
+                    calendario.max = maximo;
+
+                    calendario.title =
+                        `Intervalo disponible para comparar: ` +
+                        `${formatearFechaKardex(minimo)} a ` +
+                        `${formatearFechaKardex(maximo)}`;
+                }
+
+                inicio.value = `${prefijo}-${dosDigitosMesesKardex(diaInicio)}`;
+                fin.value = `${prefijo}-${dosDigitosMesesKardex(diaFin)}`;
+            } catch (error) {
+                // Sin un intervalo válido, impide seleccionar fechas.
+                for (const calendario of [inicio, fin]) {
+                    calendario.disabled = true;
+                    calendario.value = '';
+                    calendario.removeAttribute('min');
+                    calendario.removeAttribute('max');
+                    calendario.removeAttribute('title');
+                }
+            }
 
             mostrarResumenMesesKardex();
         }
 
         function validarIntervalosMesesKardex() {
             const meses = mesesElegidosOrdenadosKardex();
+            const { primero, ultimo } =
+                obtenerLimitesDiasComparacionKardex(meses);
 
-            if (!meses.length || meses.length > 3) {
-                throw new Error(
-                    'Selecciona entre 1 y 3 meses con ventas.'
-                );
-            }
+            const inputInicio = document.getElementById('meses-comparacion-inicio');
+            const inputFin = document.getElementById('meses-comparacion-fin');
 
-            const desde = document.getElementById(
-                'meses-comparacion-inicio'
-            ).value;
-
-            const hasta = document.getElementById(
-                'meses-comparacion-fin'
-            ).value;
-
+            const desde = inputInicio.value;
+            const hasta = inputFin.value;
             const referencia = claveMesesKardex(meses[0]);
 
+            // Valida también fechas introducidas manualmente.
             if (
                 !desde || !hasta ||
+                !inputInicio.validity.valid ||
+                !inputFin.validity.valid ||
                 desde.slice(0, 7) !== referencia ||
                 hasta.slice(0, 7) !== referencia ||
                 desde > hasta
             ) {
                 throw new Error(
-                    'Selecciona un intervalo válido dentro del mes de referencia.'
+                    `Selecciona un intervalo válido entre los días ` +
+                    `${primero} y ${ultimo}.`
                 );
             }
 
             const diaInicio = Number(desde.slice(-2));
             const diaFin = Number(hasta.slice(-2));
-            const dias = diaFin - diaInicio + 1;
 
-            return meses.map(m => {
-                const totalMes = new Date(
-                    Date.UTC(m.anio, m.mes, 0)
-                ).getUTCDate();
+            if (diaInicio < primero || diaFin > ultimo) {
+                throw new Error(
+                    `Los datos permiten comparar únicamente entre los días ` +
+                    `${primero} y ${ultimo}.`
+                );
+            }
 
-                if (diaFin > totalMes) {
+            return meses.map(mes => {
+                const prefijo = claveMesesKardex(mes);
+                const inicio = `${prefijo}-${dosDigitosMesesKardex(diaInicio)}`;
+                const fin = `${prefijo}-${dosDigitosMesesKardex(diaFin)}`;
+
+                // Verificación adicional contra las fechas reales de cada mes.
+                if (inicio < mes.fecha_minima || fin > mes.fecha_maxima) {
                     throw new Error(
-                        `${nombreMesesKardex(m)} tiene solamente ${totalMes} días.`
-                    );
-                }
-
-                const prefijo = claveMesesKardex(m);
-                const inicio =
-                    `${prefijo}-${dosDigitosMesesKardex(diaInicio)}`;
-                const fin =
-                    `${prefijo}-${dosDigitosMesesKardex(diaFin)}`;
-
-                if (fin > limitesVistaMesesKardex.ultimaFecha) {
-                    throw new Error(
-                        `${nombreMesesKardex(m)}: no hay datos cargados hasta el día ${diaFin}.`
+                        `${nombreMesesKardex(mes)}: ventas registradas desde ` +
+                        `${formatearFechaKardex(mes.fecha_minima)} hasta ` +
+                        `${formatearFechaKardex(mes.fecha_maxima)}.`
                     );
                 }
 
                 return {
-                    anio: m.anio,
-                    mes: m.mes,
+                    anio: mes.anio,
+                    mes: mes.mes,
                     inicio,
                     fin,
-                    dias
+                    dias: diaFin - diaInicio + 1
                 };
             });
         }
