@@ -1642,7 +1642,7 @@ async def guardar_inventario(
         == str(user.id)
     )
 
-    provisional_solo_cantidades = False
+    provisional_proteger_productos = False
 
     if es_provisional:
 
@@ -1681,9 +1681,10 @@ async def guardar_inventario(
             )
 
         # Si el documento fue creado por otro usuario,
-        # el Provisional únicamente puede modificar cantidades.
+        # el Provisional puede modificar cantidades y agregar productos,
+        # pero debe conservar los productos existentes.
         if not es_creador_inventario:
-            provisional_solo_cantidades = True
+            provisional_proteger_productos = True
 
     # Un inventario completado queda cerrado.
     if inventario_actual.get("estado") == "completado":
@@ -1721,11 +1722,11 @@ async def guardar_inventario(
     # creada por otro usuario, los productos existentes
     # son intocables.
     #
-    # Solo pueden cambiar sus cantidades.
+    # Pueden cambiar sus cantidades y agregar productos nuevos.
 
     productos_originales = []
 
-    if provisional_solo_cantidades:
+    if provisional_proteger_productos:
 
         res_detalle_original = await (
             config.supabase_async
@@ -1895,22 +1896,22 @@ async def guardar_inventario(
     # 4.5. PROTEGER LA ESTRUCTURA DEL INVENTARIO
     # --------------------------------------------------------
 
-    if provisional_solo_cantidades:
+    if provisional_proteger_productos:
 
         codigos_recibidos = {
             producto["codigo"]
             for producto in productos_limpios
         }
 
-        # No puede agregar ni eliminar productos.
-        if codigos_recibidos != codigos_originales:
+        # Puede agregar productos, pero debe conservar todos los originales.
+        if not codigos_originales.issubset(codigos_recibidos):
 
             return JSONResponse(
                 status_code=403,
                 content={
                     "ok": False,
                     "error": (
-                        "No puedes agregar ni eliminar "
+                        "No puedes eliminar ni reemplazar "
                         "productos de una lista creada "
                         "por otro usuario."
                     )
@@ -1931,6 +1932,12 @@ async def guardar_inventario(
         # El usuario provisional puede modificar las
         # cantidades, pero no el código, la descripción
         # ni el orden de los productos.
+
+        productos_nuevos = [
+            producto
+            for producto in productos_limpios
+            if producto["codigo"] not in codigos_originales
+        ]
 
         productos_limpios = []
 
@@ -1971,6 +1978,9 @@ async def guardar_inventario(
                     "piso_ventas": cantidad_piso_ventas
                 }
             })
+
+        # Agrega los nuevos al final, conservando el orden de los originales.
+        productos_limpios.extend(productos_nuevos)
 
     # --------------------------------------------------------
     # 5. GUARDAR TODO EN UNA SOLA OPERACIÓN

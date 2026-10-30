@@ -197,6 +197,9 @@ def extraer_datos_oc(pdf_file):
         print("==================================================")
     except Exception as e:
             # Imprime el error en la consola de VS Code para depuración sin detener el servidor
-        print(f"Error crítico al procesar el PDF: {str(e)}")           
+        print(f"Error crítico al procesar el PDF: {str(e)}")
+        datos_extraidos["error_extraccion"] = (
+            "No se pudo leer el PDF. Comprueba que no esté dañado ni protegido con contraseña."
+        )
 
     return datos_extraidos

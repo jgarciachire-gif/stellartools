@@ -1,5 +1,6 @@
 import json  # Decodificación y codificación de JSON
 import traceback  # Trazado detallado de errores de excepción
+import math
 from typing import Optional  # Tipado para valores nulos/opcionales
 from datetime import datetime, timedelta  # Manejo de fechas y diferencias
 from fastapi import APIRouter, Request, Form, Cookie, Response  # Controladores de FastAPI
@@ -25,7 +26,7 @@ async def listar_ordenes(
         .select(
             "id, numero_orden, proveedor, tienda_destino, "
             "fecha_envio, fecha_recepcion, monto_total, "
-            "estatus, pagada, proveedor_id, "
+            "estatus, proveedor_id, "
             "proveedores(nombre, dias_credito), "
             "detalles_productos(codigo, descripcion, cantidad, "
             "precio_unitario, pre, emp)"
@@ -35,7 +36,6 @@ async def listar_ordenes(
         .execute()
     )
     
-    hoy = datetime.now().date()
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     ordenes_agrupadas = {}
     
@@ -64,26 +64,12 @@ async def listar_ordenes(
             
             o['estatus'] = 'Despacho Recibido' if tiene_fecha_rec else 'Enviada'
             o['vencimiento_factura_str'] = ""
-            o['alerta_text'] = ""
-            o['alerta_color'] = "transparent"
-            o['pagada'] = o.get('pagada', False)
             
             if tiene_fecha_rec and dias_credito:
                 try:
                     f_rec = datetime.strptime(f_rec_raw, "%Y-%m-%d").date()
                     venc_date = f_rec + timedelta(days=int(dias_credito))
                     o['vencimiento_factura_str'] = venc_date.strftime("%d/%m/%Y")
-                    dias_restantes = (venc_date - hoy).days
-                    
-                    if dias_restantes < 0:
-                        o['alerta_text'] = f"Vencido ({abs(dias_restantes)}d)"
-                        o['alerta_color'] = "bg-red-500"
-                    elif dias_restantes <= 3:
-                        o['alerta_text'] = f"Por vencer ({dias_restantes}d)"
-                        o['alerta_color'] = "bg-yellow-400"
-                    else:
-                        o['alerta_text'] = "Vigente"
-                        o['alerta_color'] = "bg-green-500"
                 except ValueError:
                     pass
             
@@ -136,29 +122,14 @@ async def actualizar_orden(
         .execute()
     )
 
-    ordenes_marcadas_pagadas = 0
-
-    if f_rec:
-        resultado_pago = await config.supabase_async.rpc(
-            "marcar_ordenes_vencidas_pagadas",
-            {
-                "p_orden_id": orden_id
-            }
-        ).execute()
-
-        ordenes_marcadas_pagadas = int(
-            resultado_pago.data or 0
-        )
-    
     if "application/json" in request.headers.get("accept", "") or request.headers.get("x-requested-with") == "XMLHttpRequest":
         vencimiento_str = ""
-        alerta_text = ""
-        alerta_color = "transparent"
 
         if f_rec:
             res_oc = await config.supabase_async.table("ordenes_compra") \
-                .select("pagada, proveedores(dias_credito)") \
+                .select("proveedores(dias_credito)") \
                 .eq("id", orden_id) \
+                .eq("usuario_id", user.id) \
                 .execute()
             
             if res_oc.data:
@@ -167,55 +138,19 @@ async def actualizar_orden(
                 dias_credito = prov_info.get("dias_credito", 30) or 30
 
                 try:
-                    hoy = datetime.now().date()
                     f_rec_date = datetime.strptime(f_rec, "%Y-%m-%d").date()
                     venc_date = f_rec_date + timedelta(days=int(dias_credito))
                     vencimiento_str = venc_date.strftime("%d/%m/%Y")
-                    dias_restantes = (venc_date - hoy).days
-
-                    if dias_restantes < 0:
-                        alerta_text = f"Vencido ({abs(dias_restantes)}d)"
-                        alerta_color = "bg-red-500"
-                    elif dias_restantes <= 3:
-                        alerta_text = f"Por vencer ({dias_restantes}d)"
-                        alerta_color = "bg-yellow-400"
-                    else:
-                        alerta_text = "Vigente"
-                        alerta_color = "bg-green-500"
                 except ValueError:
                     pass
 
         return {
             "status": "ok", 
             "estatus": estatus,
-            "vencimiento_factura_str": vencimiento_str,
-            "alerta_text": alerta_text,
-            "alerta_color": alerta_color
+            "vencimiento_factura_str": vencimiento_str
         }
 
     return RedirectResponse(url="/ordenes", status_code=303)
-
-@router.post("/ordenes/pagar/{orden_id}")
-async def actualizar_pago(
-    orden_id: int, 
-    request: Request, 
-    access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
-):
-    user = await obtener_usuario_actual(access_token, refresh_token)
-    if not user:
-        return {}
-    
-    data = await request.json()
-    estado_pagada = data.get("pagada", False)
-    
-    await config.supabase_async.table("ordenes_compra") \
-        .update({"pagada": estado_pagada}) \
-        .eq("id", orden_id) \
-        .eq("usuario_id", user.id) \
-        .execute()
-        
-    return {"status": "ok"}
 
 @router.post("/ordenes/eliminar/{orden_id}")
 async def eliminar_orden(
@@ -287,7 +222,8 @@ async def crear_orden(
             status_code=401,
             content={
                 "status": "error",
-                "mensaje": "No autorizado"
+                "codigo": "sesion_expirada",
+                "mensaje": "Tu sesión venció. Inicia sesión en otra pestaña y vuelve a intentar; conserva esta revisión abierta."
             }
         )
 
@@ -295,18 +231,28 @@ async def crear_orden(
         # ========================================================
         # 1. NORMALIZAR DATOS
         # ========================================================
-        monto_total_val = sanitizar_numero(monto_total)
+        def numero_valido(valor, campo, minimo=0, entero=False):
+            try:
+                if isinstance(valor, bool):
+                    raise ValueError()
+                numero = float(str(valor).strip())
+            except (ValueError, TypeError):
+                raise ValueError(f"{campo}: introduce un número válido.")
+            if not math.isfinite(numero) or numero < minimo:
+                raise ValueError(f"{campo}: el valor debe ser finito y mayor o igual a {minimo}.")
+            if entero and not numero.is_integer():
+                raise ValueError(f"{campo}: introduce un número entero.")
+            return int(numero) if entero else numero
 
-        dias_inv_val = (
-            int(sanitizar_numero(dias_inventario))
-            if dias_inventario
-            else 15
-        )
+        monto_total_val = numero_valido(monto_total, "Monto total")
+        dias_inv_val = numero_valido(dias_inventario or "15", "Días inventario", 1, entero=True)
+        if dias_inv_val > 99:
+            raise ValueError("Días inventario: el máximo es 99.")
 
         f_emision = (
             fecha_emision.strip()
             if fecha_emision and fecha_emision.strip()
-            else datetime.now().strftime("%Y-%m-%d")
+            else ""
         )
 
         f_envio = (
@@ -318,6 +264,13 @@ async def crear_orden(
         num_oc = numero_orden.strip()
         prov_nombre = proveedor.strip()
         tienda = tienda_destino.strip()
+        if not num_oc or not prov_nombre or not tienda:
+            raise ValueError("Completa el número de orden, el proveedor y la tienda destino.")
+        try:
+            datetime.strptime(f_emision, "%Y-%m-%d")
+            datetime.strptime(f_envio, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("Revisa las fechas de emisión y envío; deben ser fechas válidas.")
 
         # ========================================================
         # 2. PARSEAR PRODUCTOS
@@ -328,12 +281,17 @@ async def crear_orden(
                 if isinstance(productos_json, str)
                 else productos_json
             )
-        except Exception:
-            productos = []
+        except (ValueError, TypeError):
+            raise ValueError("No se pudo leer el detalle de productos. Vuelve a procesar el PDF.")
+
+        if not isinstance(productos, list) or not productos:
+            raise ValueError("La orden debe contener al menos un producto. Vuelve a procesar el PDF.")
 
         productos_rpc = []
 
         for prod in productos or []:
+            if not isinstance(prod, dict):
+                raise ValueError("El detalle contiene un producto inválido. Vuelve a procesar el PDF.")
             codigo_raw = (
                 prod.get("codigo")
                 or prod.get("codigo_producto")
@@ -346,31 +304,11 @@ async def crear_orden(
                 or "Sin descripción"
             )
 
-            emp_val = int(
-                float(
-                    sanitizar_numero(
-                        prod.get("empaques")
-                        or prod.get("emp")
-                        or 0
-                    )
-                )
-            )
-
-            pre_val = int(
-                float(
-                    sanitizar_numero(
-                        prod.get("unidad_manejo")
-                        or prod.get("pre")
-                        or 1
-                    )
-                )
-            )
-
-            cant_raw = float(
-                sanitizar_numero(
-                    prod.get("cantidad") or 0
-                )
-            )
+            if not codigo_raw or not str(codigo_raw).strip():
+                raise ValueError("Hay un producto sin código. Revisa el PDF original.")
+            emp_val = numero_valido(prod.get("empaques", prod.get("emp", 0)), "Empaques", entero=True)
+            pre_val = numero_valido(prod.get("unidad_manejo", prod.get("pre", 1)), "Unidad de manejo", 1, entero=True)
+            cant_raw = numero_valido(prod.get("cantidad", 0), "Cantidad")
 
             cant_val = (
                 int(emp_val * pre_val)
@@ -382,13 +320,7 @@ async def crear_orden(
                 else int(round(cant_raw))
             )
 
-            precio_final = float(
-                sanitizar_numero(
-                    prod.get("precio_unitario")
-                    or prod.get("precio")
-                    or 0
-                )
-            )
+            precio_final = numero_valido(prod.get("precio_unitario", prod.get("precio", 0)), "Precio unitario")
 
             productos_rpc.append({
                 "codigo": str(codigo_raw) if codigo_raw else "",
@@ -433,16 +365,21 @@ async def crear_orden(
             }
         )
 
+    except ValueError as e:
+        return JSONResponse(status_code=422, content={
+            "status": "error", "codigo": "datos_invalidos", "mensaje": str(e)
+        })
     except Exception as e:
         mensaje = str(e)
 
         # Mantener el mensaje de duplicado entendible para el usuario.
-        if "ya se encuentra registrada" in mensaje:
+        if "ya se encuentra registrada" in mensaje.lower() or getattr(e, "code", None) == "23505":
             return JSONResponse(
-                status_code=400,
+                status_code=409,
                 content={
                     "status": "error",
-                    "mensaje": mensaje
+                    "codigo": "orden_duplicada",
+                    "mensaje": "Esta orden ya está registrada. Comprueba el número de orden, el proveedor y la tienda en el diario antes de volver a guardarla."
                 }
             )
 
@@ -455,7 +392,8 @@ async def crear_orden(
             status_code=500,
             content={
                 "status": "error",
-                "mensaje": mensaje
+                "codigo": "error_guardado",
+                "mensaje": "No se pudo confirmar el guardado. Conserva esta revisión y comprueba el diario antes de reintentar."
             }
         )
 

@@ -847,11 +847,7 @@
 
                 <!-- BOTÓN A LA IZQUIERDA -->
 
-                {% if inventario.estado == 'borrador'
-                and (
-                not es_provisional
-                or es_creador_inventario
-                ) %}
+                {% if inventario.estado == 'borrador' %}
 
                 <button type="button" id="btn-agregar-fila-inventario" class="px-3 py-1.5
                bg-slate-900
@@ -908,11 +904,7 @@
 
             <!-- AGREGAR PRODUCTO -->
 
-            {% if inventario.estado == 'borrador'
-            and (
-            not es_provisional
-            or es_creador_inventario
-            ) %}
+            {% if inventario.estado == 'borrador' %}
 
             <div class="p-3 border-t border-slate-200">
 
@@ -6058,6 +6050,7 @@
         </td>
 
 
+        ${!esProvisionalInventario || esCreadorInventario ? `
         <td
             class="border border-slate-200
                     p-0 text-center
@@ -6077,6 +6070,7 @@
             </button>
 
         </td>
+        ` : ''}
         `;
 
             tbody.appendChild(tr);

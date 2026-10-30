@@ -1,4 +1,5 @@
 import io  # Manejo de streams de memoria
+import math
 import re  # Expresiones regulares para extracción
 from typing import List, Optional  # Definición de tipos
 import xml.etree.ElementTree as ET  # Parseador XML
@@ -221,7 +222,7 @@ async def procesar_recepciones_xml(
 @router.post("/escanear/procesar")
 async def procesar_pdf(
     request: Request, 
-    archivos_pdf: List[UploadFile] = File(...), 
+    archivos_pdf: List[UploadFile] = File(default=[]),
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
@@ -233,17 +234,51 @@ async def procesar_pdf(
             return JSONResponse(status_code=401, content={"success": False, "mensaje": "Sesión expirada. Por favor, inicia sesión nuevamente."})
         return RedirectResponse(url="/login", status_code=303)
 
-    # 1. Extraer datos de todos los PDFs primero
+    def error_carga(mensaje, status_code=400):
+        return JSONResponse(status_code=status_code, content={
+            "success": False, "mensaje": mensaje, "ordenes": [], "errores": []
+        })
+
+    if not archivos_pdf:
+        return error_carga("Selecciona al menos un archivo PDF.")
+    if len(archivos_pdf) > 20:
+        return error_carga("Puedes procesar hasta 20 archivos por carga.")
+
+    # Limitar la lectura también en el servidor, antes de iniciar la extracción.
+    limite_bytes = 4 * 1024 * 1024
+    total_bytes = 0
+    contenidos = []
+    for archivo in archivos_pdf:
+        contenido = await archivo.read(limite_bytes - total_bytes + 1)
+        total_bytes += len(contenido)
+        if total_bytes > limite_bytes:
+            return error_carga("Los archivos superan los 4 MB permitidos en total.", 413)
+        contenidos.append((archivo.filename or "Sin nombre", contenido))
+
+    # 1. Un archivo inválido no impide revisar los demás.
+    errores = []
+    advertencias = []
     archivos_extraidos = []
     todos_codigos_st = set()
     todos_proveedores = set()
 
-    for archivo in archivos_pdf:
-        if not archivo.filename:
+    for nombre, contenido_bytes in contenidos:
+        if not nombre.lower().endswith(".pdf") or not contenido_bytes:
+            errores.append({"archivo": nombre, "mensaje": "Selecciona un PDF que no esté vacío."})
             continue
-        contenido_bytes = await archivo.read()
-        pdf_en_memoria = io.BytesIO(contenido_bytes)
-        datos_extraidos = await run_in_threadpool(extraer_datos_oc, pdf_en_memoria)
+        if b"%PDF-" not in contenido_bytes[:1024]:
+            errores.append({"archivo": nombre, "mensaje": "El contenido del archivo no corresponde a un PDF."})
+            continue
+        try:
+            datos_extraidos = await run_in_threadpool(extraer_datos_oc, io.BytesIO(contenido_bytes))
+            if datos_extraidos.get("error_extraccion"):
+                raise ValueError(datos_extraidos["error_extraccion"])
+            if not datos_extraidos.get("productos"):
+                raise ValueError("No se detectaron productos. Usa un PDF con texto seleccionable y el formato de orden de compra compatible.")
+        except Exception as exc:
+            mensaje = str(exc) if isinstance(exc, ValueError) else "No se pudo leer el PDF. Comprueba que no esté dañado ni protegido."
+            errores.append({"archivo": nombre, "mensaje": mensaje})
+            continue
         
         for p in datos_extraidos.get("productos", []):
             cod_st = str(p.get("codigo", "")).strip()
@@ -254,31 +289,37 @@ async def procesar_pdf(
         if prov_nombre:
             todos_proveedores.add(prov_nombre)
 
-        archivos_extraidos.append((archivo.filename, datos_extraidos))
+        archivos_extraidos.append((nombre, datos_extraidos))
 
     # 2. Consultar Productos y Proveedores de forma masiva (solo 2 peticiones globales)
     mapa_productos = {}
-    if todos_codigos_st:
-        res_p = await config.supabase_async.table("productos") \
-            .select("codigo_st, descripcion, precio") \
-            .in_("codigo_st", list(todos_codigos_st)) \
-            .execute()
-        if res_p.data:
-            for prod in res_p.data:
-                mapa_productos[prod["codigo_st"]] = prod
+    try:
+        if todos_codigos_st:
+            res_p = await config.supabase_async.table("productos") \
+                .select("codigo_st, descripcion, precio") \
+                .in_("codigo_st", list(todos_codigos_st)) \
+                .execute()
+            if res_p.data:
+                for prod in res_p.data:
+                    mapa_productos[prod["codigo_st"]] = prod
+    except Exception:
+        advertencias.append("No se pudo consultar el catálogo de productos. Se conservan los datos del PDF; revísalos antes de guardar.")
 
     mapa_proveedores = {}
-    if todos_proveedores:
-        res_prov = await config.supabase_async.table("proveedores") \
-            .select("nombre, dias_despacho") \
-            .execute()
-        if res_prov.data:
-            for prov in res_prov.data:
-                mapa_proveedores[prov["nombre"].strip().lower()] = prov.get("dias_despacho")
+    try:
+        if todos_proveedores:
+            res_prov = await config.supabase_async.table("proveedores") \
+                .select("nombre, dias_despacho") \
+                .execute()
+            if res_prov.data:
+                for prov in res_prov.data:
+                    mapa_proveedores[prov["nombre"].strip().lower()] = prov.get("dias_despacho")
+    except Exception:
+        advertencias.append("No se pudieron consultar los días de despacho. Revisa los días inventario sugeridos.")
 
     # 3. Cruzar datos en memoria local
     lista_datos = []
-    for filename, datos_extraidos in archivos_extraidos:
+    def completar_datos(filename, datos_extraidos):
         prods_procesados = []
         monto_calculado_total = 0.0
 
@@ -313,6 +354,8 @@ async def procesar_pdf(
                     precio_unitario = float(prod_db.get("precio") or 0.0)
 
             subtotal = round(cant * precio_unitario, 2)
+            if cant < 0 or precio_unitario < 0 or not math.isfinite(subtotal):
+                raise ValueError("Cantidad o precio inválidos.")
             monto_calculado_total += subtotal
 
             prods_procesados.append({
@@ -332,27 +375,29 @@ async def procesar_pdf(
             })
 
         datos_extraidos["productos"] = prods_procesados
-        if monto_calculado_total > 0 and datos_extraidos.get("monto_total", 0.0) == 0.0:
-            datos_extraidos["monto_total"] = monto_calculado_total
-
-        if not datos_extraidos:
-            datos_extraidos = {
-                "numero_orden": "",
-                "proveedor": "",
-                "tienda_destino": "",
-                "fecha_emision": "",
-                "fecha_envio": "",
-                "monto_total": 0.0
-            }
+        monto_pdf = float(datos_extraidos.get("monto_total") or 0)
+        if not math.isfinite(monto_pdf) or monto_pdf < 0:
+            raise ValueError("Monto total inválido.")
+        datos_extraidos["monto_total"] = monto_pdf or monto_calculado_total
 
         prov_nombre = (datos_extraidos.get("proveedor") or "").strip()
         frecuencia_sugerida = mapa_proveedores.get(prov_nombre.lower(), 15) if prov_nombre else 15
 
         datos_extraidos["dias_despacho"] = frecuencia_sugerida
         datos_extraidos["nombre_archivo"] = filename
-        lista_datos.append(datos_extraidos)
+        return datos_extraidos
+
+    for filename, datos_extraidos in archivos_extraidos:
+        try:
+            lista_datos.append(completar_datos(filename, datos_extraidos))
+        except Exception:
+            errores.append({"archivo": filename, "mensaje": "No se pudieron preparar los datos de esta orden. Revisa las cantidades y precios en el PDF original."})
 
     if es_ajax:
-        return JSONResponse(content={"success": True, "ordenes": lista_datos})
+        return JSONResponse(status_code=200 if lista_datos else 422, content={
+            "success": bool(lista_datos),
+            "mensaje": f"{len(lista_datos)} orden(es) listas para revisar; {len(errores)} archivo(s) no procesados.",
+            "ordenes": lista_datos, "errores": errores, "advertencias": advertencias
+        })
 
     return templates.TemplateResponse(request=request, name="escanear.html", context={"lista_datos": lista_datos})

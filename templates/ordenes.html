@@ -48,26 +48,6 @@
                                 <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Recibido
                             </button>
 
-                            <div class="border-t border-slate-100 my-1"></div>
-
-                            <div class="px-3 py-1 font-bold text-slate-400 uppercase tracking-wider text-[10px]">Alerta
-                                de Pago</div>
-                            <button type="button" onclick="agregarEtiqueta('alerta', 'Vigente')"
-                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Vigente
-                            </button>
-                            <button type="button" onclick="agregarEtiqueta('alerta', 'Por Vencer')"
-                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-amber-500"></span> Por Vencer
-                            </button>
-                            <button type="button" onclick="agregarEtiqueta('alerta', 'Vencido')"
-                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-rose-500"></span> Vencido
-                            </button>
-                            <button type="button" onclick="agregarEtiqueta('alerta', 'Pagada')"
-                                class="w-full text-left px-3 py-1.5 hover:bg-slate-50 text-slate-700 flex items-center gap-2">
-                                <span class="w-2 h-2 rounded-full bg-green-500"></span> Pagada
-                            </button>
                         </div>
                     </div>
 
@@ -197,11 +177,7 @@
                             <div class="flex items-center justify-between">Estatus <i
                                     class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
                         </th>
-                        <th class="p-4 cursor-pointer hover:bg-slate-50 transition-colors"
-                            onclick="ordenarTablaPrincipal(this, 9, 'texto')">
-                            <div class="flex items-center justify-between">Alerta de Pago <i
-                                    class="fa-solid fa-sort text-[10px] ml-1 text-slate-400"></i></div>
-                        </th>
+
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 text-sm">
@@ -250,33 +226,12 @@
                             </span>
                         </td>
 
-                        <td class="p-4 font-semibold text-slate-900">
-                            <div class="flex flex-col gap-1.5">
-                                <div class="flex items-center gap-2">
-                                    <!-- Mantener spans en el DOM para actualización dinámica -->
-                                    <span
-                                        class="w-2.5 h-2.5 rounded-full {{ 'bg-green-500' if o.pagada else o.alerta_color }} {{ 'hidden' if not o.alerta_text and not o.pagada }}"
-                                        id="punto-{{ o.id }}"></span>
-                                    <span id="texto-estado-{{ o.id }}" class="texto-pago" {% if o.pagada
-                                        %}style="color: #16a34a;" {% endif %}>
-                                        {{ 'Pagada' if o.pagada else o.alerta_text }}
-                                    </span>
-                                </div>
-                                <label
-                                    class="text-[11px] text-slate-500 flex items-center gap-1 cursor-pointer hover:text-slate-800 transition-colors"
-                                    onclick="event.stopPropagation();">
-                                    <input type="checkbox" {{ 'checked' if o.pagada else '' }}
-                                        onchange="cambiarEstadoPago(this, '{{ o.id }}', '{{ o.alerta_text }}', '{{ o.alerta_color }}')"
-                                        class="chk-finalizada rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                                    Finalizada
-                                </label>
-                            </div>
-                        </td>
+
                     </tr>
                     <!-- Fila de Pestaña Desplegable con el detalle de la Orden de Compra -->
                     <tr id="detalle-{{ o.id }}" class="hidden bg-slate-50/80 border-b border-slate-200">
                         <!-- td ajustado sin pl-12 para garantizar centrado simétrico -->
-                        <td colspan="10" class="p-4">
+                        <td colspan="9" class="p-4">
                             <!-- max-w-4xl y mx-auto centran el contenedor horizontalmente -->
                             <div
                                 class="max-w-6xl mx-auto bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
@@ -572,34 +527,6 @@
                     celdas[6].textContent = data.vencimiento_factura_str || '';
                 }
 
-                // 3. Actualizar Alerta de Pago y Punto indicador
-                const punto = document.getElementById(`punto-${ordenId}`);
-                const textoEstado = document.getElementById(`texto-estado-${ordenId}`);
-                const chkPago = tr.querySelector('.chk-finalizada');
-
-                if (punto && textoEstado) {
-                    if (data.alerta_text || (chkPago && chkPago.checked)) {
-                        punto.classList.remove('hidden');
-                    } else {
-                        punto.classList.add('hidden');
-                    }
-
-                    if (chkPago && chkPago.checked) {
-                        textoEstado.textContent = "Pagada";
-                        textoEstado.style.color = "#16a34a";
-                        punto.className = "w-2.5 h-2.5 rounded-full bg-green-500";
-                    } else {
-                        textoEstado.textContent = data.alerta_text;
-                        textoEstado.style.color = "";
-                        punto.className = `w-2.5 h-2.5 rounded-full ${data.alerta_color}`;
-                    }
-                }
-
-                // 4. Reconfigurar evento del checkbox de pago con los nuevos datos
-                if (chkPago) {
-                    chkPago.setAttribute('onchange', `cambiarEstadoPago(this, '${ordenId}', '${data.alerta_text}', '${data.alerta_color}')`);
-                }
-
                 filtrarOrdenes();
             }
         } catch (error) {
@@ -607,35 +534,6 @@
         }
     }
 
-    // Función asíncrona para guardar el estado de pago
-    async function cambiarEstadoPago(checkbox, idOrden, textoOriginal, colorOriginal) {
-        const textoEstado = document.getElementById('texto-estado-' + idOrden);
-        const puntoColor = document.getElementById('punto-' + idOrden);
-        const isChecked = checkbox.checked;
-
-        if (isChecked) {
-            textoEstado.textContent = "Pagada";
-            textoEstado.style.color = "#16a34a";
-            puntoColor.className = "w-2.5 h-2.5 rounded-full bg-green-500";
-        } else {
-            textoEstado.textContent = textoOriginal;
-            textoEstado.style.color = "";
-            puntoColor.className = "w-2.5 h-2.5 rounded-full " + colorOriginal;
-        }
-
-        try {
-            await fetch(`/ordenes/pagar/${idOrden}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ pagada: isChecked })
-            });
-            filtrarOrdenes();
-        } catch (error) {
-            console.error("Error al guardar estado de pago", error);
-        }
-    }
-
-    // Event Listeners e Inicializaciones
     document.addEventListener('DOMContentLoaded', () => {
         const buscadorOrdenes = document.getElementById('buscador-ordenes');
         const contenedorBuscador = document.getElementById('contenedor-buscador');
@@ -1199,16 +1097,6 @@
     }
 
     // Controles para Modales de Carga (PDF y XML)
-    function abrirModalCargarOC() {
-        const dropdown = document.getElementById('dropdown-opciones');
-        if (dropdown) dropdown.classList.add('hidden'); // Cierra el menú desplegable
-        document.getElementById('modal-cargar-oc').classList.remove('hidden'); // Muestra el modal
-    }
-
-    function cerrarModalCargarOC() {
-        document.getElementById('modal-cargar-oc').classList.add('hidden'); // Oculta el modal
-    }
-
     function abrirModalCargarXML() {
         const dropdown = document.getElementById('dropdown-opciones');
         if (dropdown) dropdown.classList.add('hidden'); // Cierra el menú desplegable
@@ -1219,274 +1107,6 @@
         document.getElementById('modal-cargar-xml').classList.add('hidden'); // Oculta el modal
     }
 
-    // Procesa la subida con seguimiento de progreso mediante XMLHttpRequest
-    function validarYProcesarPDFModal(e) {
-        e.preventDefault();
-
-        const input = document.getElementById('input-pdf-modal');
-        if (!input.files.length) return;
-
-        let pesoTotal = 0;
-        for (let i = 0; i < input.files.length; i++) {
-            pesoTotal += input.files[i].size;
-        }
-
-        if (pesoTotal > 4 * 1024 * 1024) {
-            alert('El peso total de los archivos supera los 4 MB permitidos.');
-            return;
-        }
-
-        const btn = document.getElementById('btn-procesar-pdf-modal');
-        const texto = document.getElementById('btn-texto-pdf-modal');
-        const spinner = document.getElementById('btn-spinner-pdf-modal');
-        const contenedorProgreso = document.getElementById('contenedor-progreso-pdf');
-        const barraProgreso = document.getElementById('barra-progreso-pdf');
-        const porcentajeTexto = document.getElementById('porcentaje-progreso');
-        const estadoTexto = document.getElementById('texto-estado-progreso');
-
-        texto.innerText = "Subiendo...";
-        spinner.classList.remove('hidden');
-        btn.classList.add('opacity-75', 'cursor-not-allowed');
-        btn.disabled = true;
-
-        if (contenedorProgreso) {
-            contenedorProgreso.classList.remove('hidden');
-            barraProgreso.style.width = '0%';
-            porcentajeTexto.innerText = '0%';
-            estadoTexto.innerText = 'Subiendo archivos...';
-        }
-
-        const formData = new FormData();
-        for (let i = 0; i < input.files.length; i++) {
-            formData.append('archivos_pdf', input.files[i]);
-        }
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/escanear/procesar', true);
-        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-        xhr.setRequestHeader('Accept', 'application/json');
-
-        // Escucha la carga real del archivo desde el cliente
-        xhr.upload.onprogress = function (event) {
-            if (event.lengthComputable) {
-                const porcentaje = Math.round((event.loaded / event.total) * 100);
-                if (barraProgreso && porcentajeTexto) {
-                    barraProgreso.style.width = porcentaje + '%';
-                    porcentajeTexto.innerText = porcentaje + '%';
-                }
-                if (porcentaje === 100 && estadoTexto) {
-                    estadoTexto.innerText = 'Procesando en servidor...';
-                }
-            }
-        };
-
-        xhr.onload = function () {
-            if (xhr.status === 200) {
-                try {
-                    const data = JSON.parse(xhr.responseText);
-                    if (data.success) {
-                        cerrarModalCargarOC();
-                        renderizarTablaDetalleOC(data.ordenes);
-                        document.getElementById('modal-detalle-extraido-oc').classList.remove('hidden');
-                    } else {
-                        alert('Error al procesar el archivo: ' + (data.mensaje || 'Respuesta no válida'));
-                    }
-                } catch (err) {
-                    alert('La sesión ha expirado o el servidor devolvió una respuesta no válida.');
-                }
-            } else {
-                alert('Error en la comunicación con el servidor. Código: ' + xhr.status);
-            }
-            restablecerEstadoUI();
-        };
-
-        xhr.onerror = function () {
-            alert('Ocurrió un error de red al subir los archivos.');
-            restablecerEstadoUI();
-        };
-
-        function restablecerEstadoUI() {
-            texto.innerText = "Procesar PDF(s)";
-            spinner.classList.add('hidden');
-            btn.classList.remove('opacity-75', 'cursor-not-allowed');
-            btn.disabled = false;
-            if (contenedorProgreso) contenedorProgreso.classList.add('hidden');
-        }
-
-        xhr.send(formData);
-    }
-
-    // Renderiza dinámicamente cada orden extraída en formato de tarjeta editable
-    function renderizarTablaDetalleOC(ordenes) {
-        const contenedor = document.getElementById('contenedor-tarjetas-oc');
-        const contador = document.getElementById('total-ordenes-count');
-
-        contenedor.innerHTML = '';
-        contador.innerText = ordenes.length;
-
-        ordenes.forEach((datos) => {
-            const diasInventarioSugerido = datos.dias_despacho !== null && datos.dias_despacho !== undefined ? datos.dias_despacho : 15;
-            const listaProductos = datos.productos || datos.detalles_productos || [];
-            const productosJsonEscapado = JSON.stringify(listaProductos).replace(/"/g, '&quot;');
-
-            const tarjetaHtml = `
-            <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm space-y-4 transition-opacity duration-300 tarjeta-oc">
-                
-                <div class="border-b border-slate-100 pb-3 flex flex-wrap justify-between items-center gap-2">
-                    <div class="flex items-center gap-2">
-                        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-lg flex items-center gap-1">
-                            <i class="fa-solid fa-file-pdf"></i> ${datos.nombre_archivo || 'Archivo PDF'}
-                        </span>
-                    </div>
-                    <div class="text-right">
-                        <span class="text-xs text-slate-400 font-medium">Fecha Emisión:</span>
-                        <span class="text-xs font-bold text-slate-700 ml-1">${datos.fecha_emision || 'No detectada'}</span>
-                    </div>
-                </div>
-
-                <form action="/ordenes/crear" method="POST" class="space-y-4 orden-form-modal">
-                    <input type="hidden" name="ajax" value="true">
-                    <input type="hidden" name="productos_json" value="${productosJsonEscapado}">
-
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Nº Orden</label>
-                            <input type="text" name="numero_orden" value="${datos.numero_orden || ''}" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Proveedor</label>
-                            <input type="text" name="proveedor" value="${datos.proveedor || ''}" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-blue-700 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Tienda Destino</label>
-                            <input type="text" name="tienda_destino" value="${datos.tienda_destino || ''}" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Monto Total ($)</label>
-                            <input type="number" step="0.01" name="monto_total" value="${datos.monto_total || 0.0}" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-bold text-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha Emisión / Envío</label>
-                            <input type="date" name="fecha_emision" value="${datos.fecha_emision || ''}" required
-                                class="w-full px-3 py-2 border border-slate-300 rounded-xl text-sm font-medium text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                            <input type="hidden" name="fecha_envio" value="${datos.fecha_envio || ''}">
-                        </div>
-                        <div>
-                            <label class="block text-xs font-bold text-blue-900 uppercase mb-1">Días Inventario</label>
-                            <input type="number" name="dias_inventario" min="1" max="99" value="${diasInventarioSugerido}" required
-                                class="w-full px-3 py-2 bg-blue-50/50 border border-blue-200 rounded-xl text-sm font-bold text-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-none">
-                        </div>
-                    </div>
-
-                    <div class="pt-2 flex justify-end">
-                        <button type="submit"
-                            class="btn-guardar-individual bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-sm">
-                            <i class="fa-solid fa-floppy-disk"></i> Guardar en Diario
-                        </button>
-                    </div>
-                </form>
-            </div>
-        `;
-            contenedor.innerHTML += tarjetaHtml;
-        });
-
-        // Asignar los eventos submit a las tarjetas recién creadas
-        activarEventosFormulariosModal();
-    }
-
-    // Función para guardar individualmente una orden mediante AJAX
-    async function guardarOrdenModal(form) {
-        const btnSubmit = form.querySelector('.btn-guardar-individual');
-        const formData = new FormData(form);
-        const tarjeta = form.closest('.tarjeta-oc');
-
-        try {
-            btnSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
-            btnSubmit.disabled = true;
-
-            const response = await fetch('/ordenes/crear', {
-                method: 'POST',
-                body: formData
-            });
-
-            const data = await response.json();
-
-            if (data.status === 'ok') {
-                btnSubmit.innerHTML = '<i class="fa-solid fa-check"></i> Guardado';
-                btnSubmit.classList.replace('bg-emerald-600', 'bg-slate-400');
-                btnSubmit.classList.replace('hover:bg-emerald-700', 'hover:bg-slate-500');
-
-                tarjeta.classList.add('opacity-50', 'pointer-events-none');
-                form.classList.add('guardado-exito');
-                return true;
-            } else {
-                alert('Atención: ' + data.mensaje);
-                btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Diario';
-                btnSubmit.disabled = false;
-                return false;
-            }
-        } catch (error) {
-            alert('Error de conexión al guardar.');
-            btnSubmit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Guardar en Diario';
-            btnSubmit.disabled = false;
-            return false;
-        }
-    }
-
-    // Asigna event listeners dinámicos a cada formulario y al botón "Guardar Todo"
-    function activarEventosFormulariosModal() {
-        const forms = document.querySelectorAll('.orden-form-modal');
-        const btnGuardarTodo = document.getElementById('btn-guardar-todo-modal');
-
-        forms.forEach(form => {
-            form.addEventListener('submit', async (e) => {
-                e.preventDefault();
-                await guardarOrdenModal(form);
-            });
-        });
-
-        if (btnGuardarTodo) {
-            // Remover handlers previos para evitar ejecuciones duplicadas
-            const nuevoBtn = btnGuardarTodo.cloneNode(true);
-            btnGuardarTodo.parentNode.replaceChild(nuevoBtn, btnGuardarTodo);
-
-            nuevoBtn.addEventListener('click', async () => {
-                nuevoBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando Todo...';
-                nuevoBtn.disabled = true;
-
-                let todosExitosos = true;
-
-                for (const form of forms) {
-                    if (!form.classList.contains('guardado-exito')) {
-                        const exito = await guardarOrdenModal(form);
-                        if (!exito) {
-                            todosExitosos = false;
-                        }
-                    }
-                }
-
-                if (todosExitosos) {
-                    nuevoBtn.innerHTML = '<i class="fa-solid fa-check-double"></i> Todo Listo';
-                    nuevoBtn.classList.replace('bg-blue-600', 'bg-emerald-600');
-                    nuevoBtn.classList.replace('hover:bg-blue-700', 'hover:bg-emerald-700');
-
-                    setTimeout(() => {
-                        window.location.reload(); // Recargar la página para actualizar la lista de Órdenes de Compra
-                    }, 1200);
-                } else {
-                    nuevoBtn.innerHTML = '<i class="fa-solid fa-layer-group"></i> Guardar Todo';
-                    nuevoBtn.disabled = false;
-                    alert('Hubo problemas guardando algunas órdenes. Revisa los mensajes.');
-                }
-            });
-        }
-    }
-
-    // Función asíncrona reescrita para procesar archivos de forma secuencial y real
     async function procesarXMLModal(e) {
         e.preventDefault(); // Prevenir el envío tradicional del formulario
 
@@ -1674,12 +1294,7 @@
     }
 </script>
 <script>
-    // Función faltante para cerrar el modal de detalle extraído de PDF
-    function cerrarModalDetalleOC() {
-        const modal = document.getElementById('modal-detalle-extraido-oc');
-        if (modal) modal.classList.add('hidden'); // Oculta el modal de detalle de PDF
-    }
-    // Función de ordenamiento bidireccional por columna
+    // Ordenamiento del resumen de recepciones XML.
     const estadoOrden = {};
 
     function ordenarTablaXML(colIndex) {
@@ -1788,26 +1403,29 @@
 {% endblock %}
 
 {% block modals %}
+<script src="{{ asset_url('js/ordenes-carga.js') }}" defer></script>
 <!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
 <div id="modal-cargar-oc"
+    role="dialog" aria-modal="true" aria-labelledby="titulo-carga-oc"
     class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
     <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
-        <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
+        <h3 id="titulo-carga-oc" class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF)
         </h3>
         <p class="text-xs text-slate-500 mb-4">
-            Selecciona uno o varios archivos PDF para extraer datos de las órdenes (Máx. 4 MB total).
+            Selecciona hasta 20 PDF con texto seleccionable (máximo 4 MB en total). Primero revisas los datos y después eliges qué órdenes guardar.
         </p>
 
         <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" id="form-pdf-modal"
             onsubmit="validarYProcesarPDFModal(event)">
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-2">
+                <label for="input-pdf-modal" class="block text-sm font-medium text-gray-700 mb-2">
                     Seleccionar archivo(s) PDF de Órdenes (Máx. 4 MB total)
                 </label>
                 <input type="file" id="input-pdf-modal" name="archivos_pdf" accept=".pdf" multiple required
                     class="w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 border rounded-lg p-1" />
             </div>
+            <p id="mensaje-carga-pdf" hidden aria-live="polite"></p>
             <!-- Barra de Progreso de Carga -->
             <div id="contenedor-progreso-pdf" class="hidden space-y-2 mb-4">
                 <div class="flex justify-between items-center text-xs font-semibold text-slate-600">
@@ -1904,6 +1522,7 @@
 
 <!-- Modal 3: Resultado de Órdenes Extraídas de PDF -->
 <div id="modal-detalle-extraido-oc"
+    role="dialog" aria-modal="true" aria-labelledby="titulo-revision-oc"
     class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
     <div
         class="bg-slate-50 rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
@@ -1912,9 +1531,9 @@
         <div
             class="flex justify-between items-center pb-4 border-b border-slate-200 bg-white -mx-6 -mt-6 p-6 rounded-t-2xl">
             <div>
-                <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <h3 id="titulo-revision-oc" tabindex="-1" class="text-lg font-bold text-slate-800 flex items-center gap-2">
                     <i class="fa-solid fa-list-check text-blue-600"></i>
-                    Órdenes Procesadas (<span id="total-ordenes-count">0</span>)
+                    Revisar órdenes (<span id="total-ordenes-count">0</span>)
                 </h3>
                 <p class="text-xs text-slate-500">Revisa, edita si es necesario y guarda las órdenes extraídas en el
                     diario.</p>
@@ -1925,7 +1544,7 @@
                     class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-xl shadow-sm transition-all flex items-center gap-2 text-xs">
                     <i class="fa-solid fa-layer-group"></i> Guardar Todo
                 </button>
-                <button type="button" onclick="cerrarModalDetalleOC()"
+                <button type="button" onclick="cerrarModalDetalleOC()" aria-label="Cerrar revisión"
                     class="text-slate-400 hover:text-slate-600 transition-colors">
                     <i class="fa-solid fa-xmark text-lg"></i>
                 </button>
@@ -1933,6 +1552,8 @@
         </div>
 
         <!-- Contenedor dinámico con scroll para las tarjetas de órdenes -->
+        <p id="resultado-extraccion-oc" class="text-sm" aria-live="polite"></p>
+        <p id="resumen-guardado-oc" class="text-sm" aria-live="polite"></p>
         <div id="contenedor-tarjetas-oc" class="overflow-y-auto my-4 space-y-4 pr-1 flex-1">
             <!-- Las tarjetas editables se renderizan aquí mediante JS -->
         </div>
@@ -1941,7 +1562,7 @@
         <div class="flex justify-end items-center gap-3 pt-4 border-t border-slate-100 mt-4">
             <button type="button" onclick="cerrarModalDetalleOC()"
                 class="px-4 py-2 text-xs font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all">
-                Cancelar
+                Cerrar revisión
             </button>
         </div>
     </div>
