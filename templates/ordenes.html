@@ -1096,202 +1096,336 @@
         ordenesAEliminarIds = []; // Limpia la lista de IDs a eliminar
     }
 
-    // Controles para Modales de Carga (PDF y XML)
+    const estadoCargaXML = {
+        procesando: false,
+        recargar: false
+    };
+
+    const xmlElemento = id => document.getElementById(id);
+
+    function escaparHTML(valor) {
+        return String(valor ?? '').replace(/[&<>"']/g, caracter => ({
+            '&': '&amp;',
+            '<': '&lt;',
+            '>': '&gt;',
+            '"': '&quot;',
+            "'": '&#039;'
+        }[caracter]));
+    }
+
+    function actualizarBotonXML() {
+        xmlElemento('btn-procesar-xml-modal').disabled =
+            estadoCargaXML.procesando
+            || !xmlElemento('input-xml-modal').files.length;
+    }
+
     function abrirModalCargarXML() {
-        const dropdown = document.getElementById('dropdown-opciones');
-        if (dropdown) dropdown.classList.add('hidden'); // Cierra el menú desplegable
-        document.getElementById('modal-cargar-xml').classList.remove('hidden'); // Muestra el modal
+        xmlElemento('dropdown-opciones')?.classList.add('hidden');
+        xmlElemento('input-xml-modal').onchange = actualizarBotonXML;
+        actualizarBotonXML();
+        xmlElemento('modal-cargar-xml').classList.remove('hidden');
     }
 
     function cerrarModalCargarXML() {
-        document.getElementById('modal-cargar-xml').classList.add('hidden'); // Oculta el modal
+        if (estadoCargaXML.procesando) return;
+        xmlElemento('modal-cargar-xml').classList.add('hidden');
     }
 
-    async function procesarXMLModal(e) {
-        e.preventDefault(); // Prevenir el envío tradicional del formulario
+    function procesarXMLModal(evento) {
+        evento.preventDefault();
+        if (estadoCargaXML.procesando) return;
 
-        // 1. Obtener referencias a elementos del modal
-        const input = document.getElementById('input-xml-modal');
-        const btn = document.getElementById('btn-procesar-xml-modal');
-        const texto = document.getElementById('btn-texto-xml-modal');
-        const spinner = document.getElementById('btn-spinner-xml-modal');
-        const modalDetalle = document.getElementById('modal-detalle-xml-oc');
+        const input = xmlElemento('input-xml-modal');
+        const archivos = [...input.files];
 
-        const contenedorProgreso = document.getElementById('contenedor-progreso-xml');
-        const barraProgreso = document.getElementById('barra-progreso-xml');
-        const porcentajeTexto = document.getElementById('porcentaje-progreso-xml');
-        const estadoTexto = document.getElementById('texto-estado-progreso-xml');
+        // Mostrar errores de selección dentro del modal.
+        let aviso = xmlElemento('mensaje-carga-xml');
 
-        // 2. Validar que existan archivos en el input
-        if (!input || !input.files || input.files.length === 0) return;
-        const archivos = input.files;
-        const totalArchivos = archivos.length;
-
-        // 3. Configurar interfaz inicial antes de procesar
-        if (texto) texto.innerText = "Procesando...";
-        if (spinner) spinner.classList.remove('hidden');
-        if (btn) {
-            btn.classList.add('opacity-75', 'cursor-default');
-            btn.disabled = true;
+        if (!aviso) {
+            aviso = document.createElement('p');
+            aviso.id = 'mensaje-carga-xml';
+            aviso.className = 'text-sm text-rose-700 mb-3';
+            aviso.setAttribute('role', 'alert');
+            input.closest('form').prepend(aviso);
         }
 
-        if (contenedorProgreso) {
-            contenedorProgreso.classList.remove('hidden');
-            if (barraProgreso) barraProgreso.style.width = '0%';
-            if (porcentajeTexto) porcentajeTexto.innerText = '0%';
-            if (estadoTexto) estadoTexto.innerText = `Iniciando (0 de ${totalArchivos})...`;
+        aviso.textContent = '';
+
+        if (!archivos.length || archivos.length > 20) {
+            aviso.textContent = 'Selecciona entre 1 y 20 archivos XML.';
+            return;
         }
 
-        let todosProcesados = [];
-        let todosNoEncontrados = [];
+        if (archivos.some(a => !/\.xml$/i.test(a.name) || !a.size)) {
+            aviso.textContent = 'Selecciona archivos XML que no estén vacíos.';
+            return;
+        }
 
-        // 4. Recorrer y enviar los XML uno a uno para un avance real
-        for (let i = 0; i < totalArchivos; i++) {
-            const archivoActual = archivos[i];
-            const formData = new FormData();
-            formData.append('archivos_xml', archivoActual); // Enviar solo 1 archivo por petición
+        if (archivos.reduce((total, a) => total + a.size, 0) > 4 * 1024 * 1024) {
+            aviso.textContent = 'El lote supera los 4 MB. Selecciona menos archivos.';
+            return;
+        }
 
-            // Actualizar texto descriptivo del archivo en proceso
-            if (estadoTexto) estadoTexto.innerText = `Procesando: ${archivoActual.name} (${i + 1}/${totalArchivos})`;
+        // Enviar el lote junto para consolidar órdenes entre archivos.
+        const datos = new FormData();
+        archivos.forEach(archivo => datos.append('archivos_xml', archivo));
+
+        const controles = [
+            ...xmlElemento('modal-cargar-xml').querySelectorAll('button, input')
+        ].map(elemento => [elemento, elemento.disabled]);
+
+        estadoCargaXML.procesando = true;
+        controles.forEach(([elemento]) => { elemento.disabled = true; });
+
+        xmlElemento('btn-texto-xml-modal').textContent = 'Procesando…';
+        xmlElemento('btn-spinner-xml-modal').classList.remove('hidden');
+        xmlElemento('contenedor-progreso-xml').classList.remove('hidden');
+        xmlElemento('barra-progreso-xml').style.width = '0%';
+        xmlElemento('porcentaje-progreso-xml').textContent = 'Envío 0%';
+        xmlElemento('texto-estado-progreso-xml').textContent = 'Enviando archivos…';
+
+        const mostrar = resultado => {
+            renderizarResumenXML(resultado);
+            xmlElemento('modal-cargar-xml').classList.add('hidden');
+            xmlElemento('modal-detalle-xml-oc').classList.remove('hidden');
+        };
+
+        const sinConfirmacion = motivo => mostrar({
+            procesados: [],
+            incierto: true,
+            detalles: [{
+                estado: 'Sin confirmar',
+                archivo: 'Lote XML',
+                numero_orden: '',
+                motivo
+            }]
+        });
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/recepciones/procesar-xml');
+        xhr.timeout = 120000;
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('Accept', 'application/json');
+
+        // El porcentaje representa el envío, no las actualizaciones.
+        xhr.upload.onprogress = evento => {
+            if (!evento.lengthComputable) return;
+
+            const porcentaje = Math.round(
+                evento.loaded / evento.total * 100
+            );
+
+            xmlElemento('barra-progreso-xml').style.width = `${porcentaje}%`;
+            xmlElemento('porcentaje-progreso-xml').textContent =
+                `Envío ${porcentaje}%`;
+
+            if (porcentaje === 100) {
+                xmlElemento('texto-estado-progreso-xml').textContent =
+                    'Archivos enviados. Revisando y actualizando recepciones…';
+            }
+        };
+
+        xhr.onload = () => {
+            let resultado;
 
             try {
-                // Petición POST unitaria al backend
-                const response = await fetch('/recepciones/procesar-xml', {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                });
-
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.success) {
-                        if (data.procesados) todosProcesados.push(...data.procesados);
-                        if (data.no_encontrados) todosNoEncontrados.push(...data.no_encontrados);
-                    }
+                resultado = JSON.parse(xhr.responseText);
+            } catch {
+                if (xhr.responseURL?.includes('/login')) {
+                    aviso.textContent =
+                        'Tu sesión venció. Inicia sesión y vuelve a intentar.';
                 } else {
-                    todosNoEncontrados.push(archivoActual.name);
+                    sinConfirmacion(
+                        'Respuesta inesperada. Comprueba el diario antes de reintentar.'
+                    );
                 }
-            } catch (err) {
-                console.error(`Error en ${archivoActual.name}:`, err);
-                todosNoEncontrados.push(archivoActual.name);
+                return;
             }
 
-            // 5. Cálculo exacto del porcentaje completado
-            const completados = i + 1;
-            const porcentajeReal = Math.round((completados / totalArchivos) * 100);
-
-            // Actualizar barra y número según archivos realmente terminados
-            if (barraProgreso) barraProgreso.style.width = `${porcentajeReal}%`;
-            if (porcentajeTexto) porcentajeTexto.innerText = `${porcentajeReal}%`;
-
-            // Pausa de 150ms para renderizar suavemente el movimiento de la barra
-            await new Promise(resolve => setTimeout(resolve, 150));
-        }
-
-        // 6. Finalización y muestra de resultados
-        if (estadoTexto) estadoTexto.innerText = '¡Procesamiento finalizado!';
-
-        setTimeout(() => {
-            if (typeof cerrarModalCargarXML === 'function') cerrarModalCargarXML();
-
-            // Estructura de datos consolidada para tu tabla de resumen
-            const resultadoFinal = {
-                success: true,
-                procesados: todosProcesados,
-                no_encontrados: todosNoEncontrados
-            };
-
-            if (typeof renderizarResumenXML === 'function') {
-                renderizarResumenXML(resultadoFinal);
+            if (
+                xhr.status >= 200 && xhr.status < 300
+                && resultado.success === true
+                && Array.isArray(resultado.procesados)
+                && Array.isArray(resultado.detalles)
+            ) {
+                input.value = '';
+                mostrar(resultado);
+            } else if (
+                [400, 401, 403, 413].includes(xhr.status)
+                || (xhr.status === 503 && resultado.success === false)
+            ) {
+                aviso.textContent = resultado.mensaje
+                    || 'No se pudo iniciar el procesamiento. Revisa tu sesión y los archivos.';
+            } else {
+                sinConfirmacion(
+                    'No se recibió una confirmación válida. Comprueba el diario antes de reintentar.'
+                );
             }
+        };
 
-            if (modalDetalle) modalDetalle.classList.remove('hidden');
+        xhr.onerror = () => sinConfirmacion(
+            'Se perdió la conexión. El servidor podría haber aplicado cambios; comprueba el diario antes de reintentar.'
+        );
 
-            restablecerEstadoXML();
-        }, 400);
+        xhr.ontimeout = () => sinConfirmacion(
+            'Se agotó el tiempo de espera. El servidor podría seguir procesando; comprueba el diario antes de reintentar.'
+        );
 
-        // Función interna para restaurar botones
-        function restablecerEstadoXML() {
-            if (texto) texto.innerText = "Procesar";
-            if (spinner) spinner.classList.add('hidden');
-            if (btn) {
-                btn.classList.remove('opacity-75', 'cursor-not-allowed');
-                btn.disabled = false;
-            }
-            if (contenedorProgreso) contenedorProgreso.classList.add('hidden');
+        xhr.onloadend = () => {
+            estadoCargaXML.procesando = false;
+
+            controles.forEach(([elemento, deshabilitado]) => {
+                elemento.disabled = deshabilitado;
+            });
+
+            xmlElemento('btn-texto-xml-modal').textContent = 'Procesar';
+            xmlElemento('btn-spinner-xml-modal').classList.add('hidden');
+            xmlElemento('contenedor-progreso-xml').classList.add('hidden');
+
+            actualizarBotonXML();
+        };
+
+        try {
+            xhr.send(datos);
+        } catch {
+            xhr.onloadend();
+            aviso.textContent =
+                'No se pudo enviar el lote. Revisa tu conexión e inténtalo nuevamente.';
         }
     }
 
-    // Función auxiliar para desinfectar texto y prevenir ataques XSS
-    function escaparHTML(str) {
-        if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#039;');
-    }
-
-    // Renderizado corregido con estilos idénticos al módulo "escanear"
     function renderizarResumenXML(data) {
-        const bloqueExito = document.getElementById('bloque-xml-exito');
-        const tablaExito = document.getElementById('tabla-xml-exito-body');
-        const countExito = document.getElementById('count-xml-exito');
+        const procesados = data.procesados || [];
+        const detalles = data.detalles || [];
 
-        const alertaNoEncontrados = document.getElementById('alerta-xml-no-encontradas');
-        const countNoEncontrados = document.getElementById('count-xml-no-encontradas');
+        // Recargar también cuando sea necesario comprobar cambios inciertos.
+        estadoCargaXML.recargar =
+            procesados.length > 0 || Boolean(data.incierto);
 
-        // Obtener la cantidad de OC no procesadas (compatible con conteo directo o longitud de array)
-        const totalNoProcesadas = data.total_no_encontrados !== undefined
-            ? data.total_no_encontrados
-            : (data.no_encontrados ? data.no_encontrados.length : 0);
+        const normales = [
+            'Sin cambios',
+            'Recepción anterior',
+            'Archivo repetido'
+        ];
 
-        // Renderizar la cantidad en la línea inferior si existen no procesadas
-        if (alertaNoEncontrados && countNoEncontrados) {
-            if (totalNoProcesadas > 0) {
-                countNoEncontrados.innerText = `${totalNoProcesadas} orden(es)`; // Asigna el valor numérico
-                alertaNoEncontrados.classList.remove('hidden'); // Muestra la barra resumida
-            } else {
-                alertaNoEncontrados.classList.add('hidden'); // Oculta si todas se actualizaron
-            }
+        const incidencias = detalles.filter(
+            detalle => !normales.includes(detalle.estado)
+        );
+
+        let mensaje = 'Recepciones actualizadas correctamente.';
+
+        if (data.incierto) {
+            mensaje = 'No se pudo confirmar todo el procesamiento. Comprueba el diario antes de reintentar.';
+        } else if (incidencias.length) {
+            mensaje = procesados.length
+                ? 'Procesamiento completado con incidencias.'
+                : incidencias.every(d => d.estado === 'No encontrada')
+                    ? 'No se encontraron órdenes correspondientes a las recepciones cargadas.'
+                    : 'No se realizaron cambios. Revisa las incidencias indicadas.';
+        } else if (!procesados.length) {
+            mensaje = detalles.some(d => d.estado === 'Recepción anterior')
+                ? 'No hay recepciones nuevas que actualizar. Se conservaron las fechas registradas.'
+                : 'No hay recepciones nuevas que actualizar.';
         }
 
-        if (tablaExito) {
-            tablaExito.innerHTML = '';
+        const bloque = xmlElemento('bloque-xml-exito');
+        let resumen = xmlElemento('mensaje-resumen-xml');
 
-            if (data.procesados && data.procesados.length > 0) {
-                if (countExito) countExito.innerText = data.procesados.length;
-
-                data.procesados.forEach(row => {
-                    tablaExito.innerHTML += `
-                    <tr class="hover:bg-slate-50/50 transition-colors text-slate-700">
-                        <td class="px-4 py-2.5 font-bold text-slate-800">${escaparHTML(row.numero_orden)}</td>
-                        <td class="px-4 py-2.5 font-medium text-blue-800">${escaparHTML(row.proveedor || 'N/A')}</td>
-                        <td class="px-4 py-2.5 font-semibold text-slate-700">${escaparHTML(row.tienda_destino || 'N/A')}</td>
-                        <td class="px-4 py-2.5 font-medium text-slate-700">${escaparHTML(row.fecha_recepcion)}</td>
-                        <td class="px-4 py-2.5 text-center">
-                            <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-                                Recibido
-                            </span>
-                        </td>
-                    </tr>
-                `;
-                });
-                if (bloqueExito) bloqueExito.classList.remove('hidden');
-            } else {
-                if (bloqueExito) bloqueExito.classList.add('hidden');
-            }
+        if (!resumen) {
+            resumen = document.createElement('div');
+            resumen.id = 'mensaje-resumen-xml';
+            resumen.className =
+                'rounded-xl bg-slate-50 p-3 text-sm text-slate-800';
+            resumen.setAttribute('role', 'status');
+            bloque.before(resumen);
         }
+
+        resumen.textContent = `${mensaje} Actualizadas: ${procesados.length}. Registros repetidos consolidados: ${data.repetidos || 0}.`;
+
+        // Mantener la tabla existente y su función de ordenamiento.
+        xmlElemento('count-xml-exito').textContent = procesados.length;
+
+        xmlElemento('tabla-xml-exito-body').innerHTML =
+            procesados.map(fila => `
+            <tr class="text-xs text-slate-700">
+                ${[
+                    'numero_orden',
+                    'proveedor',
+                    'tienda_destino',
+                    'fecha_recepcion'
+                ].map(campo => `
+                    <td class="px-4 py-2.5">
+                        ${escaparHTML(fila[campo])}
+                    </td>
+                `).join('')}
+                <td class="px-4 py-2.5 text-center text-emerald-700">
+                    Recibido
+                </td>
+            </tr>
+        `).join('');
+
+        bloque.classList.toggle('hidden', !procesados.length);
+
+        // Sustituir la alerta genérica por resultados separados.
+        xmlElemento('alerta-xml-no-encontradas').classList.add('hidden');
+
+        let contenedor = xmlElemento('incidencias-resumen-xml');
+
+        if (!contenedor) {
+            contenedor = document.createElement('div');
+            contenedor.id = 'incidencias-resumen-xml';
+            bloque.after(contenedor);
+        }
+
+        const grupos = new Map();
+
+        detalles.forEach(detalle => {
+            if (!grupos.has(detalle.estado)) {
+                grupos.set(detalle.estado, []);
+            }
+
+            grupos.get(detalle.estado).push(detalle);
+        });
+
+        contenedor.innerHTML = [...grupos].map(([estado, filas]) => `
+        <details
+            class="border border-slate-200 rounded-xl p-3 mb-3"
+            ${normales.includes(estado) ? '' : 'open'}
+        >
+            <summary class="cursor-pointer text-sm font-semibold">
+                ${escaparHTML(estado)} (${filas.length})
+            </summary>
+
+            <ul class="mt-2 space-y-2 text-xs text-slate-700">
+                ${filas.map(fila => `
+                    <li class="break-words">
+                        ${escaparHTML(fila.archivo)}
+                        ${fila.numero_orden
+                ? ` · OC ${escaparHTML(fila.numero_orden)}`
+                : ''}:
+                        ${escaparHTML(fila.motivo)}
+                    </li>
+                `).join('')}
+            </ul>
+        </details>
+    `).join('');
     }
 
     function cerrarModalDetalleXML() {
-        const modal = document.getElementById('modal-detalle-xml-oc');
-        if (modal) modal.classList.add('hidden');
+        xmlElemento('modal-detalle-xml-oc').classList.add('hidden');
+
+        if (estadoCargaXML.recargar) {
+            location.reload();
+        }
     }
+
+    // Advertir si se intenta abandonar la página durante la carga.
+    window.addEventListener('beforeunload', evento => {
+        if (!estadoCargaXML.procesando) return;
+
+        evento.preventDefault();
+        evento.returnValue = '';
+    });
 </script>
 <script>
     // Ordenamiento del resumen de recepciones XML.
@@ -1403,17 +1537,62 @@
 {% endblock %}
 
 {% block modals %}
+<style>
+    /* Centrar los encabezados PRE, EMP y Precio. */
+    .orden-form-modal details th:nth-child(n + 3) {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    /* Centrar las celdas de las columnas editables. */
+    .orden-form-modal [data-producto-indice] td:nth-child(n + 3) {
+        text-align: center;
+        vertical-align: middle;
+    }
+
+    /* Mostrar los números sin borde, fondo ni contenedor visible. */
+    .orden-form-modal [data-producto-indice] input[type="number"][data-campo] {
+        display: block;
+        width: 100%;
+        min-width: 4rem;
+        max-width: 7rem;
+        margin: 0 auto;
+        padding: 0.375rem 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        text-align: center;
+        font: inherit;
+        color: inherit;
+        appearance: textfield;
+        -moz-appearance: textfield;
+    }
+
+    /* Ocultar las flechas en Chrome, Edge, Opera y Safari. */
+    .orden-form-modal [data-producto-indice] input[type="number"]::-webkit-inner-spin-button,
+    .orden-form-modal [data-producto-indice] input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+    }
+
+    /* Identificar discretamente el campo que se está editando. */
+    .orden-form-modal [data-producto-indice] input[data-campo]:focus {
+        outline: 0;
+        box-shadow: 0 1px 0 #2d2d2e;
+    }
+</style>
 <script src="{{ asset_url('js/ordenes-carga.js') }}" defer></script>
 <!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
-<div id="modal-cargar-oc"
-    role="dialog" aria-modal="true" aria-labelledby="titulo-carga-oc"
+<div id="modal-cargar-oc" role="dialog" aria-modal="true" aria-labelledby="titulo-carga-oc"
     class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
     <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h3 id="titulo-carga-oc" class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF)
         </h3>
         <p class="text-xs text-slate-500 mb-4">
-            Selecciona hasta 20 PDF con texto seleccionable (máximo 4 MB en total). Primero revisas los datos y después eliges qué órdenes guardar.
+            Selecciona hasta 20 PDF con texto seleccionable (máximo 4 MB en total). Primero revisas los datos y después
+            eliges qué órdenes guardar.
         </p>
 
         <form action="/escanear/procesar" method="POST" enctype="multipart/form-data" id="form-pdf-modal"
@@ -1521,8 +1700,7 @@
 </div>
 
 <!-- Modal 3: Resultado de Órdenes Extraídas de PDF -->
-<div id="modal-detalle-extraido-oc"
-    role="dialog" aria-modal="true" aria-labelledby="titulo-revision-oc"
+<div id="modal-detalle-extraido-oc" role="dialog" aria-modal="true" aria-labelledby="titulo-revision-oc"
     class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
     <div
         class="bg-slate-50 rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
@@ -1531,7 +1709,8 @@
         <div
             class="flex justify-between items-center pb-4 border-b border-slate-200 bg-white -mx-6 -mt-6 p-6 rounded-t-2xl">
             <div>
-                <h3 id="titulo-revision-oc" tabindex="-1" class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                <h3 id="titulo-revision-oc" tabindex="-1"
+                    class="text-lg font-bold text-slate-800 flex items-center gap-2">
                     <i class="fa-solid fa-list-check text-blue-600"></i>
                     Revisar órdenes (<span id="total-ordenes-count">0</span>)
                 </h3>
@@ -1646,9 +1825,10 @@
 
         <!-- Pie -->
         <div class="flex justify-end gap-2 pt-3 border-t border-slate-100">
-            <button type="button" onclick="location.reload()"
+            <button type="button" onclick="cerrarModalDetalleXML()"
                 class="px-5 py-3 text-xs font-medium text-white bg-blue-600 hover:bg-blue-700 transition-all rounded-xl flex items-center gap-3 shadow-sm">
-                <i class="fa-solid fa-rotate-right"></i> Actualizar Órdenes
+                <i class="fa-solid fa-check"></i>
+                Aceptar
             </button>
         </div>
 

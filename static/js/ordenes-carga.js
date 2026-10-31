@@ -160,12 +160,71 @@ function renderizarTablaDetalleOC(ordenes, resultado = {}) {
                     ${campo('fecha_emision', 'Fecha emisión / envío', datos.fecha_emision || '', 'date')}
                     ${campo('dias_inventario', 'Días inventario', datos.dias_despacho ?? 15, 'number', 'min="1" max="99" step="1"')}
                 </div>
-                <details class="text-sm text-slate-700">
-                    <summary class="cursor-pointer font-medium">Revisar ${productos.length} producto(s)</summary>
-                    <div class="overflow-x-auto mt-2"><table class="w-full text-left text-xs">
-                        <thead><tr><th>Código</th><th>Descripción</th><th>Cantidad</th><th>Precio</th></tr></thead>
-                        <tbody>${productos.map(p => `<tr><td class="p-2">${ocEscapar(p.codigo)}</td><td class="p-2">${ocEscapar(p.descripcion)}</td><td class="p-2">${ocEscapar(p.cantidad)}</td><td class="p-2">${ocEscapar(p.precio_unitario)}</td></tr>`).join('')}</tbody>
-                    </table></div>
+                <details open class="text-sm text-slate-700">
+                    <summary class="cursor-pointer font-medium">
+                        Revisar ${productos.length} producto(s)
+                    </summary>
+
+                    <div class="overflow-x-auto mt-2">
+                        <table class="w-full text-left text-xs">
+                            <thead>
+                                <tr>
+                                    <th class="p-2">Código</th>
+                                    <th class="p-2">Descripción</th>
+                                    <th class="p-2">PRE</th>
+                                    <th class="p-2">EMP</th>
+                                    <th class="p-2">Precio ($)</th>
+                                </tr>
+                            </thead>
+
+                            <tbody>
+                                ${productos.map((p, indice) => `
+                                    <tr data-producto-indice="${indice}">
+                                        <td class="p-2">
+                                            ${ocEscapar(p.codigo)}
+                                        </td>
+
+                                        <td class="p-2">
+                                            ${ocEscapar(p.descripcion)}
+                                        </td>
+
+                                        <td class="p-2">
+                                            <input
+                                                type="number"
+                                                data-campo="pre"
+                                                aria-label="PRE del producto ${ocEscapar(p.codigo)}"
+                                                value="${ocEscapar(p.unidad_manejo ?? p.pre ?? '')}"
+                                                min="1" step="1" required
+                                                class="w-20 rounded-lg border border-slate-300 px-2 py-2"
+                                            >
+                                        </td>
+
+                                        <td class="p-2">
+                                            <input
+                                                type="number"
+                                                data-campo="emp"
+                                                aria-label="EMP del producto ${ocEscapar(p.codigo)}"
+                                                value="${ocEscapar(p.empaques ?? p.emp ?? '')}"
+                                                min="0" step="1" required
+                                                class="w-20 rounded-lg border border-slate-300 px-2 py-2"
+                                            >
+                                        </td>
+
+                                        <td class="p-2">
+                                            <input
+                                                type="number"
+                                                data-campo="precio"
+                                                aria-label="Precio del producto ${ocEscapar(p.codigo)}"
+                                                value="${ocEscapar(p.precio_unitario ?? p.precio ?? '')}"
+                                                min="0" step="any" required
+                                                class="w-28 rounded-lg border border-slate-300 px-2 py-2"
+                                            >
+                                        </td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    </div>
                 </details>
                 <p class="mensaje-orden" hidden aria-live="polite"></p>
                 <div class="flex justify-end"><button type="submit" class="btn-guardar-individual bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl text-sm disabled:opacity-50">Guardar orden</button></div>
@@ -196,6 +255,64 @@ async function guardarOrdenModal(form, desdeLote = false) {
         ocMensaje(mensaje, 'Completa los campos indicados antes de guardar esta orden.', true);
         return false;
     }
+    // Incorporar las correcciones antes de enviar la orden.
+    try {
+        const campoProductos = form.elements.namedItem('productos_json');
+        const productos = JSON.parse(campoProductos.value);
+        const filas = [...form.querySelectorAll('[data-producto-indice]')];
+
+        if (!Array.isArray(productos) || filas.length !== productos.length) {
+            throw new Error('No se pudo leer el detalle. Vuelve a procesar el PDF.');
+        }
+
+        const actualizados = filas.map(fila => {
+            const producto = productos[Number(fila.dataset.productoIndice)];
+            const pre = fila.querySelector('[data-campo="pre"]').valueAsNumber;
+            const emp = fila.querySelector('[data-campo="emp"]').valueAsNumber;
+            const precio = fila.querySelector('[data-campo="precio"]').valueAsNumber;
+            const codigo = String(producto.codigo ?? '');
+
+            // Validar PRE y EMP sin convertir valores inválidos en 1 o 0.
+            if (!Number.isSafeInteger(pre) || pre < 1) {
+                throw new Error(`Producto ${codigo}: PRE debe ser un entero mayor o igual a 1.`);
+            }
+
+            if (!Number.isSafeInteger(emp) || emp < 0) {
+                throw new Error(`Producto ${codigo}: EMP debe ser un entero mayor o igual a 0.`);
+            }
+
+            if (!Number.isFinite(precio) || precio < 0) {
+                throw new Error(`Producto ${codigo}: el precio debe ser un número mayor o igual a 0.`);
+            }
+
+            // Mantener la misma regla de unidades que utiliza el servidor.
+            const cantidad = emp > 0
+                ? pre * emp
+                : Math.round(Number(producto.cantidad ?? 0));
+
+            if (!Number.isSafeInteger(cantidad) || cantidad < 0) {
+                throw new Error(`Producto ${codigo}: revisa la cantidad de unidades.`);
+            }
+
+            return {
+                ...producto,
+                pre,
+                unidad_manejo: pre, // Actualizar ambos nombres del mismo dato.
+                emp,
+                empaques: emp,
+                precio: precio,
+                precio_unitario: precio,
+                cantidad,
+                subtotal: cantidad * precio
+            };
+        });
+
+        campoProductos.value = JSON.stringify(actualizados);
+    } catch (error) {
+        ocMensaje(mensaje, error.message, true);
+        return false;
+    }
+
     const datos = new FormData(form);
     // Detectar repeticiones dentro del mismo lote antes de enviar otra creación.
     const clave = formulario => ['numero_orden', 'proveedor', 'tienda_destino'].map(n => formulario.elements.namedItem(n).value.trim().toLocaleLowerCase());

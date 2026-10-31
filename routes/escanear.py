@@ -27,196 +27,343 @@ async def vista_escanear(
 @router.post("/recepciones/procesar-xml")
 async def procesar_recepciones_xml(
     request: Request,
-    archivos_xml: List[UploadFile] = File(default=[]), # Permite recibir listas vacías sin lanzar error 422 de validación
-    access_token: Optional[str] = Cookie(None), # Evita fallos de validación si la cookie no está presente
+    archivos_xml: List[UploadFile] = File(default=[]),
+    access_token: Optional[str] = Cookie(None),
     refresh_token: Optional[str] = Cookie(None)
 ):
-    es_ajax = request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
-    # Validar sesión activa del usuario
+    from datetime import datetime
+
     user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
-        if es_ajax:
-            return JSONResponse(status_code=401, content={"success": False, "mensaje": "Sesión expirada."})
-        return RedirectResponse(url="/login", status_code=303)
+        return JSONResponse(status_code=401, content={
+            "success": False,
+            "mensaje": "Tu sesión venció. Inicia sesión y vuelve a intentar."
+        })
 
-    # Validar manualmente si se enviaron archivos en la petición
-    if not archivos_xml:
-        if es_ajax:
-            return JSONResponse(status_code=400, content={"success": False, "mensaje": "No se enviaron archivos XML."})
-        return script_alerta_error("No se adjuntó ningún archivo XML", redireccionar="/escanear")
+    if not archivos_xml or len(archivos_xml) > 20:
+        return JSONResponse(status_code=400, content={
+            "success": False,
+            "mensaje": "Selecciona entre 1 y 20 archivos XML."
+        })
 
-    procesados_exito = []
-    no_encontrados = []
+    resultado = {
+        "success": True,
+        "procesados": [],
+        "detalles": [],
+        "incierto": False,
+        "repetidos": 0
+    }
 
-    try:
-        items_a_procesar = []
-        # Bucle de depuración para verificar qué archivos llegan en la consola
-        for archivo_xml in archivos_xml:
-            # Leer los bytes del archivo enviado por la petición
-            contenido_bytes = await archivo_xml.read()
-            # Imprimir en la terminal el nombre del archivo y cuántos bytes mide
-            print(f"--> Archivo recibido: {archivo_xml.filename} | Tamaño: {len(contenido_bytes)} bytes")
-            # Reposicionar el puntero de lectura al inicio para no dejar el archivo vacío
-            await archivo_xml.seek(0)
+    def informar(estado, archivo, numero, motivo):
+        resultado["detalles"].append({
+            "estado": estado,
+            "archivo": archivo,
+            "numero_orden": numero,
+            "motivo": motivo
+        })
 
-        # 1. Parsear archivos XML con decodificación tolerante
-        for archivo_xml in archivos_xml:
-            if not archivo_xml.filename:
-                continue
-                
-            contenido_bytes = await archivo_xml.read()
-            if not contenido_bytes:
-                continue
+    def normalizar(numero):
+        numero = str(numero or "").strip()
+        return (
+            numero.lstrip("0") or "0"
+        ) if numero.isdecimal() else numero
 
+    def fecha(valor):
+        valor = str(valor or "").strip()
+
+        for formato in (
+            "%d/%m/%Y", "%d/%m/%y",
+            "%d-%m-%Y", "%d-%m-%y"
+        ):
             try:
-                # Decodificar manejando UTF-8 BOM y encodings alternativos de ERPs
-                try:
-                    contenido_str = contenido_bytes.decode('utf-8-sig')
-                except UnicodeDecodeError:
-                    contenido_str = contenido_bytes.decode('latin-1', errors='ignore')
+                return datetime.strptime(valor, formato).date()
+            except ValueError:
+                pass
 
-                # Eliminar la declaración XML si interfiere con el string de Python
-                contenido_str = re.sub(r'<\?xml[^\?]*\?>', '', contenido_str, count=1).strip()
-                arbol = ET.fromstring(contenido_str)
-            except Exception:
-                no_encontrados.append(archivo_xml.filename)
-                continue
+        return datetime.fromisoformat(
+            valor.replace("Z", "+00:00")
+        ).date()
 
-            registros = arbol.findall('.//Registro')
-            if not registros:
-                registros = arbol.findall('.//*')
+    # Validar el tamaño completo antes de modificar órdenes.
+    contenidos, total = [], 0
 
-            for reg in registros:
-                nro_oc_raw = (reg.findtext('Nro_OrdenDeCompra') or reg.findtext('nro_ordendecompra') or "").strip()
-                fechas_nodos = reg.findall('.//FechaREC') or reg.findall('.//fecharec')
-                fecha_rec_raw = (fechas_nodos[-1].text or "").strip() if fechas_nodos else ""
+    for archivo in archivos_xml:
+        contenido = await archivo.read(
+            4 * 1024 * 1024 - total + 1
+        )
+        total += len(contenido)
 
-                nro_oc_limpio = str(nro_oc_raw.lstrip('0')) if nro_oc_raw.lstrip('0') else nro_oc_raw
-
-                if nro_oc_limpio and fecha_rec_raw:
-                    fecha_formateada = None
-                    dia, mes, anio = "", "", ""
-                    
-                    coincidencia = re.search(r'(\d{1,2})/(\d{1,2})/(\d{2,4})', str(fecha_rec_raw))
-                    if coincidencia:
-                        dia = coincidencia.group(1).zfill(2)
-                        mes = coincidencia.group(2).zfill(2)
-                        anio_raw = coincidencia.group(3)
-                        anio = anio_raw if len(anio_raw) == 4 else f"20{anio_raw}"
-                        fecha_formateada = f"{anio}-{mes}-{dia}"
-                    else:
-                        coincidencia_iso = re.search(r'(\d{4})-(\d{1,2})-(\d{1,2})', str(fecha_rec_raw))
-                        if coincidencia_iso:
-                            anio = coincidencia_iso.group(1)
-                            mes = coincidencia_iso.group(2).zfill(2)
-                            dia = coincidencia_iso.group(3).zfill(2)
-                            fecha_formateada = f"{anio}-{mes}-{dia}"
-
-                    if not fecha_formateada:
-                        no_encontrados.append(nro_oc_limpio)
-                        continue
-
-                    items_a_procesar.append({
-                        "nro_oc_limpio": nro_oc_limpio,
-                        "fecha_formateada": fecha_formateada,
-                        "dia": dia,
-                        "mes": mes,
-                        "anio": anio
-                    })
-
-        # 2. Consultar órdenes de compra únicamente pertenecientes al usuario actual
-        res_ocs = await config.supabase_async.table("ordenes_compra") \
-            .select("id, numero_orden, tienda_destino, proveedores(nombre)") \
-            .eq("usuario_id", user.id) \
-            .execute()
-
-        ordenes_db = res_ocs.data or []
-        
-        mapa_ordenes = {}
-        for o in ordenes_db:
-            num_raw = str(o.get("numero_orden") or "").strip()
-            num_str = num_raw.lstrip('0') if num_raw.lstrip('0') else num_raw
-            mapa_ordenes[num_str] = o
-
-        actualizaciones_payload = []
-
-        for item in items_a_procesar:
-            nro = item["nro_oc_limpio"]
-            if nro in mapa_ordenes:
-                orden = mapa_ordenes[nro]
-                orden_id = orden["id"]
-                num_orden_str = str(orden.get("numero_orden") or "")
-                
-                # Obtener nombre del proveedor desde la tabla relacionada
-                prov_obj = orden.get("proveedores")
-                prov_str = prov_obj.get("nombre") if isinstance(prov_obj, dict) else str(orden.get("proveedor") or "Sin Proveedor")
-                tienda_str = str(orden.get("tienda_destino") or "Sin Tienda")
-
-                actualizaciones_payload.append({
-                    "id": orden_id,
-                    "fecha_recepcion": item["fecha_formateada"],
-                    "estatus": item["estatus"] if "estatus" in item else "Despacho Recibido"
-                })
-
-                dia, mes, anio = item["dia"], item["mes"], item["anio"]
-                fecha_mostrar = f"{dia}/{mes}/{anio}" if (dia and mes and anio) else item["fecha_formateada"]
-
-                procesados_exito.append({
-                    "numero_orden": num_orden_str,
-                    "proveedor": prov_str,
-                    "tienda_destino": tienda_str,
-                    "fecha_recepcion": str(fecha_mostrar)
-                })
-            else:
-                no_encontrados.append(nro)
-
-        # 3. Actualizar registros asegurando pertenencia al usuario actual
-        for item_act in actualizaciones_payload:
-            await config.supabase_async.table("ordenes_compra") \
-                .update({
-                    "fecha_recepcion": item_act["fecha_recepcion"],
-                    "estatus": item_act["estatus"]
-                }) \
-                .eq("id", item_act["id"]) \
-                .eq("usuario_id", user.id) \
-                .execute()
-
-        if es_ajax:
-            return JSONResponse(content={
-                "success": True,
-                "procesados": procesados_exito,
-                "no_encontrados": no_encontrados,
-                "total_procesados": len(procesados_exito),
-                "total_no_encontrados": len(no_encontrados)
+        if total > 4 * 1024 * 1024:
+            return JSONResponse(status_code=413, content={
+                "success": False,
+                "mensaje": (
+                    "El lote supera los 4 MB. "
+                    "No se realizaron cambios."
+                )
             })
 
-        return templates.TemplateResponse(
-            request=request,
-            name="resumen_xml.html",
-            context={
-                "request": request,
-                "procesados": procesados_exito,
-                "no_encontrados": no_encontrados,
-                "total_procesados": len(procesados_exito),
-                "total_no_encontrados": len(no_encontrados)
-            }
-        )
+        contenidos.append((
+            archivo.filename or "Sin nombre",
+            contenido
+        ))
 
-    except Exception as e:
-        import traceback
-        # Imprimir la traza completa del error en la consola de Uvicorn para ver el archivo y linea exactos
-        print("\n================ ERROR AL PROCESAR XML ================")
-        traceback.print_exc()
-        print("========================================================\n")
-        
-        # Limpiar mensaje de error para evitar fallos de formato
-        error_msg = str(e).replace("'", "").replace('"', '').replace("\n", " ")
-        
-        # Retornar respuesta JSON con el error explícito sin romper la app
-        return JSONResponse(
-            status_code=500, 
-            content={"success": False, "mensaje": f"Error interno en servidor: {error_msg}"}
-        )
+    pendientes, firmas = {}, set()
+
+    for nombre, contenido in contenidos:
+        # Detectar archivos idénticos aunque tengan otro nombre.
+        if contenido in firmas:
+            informar(
+                "Archivo repetido", nombre, "",
+                "Omitido: su contenido ya está en este lote."
+            )
+            continue
+
+        firmas.add(contenido)
+
+        try:
+            if not nombre.lower().endswith(".xml") or not contenido:
+                raise ValueError(
+                    "Selecciona un XML que no esté vacío."
+                )
+
+            try:
+                texto = contenido.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                texto = contenido.decode("latin-1")
+
+            if "\x00" in texto or re.search(
+                r"<!\s*(DOCTYPE|ENTITY)\b", texto, re.I
+            ):
+                raise ValueError(
+                    "XML no compatible: utiliza UTF-8 o Latin-1, "
+                    "sin DTD ni entidades."
+                )
+
+            texto = re.sub(
+                r"<\?xml[^?]*\?>", "", texto, count=1
+            ).strip()
+
+            raiz = ET.fromstring(texto)
+
+            # Admitir nombres con namespaces y diferencias de mayúsculas.
+            for nodo in raiz.iter():
+                nodo.tag = nodo.tag.rsplit("}", 1)[-1].lower()
+
+            registros = [
+                nodo for nodo in raiz.iter()
+                if nodo.find("nro_ordendecompra") is not None
+            ]
+
+            if not registros:
+                raise ValueError(
+                    "El archivo no contiene registros "
+                    "de recepción compatibles."
+                )
+
+        except (ValueError, ET.ParseError) as exc:
+            informar("Archivo inválido", nombre, "", str(exc))
+            continue
+
+        for reg in registros:
+            numero = normalizar(
+                reg.findtext("nro_ordendecompra")
+            )
+
+            valores = [
+                nodo.text
+                for nodo in reg.iter("fecharec")
+                if (nodo.text or "").strip()
+            ]
+
+            try:
+                if not numero or not valores:
+                    raise ValueError()
+
+                ultima = max(fecha(valor) for valor in valores)
+
+            except (ValueError, TypeError):
+                informar(
+                    "Registro inválido", nombre, numero,
+                    "Falta el número o la fecha de recepción "
+                    "no es válida."
+                )
+                continue
+
+            # Consolidar cada número usando su fecha más reciente.
+            anterior = pendientes.get(numero)
+
+            if anterior:
+                resultado["repetidos"] += 1
+
+                if ultima <= anterior["fecha"]:
+                    continue
+
+            pendientes[numero] = {
+                "archivo": nombre,
+                "fecha": ultima
+            }
+
+    # Consultar todas las páginas para evitar resultados incompletos.
+    mapa, inicio = {}, 0
+
+    try:
+        while pendientes:
+            res = await (
+                config.supabase_async.table("ordenes_compra")
+                .select(
+                    "id, numero_orden, fecha_recepcion, estatus, "
+                    "tienda_destino, proveedores(nombre)"
+                )
+                .eq("usuario_id", user.id)
+                .order("id")
+                .range(inicio, inicio + 499)
+                .execute()
+            )
+
+            filas = res.data or []
+
+            if not filas:
+                break
+
+            for orden in filas:
+                clave = normalizar(orden["numero_orden"])
+
+                if clave in pendientes:
+                    mapa.setdefault(clave, []).append(orden)
+
+            inicio += len(filas)
+
+    except Exception:
+        return JSONResponse(status_code=503, content={
+            "success": False,
+            "mensaje": (
+                "No se pudieron consultar tus órdenes. "
+                "No se realizaron cambios."
+            )
+        })
+
+    for numero, item in pendientes.items():
+        nombre = item["archivo"]
+        nueva = item["fecha"]
+
+        # Conservar lo confirmado y detener escrituras tras un fallo incierto.
+        if resultado["incierto"]:
+            informar(
+                "Pendiente", nombre, numero,
+                "No se intentó actualizar tras el fallo anterior."
+            )
+            continue
+
+        coincidencias = mapa.get(numero, [])
+
+        if len(coincidencias) != 1:
+            informar(
+                "No encontrada"
+                if not coincidencias else "Coincidencia ambigua",
+                nombre,
+                numero,
+                "No existe entre tus órdenes."
+                if not coincidencias else
+                "Varias órdenes comparten el número; "
+                "revisa proveedor y tienda."
+            )
+            continue
+
+        orden = coincidencias[0]
+        guardada = orden.get("fecha_recepcion")
+
+        try:
+            actual = fecha(guardada) if guardada else None
+        except ValueError:
+            informar(
+                "Registro inválido", nombre, numero,
+                "La fecha guardada requiere revisión manual."
+            )
+            continue
+
+        if actual and nueva < actual:
+            informar(
+                "Recepción anterior", nombre, numero,
+                "Se conservó la fecha más reciente "
+                "que ya estaba guardada."
+            )
+            continue
+
+        if (
+            nueva == actual
+            and orden.get("estatus") == "Despacho Recibido"
+        ):
+            informar(
+                "Sin cambios", nombre, numero,
+                "Esta recepción ya estaba registrada."
+            )
+            continue
+
+        try:
+            consulta = (
+                config.supabase_async.table("ordenes_compra")
+                .update({
+                    "fecha_recepcion": nueva.isoformat(),
+                    "estatus": "Despacho Recibido"
+                })
+                .eq("id", orden["id"])
+                .eq("usuario_id", user.id)
+            )
+
+            # Evitar sobrescribir cambios realizados desde otra pestaña.
+            for campo in ("fecha_recepcion", "estatus"):
+                valor = orden.get(campo)
+
+                consulta = (
+                    consulta.is_(campo, "null")
+                    if valor is None else
+                    consulta.eq(campo, valor)
+                )
+
+            res = await consulta.select(
+                "id, fecha_recepcion, estatus"
+            ).execute()
+
+            confirmadas = res.data or []
+
+            if not any(
+                fila.get("id") == orden["id"]
+                and fila.get("fecha_recepcion") == nueva.isoformat()
+                and fila.get("estatus") == "Despacho Recibido"
+                for fila in confirmadas
+            ):
+                informar(
+                    "No actualizada", nombre, numero,
+                    "No se confirmó el cambio. Revisa permisos "
+                    "o cambios desde otra pestaña."
+                )
+                continue
+
+            proveedor = orden.get("proveedores") or {}
+
+            resultado["procesados"].append({
+                "numero_orden": orden["numero_orden"],
+                "proveedor": proveedor.get(
+                    "nombre", "Sin proveedor"
+                ),
+                "tienda_destino": (
+                    orden.get("tienda_destino") or "Sin tienda"
+                ),
+                "fecha_recepcion": nueva.strftime("%d/%m/%Y")
+            })
+
+        except Exception:
+            resultado["incierto"] = True
+
+            informar(
+                "Sin confirmar", nombre, numero,
+                "Se interrumpió la confirmación. "
+                "Comprueba el diario antes de reintentar."
+            )
+
+    resultado["total_procesados"] = len(resultado["procesados"])
+
+    return JSONResponse(content=resultado)
 
 
 @router.post("/escanear/procesar")

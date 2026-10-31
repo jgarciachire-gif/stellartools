@@ -262,46 +262,76 @@ def convertir_codigo(valor):
 
 
 def convertir_unidad_manejo(valor):
-    """Convierte UnidadManejo en entero positivo."""
+    from decimal import Decimal, InvalidOperation
+
     texto = texto_valor(valor)
 
+    # Vacío significa conservar el valor existente.
     if not texto:
         return None
 
     try:
-        numero = float(texto.replace(",", "."))
+        numero = Decimal(texto.replace(",", "."))
 
-        if not numero.is_integer() or numero <= 0:
-            return None
+        if (
+            not numero.is_finite()
+            or numero != numero.to_integral_value()
+            or not 1 <= numero <= 2147483647
+        ):
+            raise ValueError()
 
         return int(numero)
 
-    except (ValueError, TypeError):
-        return None
+    except (InvalidOperation, ValueError, TypeError):
+        raise ValueError(
+            "UnidadManejo debe ser un entero positivo."
+        )
 
 
 def convertir_precio(valor):
-    """Convierte CostoActual soportando formatos 12.50, 12,50 y 1.234,56."""
+    from decimal import Decimal, InvalidOperation
+    import math
+
     texto = texto_valor(valor)
 
+    # No convertir una celda vacía en precio cero.
     if not texto:
-        return 0.0
+        return None
+
+    texto = (
+        texto.replace("$", "")
+        .replace(" ", "")
+        .replace("\u00a0", "")
+    )
+
+    # Admitir 1.234,56 y 1,234.56.
+    if "." in texto and "," in texto:
+        if texto.rfind(",") > texto.rfind("."):
+            texto = texto.replace(".", "").replace(",", ".")
+        else:
+            texto = texto.replace(",", "")
+
+    elif "," in texto:
+        texto = texto.replace(",", ".")
 
     try:
-        # Si viene con punto y coma, asumimos formato 1.234,56
-        if "." in texto and "," in texto:
-            texto = texto.replace(".", "").replace(",", ".")
+        numero = Decimal(texto)
 
-        # Si solo tiene coma, asumimos decimal 12,50
-        elif "," in texto:
-            texto = texto.replace(",", ".")
+        if not numero.is_finite() or numero < 0:
+            raise ValueError()
 
-        # Si solo tiene punto, se conserva como decimal: 12.50
+        precio = float(numero)
 
-        return float(texto)
+        if not math.isfinite(precio):
+            raise ValueError()
 
-    except (ValueError, TypeError):
-        return 0.0
+        return precio
+
+    except (InvalidOperation, ValueError, TypeError, OverflowError):
+        raise ValueError(
+            "CostoActual debe ser un número finito "
+            "mayor o igual a 0."
+        )
 
 @router.post("/productos/cargar-lista")
 async def cargar_lista_productos(
@@ -317,21 +347,24 @@ async def cargar_lista_productos(
     nombre = archivo.filename.lower()
     filas = []
 
-    # 1. Extracción de datos según extensión
     if nombre.endswith(".csv"):
         try:
             df = pd.read_csv(
                 io.BytesIO(contenido),
                 sep=None,
                 engine="python",
-                encoding="utf-8"
+                encoding="utf-8-sig",
+                dtype=str,
+                keep_default_na=False
             )
-        except Exception:
+        except UnicodeDecodeError:
             df = pd.read_csv(
                 io.BytesIO(contenido),
                 sep=None,
                 engine="python",
-                encoding="latin1"
+                encoding="latin1",
+                dtype=str,
+                keep_default_na=False
             )
 
         # Normalizar encabezados SIEMPRE, independientemente
@@ -369,7 +402,11 @@ async def cargar_lista_productos(
 
 
     elif nombre.endswith(".xlsx"):
-        df = pd.read_excel(io.BytesIO(contenido))
+        df = pd.read_excel(
+            io.BytesIO(contenido),
+            dtype=str,
+            keep_default_na=False
+        )
 
         # Normalizar encabezados.
         df.columns = [
@@ -430,106 +467,130 @@ async def cargar_lista_productos(
             "/productos"
         )
 
-    # 2. Mapeo asíncrono de proveedores
-    res_prov = await config.supabase_async.table("proveedores").select("id, nombre").execute()
-    mapa_proveedores = {p["nombre"].strip().upper(): p["id"] for p in (res_prov.data or []) if p.get("nombre")}
+    # 2. Leer todos los proveedores, sin limitarse a la primera página.
+    mapa_proveedores = {}
+    ids_proveedores = set()
+    inicio = 0
 
-    # 3. Formateo y limpieza de datos
-    filas_procesadas = []
-    errores_filas = []
+    def clave_proveedor(valor):
+        return " ".join(texto_valor(valor).split()).casefold()
 
-    for numero_fila, f in enumerate(filas, start=2):
+    while True:
+        res_prov = await (
+            config.supabase_async.table("proveedores")
+            .select("id, nombre")
+            .order("id")
+            .range(inicio, inicio + 499)
+            .execute()
+        )
 
-        codigo_st = convertir_codigo(f["codigo"])
+        proveedores = res_prov.data or []
+
+        if not proveedores:
+            break
+
+        for proveedor in proveedores:
+            proveedor_id = int(proveedor["id"])
+            ids_proveedores.add(proveedor_id)
+
+            clave = clave_proveedor(proveedor.get("nombre"))
+
+            if clave:
+                mapa_proveedores.setdefault(
+                    clave, set()
+                ).add(proveedor_id)
+
+        inicio += len(proveedores)
+
+    # 3. Preparar actualizaciones parciales.
+    productos_importacion = []
+    avisos_importacion = []
+
+    campos_texto = {
+        "codigo_ean": "codigo_ean",
+        "descripcion": "descripcion",
+        "departamento": "departamento",
+        "grupo": "grupo",
+        "subgrupo": "subgrupo",
+        "marca": "marca"
+    }
+
+    for numero_fila, fila in enumerate(filas, start=2):
+        codigo_st = convertir_codigo(fila.get("codigo"))
 
         if not codigo_st:
-            errores_filas.append(
-                f"Fila {numero_fila}: CodigoDelProducto vacío."
+            avisos_importacion.append(
+                f"Fila {numero_fila}: omitida por código vacío."
             )
             continue
 
-        unidad_manejo = convertir_unidad_manejo(
-            f["unidad_manejo"]
-        )
+        # Mantener la escritura del archivo y enviar vacíos como None.
+        producto = {
+            destino: texto_valor(fila.get(origen)) or None
+            for destino, origen in campos_texto.items()
+        }
 
-        if unidad_manejo is None:
-            errores_filas.append(
-                f"Fila {numero_fila}: UnidadManejo inválida "
-                f"para el producto {codigo_st}."
+        producto["codigo_st"] = codigo_st
+
+        # Un dato numérico inválido no impide actualizar los demás campos.
+        conversiones = (
+            (
+                "unidad_manejo",
+                "unidad_manejo",
+                convertir_unidad_manejo
+            ),
+            (
+                "precio_nuevo",
+                "costo",
+                convertir_precio
             )
-            continue
-
-        nombre_prov = texto_valor(
-            f["proveedor"]
-        ).upper()
-
-        prov_id = mapa_proveedores.get(nombre_prov)
-
-        filas_procesadas.append({
-            "codigo_st": codigo_st,
-            "codigo_ean": texto_valor(f["codigo_ean"]),
-            "descripcion": texto_valor(
-                f["descripcion"]
-            ).upper(),
-            "unidad_manejo": unidad_manejo,
-            "marca": texto_valor(
-                f["marca"]
-            ).upper(),
-            "departamento": texto_valor(
-                f["departamento"]
-            ),
-            "grupo": texto_valor(
-                f["grupo"]
-            ),
-            "subgrupo": texto_valor(
-                f["subgrupo"]
-            ),
-            "costo_raw": f["costo"],
-            "proveedor_id": prov_id
-        })
-
-
-    if not filas_procesadas:
-        mensaje = (
-            "No se encontraron productos válidos para importar."
         )
 
-        if errores_filas:
-            mensaje += "\n\n" + "\n".join(errores_filas[:10])
+        for destino, origen, convertir in conversiones:
+            try:
+                producto[destino] = convertir(fila.get(origen))
+            except ValueError as error:
+                producto[destino] = None
+                avisos_importacion.append(
+                    f"Fila {numero_fila}: {error} "
+                    "Ese campo no se modificará."
+                )
 
+        # Proveedor vacío conserva el actual.
+        proveedor_raw = texto_valor(fila.get("proveedor"))
+        proveedor_id = None
+
+        if proveedor_raw:
+            # Admitir un ID existente o un nombre que coincida.
+            if (
+                proveedor_raw.isdigit()
+                and int(proveedor_raw) in ids_proveedores
+            ):
+                proveedor_id = int(proveedor_raw)
+            else:
+                coincidencias = mapa_proveedores.get(
+                    clave_proveedor(proveedor_raw),
+                    set()
+                )
+
+                if len(coincidencias) == 1:
+                    proveedor_id = next(iter(coincidencias))
+                else:
+                    avisos_importacion.append(
+                        f"Fila {numero_fila}: proveedor no encontrado "
+                        "o ambiguo. Se conservará el proveedor existente."
+                    )
+
+        producto["proveedor_id"] = proveedor_id
+        productos_importacion.append(producto)
+
+    if not productos_importacion:
         return script_alerta_modal(
             "error",
             "No se pudo procesar el archivo",
-            mensaje,
+            "No se encontraron filas con código de producto válido.",
             "/productos"
         )
-
-    
-
-    # ============================================================
-    # 4. PREPARAR DATOS PARA IMPORTACIÓN MASIVA
-    # ============================================================
-
-    productos_importacion = []
-
-    for item in filas_procesadas:
-
-        precio_nuevo = convertir_precio(
-            item["costo_raw"]
-        )
-
-        productos_importacion.append({
-            "codigo_st": item["codigo_st"],
-            "codigo_ean": item["codigo_ean"],
-            "descripcion": item["descripcion"],
-            "unidad_manejo": item["unidad_manejo"],
-            "marca": item["marca"],
-            "departamento": item["departamento"],
-            "grupo": item["grupo"],
-            "subgrupo": item["subgrupo"],
-            "proveedor_id": item["proveedor_id"],
-            "precio_nuevo": precio_nuevo
-        })
 
 
     # ============================================================
@@ -588,18 +649,34 @@ async def cargar_lista_productos(
     # 6. MENSAJE DE CONFIRMACIÓN
     # ============================================================
 
-    from config import script_alerta_modal
+    total_omitidos = int(resultado.get("omitidos", 0))
 
     msj = (
         f"Proceso finalizado: "
         f"{total_nuevos} productos creados, "
-        f"{total_actualizados} actualizados y "
-        f"{total_sin_cambios} sin cambios."
+        f"{total_actualizados} actualizados, "
+        f"{total_sin_cambios} sin cambios y "
+        f"{total_omitidos} productos nuevos omitidos."
     )
+
+    if total_omitidos:
+        msj += (
+            "\n\nLos productos nuevos omitidos necesitan "
+            "descripción y unidad de manejo válidas."
+        )
+
+    if avisos_importacion:
+        msj += (
+            f"\n\nAdvertencias: {len(avisos_importacion)}.\n"
+            + "\n".join(avisos_importacion[:10])
+        )
+
+        if len(avisos_importacion) > 10:
+            msj += "\nSe muestran las primeras 10 advertencias."
 
     return script_alerta_modal(
         "exito",
-        "Carga Completada",
+        "Resultado de la importación",
         msj,
         "/productos"
     )
