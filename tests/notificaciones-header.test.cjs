@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const source = fs.readFileSync('static/js/componentes/notificaciones-header.js', 'utf8');
 
-function setup(storage = new Map(), usuarioId = 'user-a', descartadasStorage = new Map()) {
+function setup(storage = new Map(), usuarioId = 'user-a', descartadasStorage = new Map(), options = {}) {
     const requests = [];
     let now = 1000;
     const listeners = new Map();
@@ -21,7 +21,7 @@ function setup(storage = new Map(), usuarioId = 'user-a', descartadasStorage = n
     };
     vm.runInNewContext(source, {window, document, URL, Date: {now: () => now},
         fetch: (url, options) => new Promise((resolve, reject) => requests.push({url, options, resolve, reject}))});
-    return {state: window.notificacionesHeader(usuarioId), requests, storage, descartadasStorage, document, timers, listeners,
+    return {state: window.notificacionesHeader(usuarioId, options.tipo, options.tienda), requests, storage, descartadasStorage, document, timers, listeners,
         advance(ms) { now += ms; },
         respond(index, body = {notificaciones: [], total: 0}, status = 200) {
             requests[index].resolve({ok: status === 200, status, json: async () => body});
@@ -238,5 +238,52 @@ test('la caché anterior sin versión se actualiza antes de permitir descartes',
     view.respond(0, {notificaciones: [{proveedor: 'Anterior', version_estado: 'v1', tiendas: []}], total: 1});
     await new Promise(resolve => setImmediate(resolve));
     view.state.descartar(view.state.notificaciones[0]);
+    assert.equal(view.state.total, 0);
+});
+
+test('Provisional usa su API de documentos y separa la caché por rol y tienda', async () => {
+    const storage = new Map([['stellartools:notificaciones:reposicion:user-a', JSON.stringify({
+        notificaciones: [{proveedor: 'Proveedor privado', version_estado: 'v1'}], total: 1, ultimaCarga: 1000
+    })]]);
+    const view = setup(storage, 'user-a', new Map(), {tipo: 'inventarios', tienda: 'CENTRO'});
+    view.state.init();
+    assert.equal(view.state.total, 0);
+    assert.equal(view.requests[0].url, '/api/notificaciones/inventarios');
+    const draft = {clave: 'inventario:1', documento_id: 1, nombre: 'Documento Centro', tienda: 'CENTRO'};
+    view.respond(0, {notificaciones: [draft], total: 1});
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(view.state.total, 1);
+    const anotherStore = setup(storage, 'user-a', new Map(), {tipo: 'inventarios', tienda: 'GARIBALDI'});
+    anotherStore.state.init();
+    assert.equal(anotherStore.state.total, 0);
+    assert.equal(anotherStore.requests.length, 1);
+    anotherStore.respond(0);
+    await new Promise(resolve => setImmediate(resolve));
+});
+
+test('completar un documento lo elimina inmediatamente del contador y de la caché', async () => {
+    const view = setup(new Map(), 'user-a', new Map(), {tipo: 'inventarios', tienda: 'CENTRO'});
+    const drafts = [{clave: 'inventario:1', documento_id: 1}, {clave: 'inventario:2', documento_id: 2}];
+    const loaded = view.state.cargar(); view.respond(0, {notificaciones: drafts, total: 2}); await loaded;
+    view.state.actualizarDocumento({id: '1', estado: 'completado'});
+    assert.equal(view.state.total, 1);
+    assert.equal(view.state.notificaciones[0].documento_id, 2);
+    assert.equal(JSON.parse([...view.storage.values()][0]).total, 1);
+    view.respond(1, {notificaciones: [drafts[1]], total: 1});
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(view.state.total, 1);
+    const nextPage = setup(view.storage, 'user-a', new Map(), {tipo: 'inventarios', tienda: 'CENTRO'});
+    nextPage.state.init();
+    assert.equal(nextPage.state.total, 1);
+    assert.equal(nextPage.requests.length, 0);
+});
+
+test('los documentos pendientes se mantienen hasta completarse y la actualización los retira', async () => {
+    const view = setup(new Map(), 'user-a', new Map(), {tipo: 'inventarios', tienda: 'CENTRO'});
+    const draft = {clave: 'inventario:1', documento_id: 1, nombre: 'Pendiente'};
+    const loaded = view.state.cargar(); view.respond(0, {notificaciones: [draft], total: 1}); await loaded;
+    view.state.descartar(draft);
+    assert.equal(view.state.total, 1);
+    const refresh = view.state.cargar(true); view.respond(1); await refresh;
     assert.equal(view.state.total, 0);
 });

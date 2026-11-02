@@ -1,4 +1,6 @@
-window.notificacionesHeader = (usuarioId = '') => ({
+window.notificacionesHeader = (usuarioId = '', tipo = 'reposicion', tienda = '') => ({
+    esInventario: tipo === 'inventarios',
+    urlApi: tipo === 'inventarios' ? '/api/notificaciones/inventarios' : '/api/notificaciones/reposicion',
     abierto: false,
     cargando: false,
     error: '',
@@ -7,8 +9,9 @@ window.notificacionesHeader = (usuarioId = '') => ({
     descartadas: [],
     total: 0,
     ultimaCarga: null,
-    claveCache: usuarioId ? `stellartools:notificaciones:reposicion:${usuarioId}` : null,
-    claveDescartadas: usuarioId ? `stellartools:notificaciones:descartadas:${usuarioId}` : null,
+    claveCache: usuarioId ? (tipo === 'inventarios' ? `stellartools:notificaciones:inventarios:${usuarioId}:${tienda}`
+        : `stellartools:notificaciones:reposicion:${usuarioId}`) : null,
+    claveDescartadas: usuarioId && tipo !== 'inventarios' ? `stellartools:notificaciones:descartadas:${usuarioId}` : null,
     intervalo: null,
     alCambiarVisibilidad: null,
 
@@ -29,7 +32,7 @@ window.notificacionesHeader = (usuarioId = '') => ({
                     && Number.isFinite(datos.ultimaCarga) && datos.ultimaCarga <= Date.now()) {
                     this.avisosRecibidos = datos.notificaciones;
                     this.aplicarDescartadas();
-                    this.ultimaCarga = datos.notificaciones.every(aviso => typeof aviso.version_estado === 'string')
+                    this.ultimaCarga = this.esInventario || datos.notificaciones.every(aviso => typeof aviso.version_estado === 'string')
                         ? datos.ultimaCarga : null;
                 }
             } catch { /* La carga continúa si el navegador no permite almacenar datos. */ }
@@ -70,6 +73,11 @@ window.notificacionesHeader = (usuarioId = '') => ({
     },
 
     aplicarDescartadas(reconciliar = false) {
+        if (this.esInventario) {
+            this.notificaciones = this.avisosRecibidos;
+            this.total = this.notificaciones.length;
+            return;
+        }
         if (reconciliar) {
             // Si salió de alerta o cambió de estado/ciclo, libera el descarte anterior.
             this.descartadas = this.descartadas.filter(descartada => this.avisosRecibidos.some(aviso =>
@@ -82,7 +90,7 @@ window.notificacionesHeader = (usuarioId = '') => ({
     },
 
     descartar(aviso) {
-        if (!aviso.version_estado) return;
+        if (this.esInventario || !aviso.version_estado) return;
         // El botón desaparecerá: conserva el foco dentro del desplegable antes de retirarlo.
         this.$refs?.campana?.focus({preventScroll: true});
         this.descartadas = this.descartadas.filter(descartada => descartada.proveedor !== aviso.proveedor);
@@ -96,12 +104,22 @@ window.notificacionesHeader = (usuarioId = '') => ({
         if (this.abierto) this.cargar();
     },
 
+    actualizarDocumento(detalle) {
+        if (!this.esInventario) return;
+        if (detalle.estado === 'completado') {
+            this.avisosRecibidos = this.avisosRecibidos.filter(aviso => String(aviso.documento_id) !== String(detalle.id));
+            this.aplicarDescartadas();
+            this.guardarCache();
+        }
+        this.cargar(true);
+    },
+
     async cargar(forzar = false) {
         if (this.cargando || (!forzar && this.ultimaCarga !== null && Date.now() - this.ultimaCarga < 60000)) return;
         this.cargando = true;
         this.error = '';
         try {
-            const respuesta = await fetch('/api/notificaciones/reposicion', {
+            const respuesta = await fetch(this.urlApi, {
                 credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' }
             });
             if (respuesta.status === 401 || (respuesta.redirected && new URL(respuesta.url).pathname === '/login')) {

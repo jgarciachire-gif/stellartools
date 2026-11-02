@@ -136,7 +136,7 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(body['notificaciones'], self.env['construir_notificaciones_reposicion'](breakdown))
         self.assertEqual(body['total'], 2)
 
-    async def test_header_renders_notifications_with_existing_role_restrictions(self):
+    async def test_header_chooses_notification_type_by_role(self):
         env = Environment(loader=FileSystemLoader('templates'), autoescape=select_autoescape())
         env.globals['asset_url'] = lambda path: '/static/' + path
         request = NS(state=NS(perfil=None))
@@ -144,9 +144,12 @@ class NotificationTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn('id="panel-notificaciones-header"', html)
         self.assertLess(html.index('id="panel-notificaciones-header"'), html.index('</header>'))
         self.assertLess(html.index('notificaciones-header.js'), html.index('alpinejs'))
-        request.state.perfil = NS(tipo_usuario='provisional', nombre_comprador='Inventario')
+        request.state.perfil = NS(tipo_usuario='provisional', nombre_comprador='Inventario', tienda='CENTRO')
         restricted = env.get_template('base.html').render(request=request)
-        self.assertNotIn('id="panel-notificaciones-header"', restricted)
+        self.assertIn('id="panel-notificaciones-header"', restricted)
+        self.assertIn('data-tipo-notificaciones="inventarios"', restricted)
+        self.assertIn('data-tienda-notificaciones="CENTRO"', restricted)
+        self.assertIn('data-tipo-notificaciones="reposicion"', html)
 
     async def test_version_changes_with_status_but_not_with_daily_countdown(self):
         order = self.order(remaining=2)

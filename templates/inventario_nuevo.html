@@ -3281,6 +3281,10 @@
                     'success'
                 );
 
+                window.dispatchEvent(new CustomEvent('inventario-guardado', {
+                    detail: {id: inventarioId, estado}
+                }));
+
                 // Recarga para que el servidor
                 // determine nuevamente el estado
                 // y la vista.

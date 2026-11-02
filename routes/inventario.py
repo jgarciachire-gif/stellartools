@@ -52,10 +52,59 @@ def obtener_tienda_provisional(perfil: dict):
     Devuelve la tienda asignada al usuario provisional.
     """
     tienda = str(
-        perfil.get("tienda", "")
+        perfil.get("tienda") or ""
     ).strip()
 
     return tienda or None
+
+
+@router.get("/api/notificaciones/inventarios")
+async def notificaciones_inventarios_provisionales(
+    request: Request,
+    access_token: str = Cookie(None),
+    refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
+    headers = {"Cache-Control": "no-store"}
+    if not user:
+        return JSONResponse({"detalle": "Tu sesión ha vencido. Inicia sesión nuevamente."}, status_code=401, headers=headers)
+    perfil = obtener_perfil_inventario(request)
+    if not perfil or not es_usuario_provisional(perfil):
+        return JSONResponse({"detalle": "No tienes permiso para consultar estos avisos."}, status_code=403, headers=headers)
+    tienda = obtener_tienda_provisional(perfil)
+    if not tienda:
+        return JSONResponse({"detalle": "El usuario provisional no tiene una tienda asignada."}, status_code=403, headers=headers)
+
+    avisos = []
+    offset = 0
+    while True:
+        respuesta = await (
+            config.supabase_async.table("inventarios")
+            .select("id, nombre, tienda, estado, realizado_por, usuario_creador_id, created_at")
+            .eq("tienda", tienda)
+            .ilike("estado", "borrador")
+            .order("created_at", desc=True).order("id", desc=True)
+            .range(offset, offset + 999).execute()
+        )
+        documentos = respuesta.data or []
+        for documento in documentos:
+            # Defensa adicional: ninguna fila de otra tienda ni completada sale en la respuesta.
+            if (str(documento.get('tienda') or '').strip().casefold() != tienda.casefold()
+                    or str(documento.get('estado') or '').strip().lower() != 'borrador'):
+                continue
+            identificador = documento['id']
+            avisos.append({
+                "clave": f"inventario:{identificador}", "documento_id": identificador,
+                "nombre": documento.get('nombre') or 'Inventario sin nombre',
+                "tienda": tienda, "estado": "Borrador",
+                "realizado_por": documento.get('realizado_por') or 'Sin responsable',
+                "creado_por_otro": str(documento.get('usuario_creador_id')) != str(user.id),
+                "url": f"/inventario/{identificador}"
+            })
+        if len(documentos) < 1000:
+            break
+        offset += 1000
+    return JSONResponse({"notificaciones": avisos, "total": len(avisos)}, headers=headers)
 
 
 # ============================================================

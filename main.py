@@ -126,6 +126,9 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
                 "/api/proveedores",
                 "/api/clasificacion",
 
+                # Avisos de borradores limitados a la tienda del usuario.
+                "/api/notificaciones/inventarios",
+
                 # Recursos del frontend.
                 "/static/",
                 "/.well-known/",

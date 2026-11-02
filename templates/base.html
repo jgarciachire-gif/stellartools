@@ -62,9 +62,7 @@
         {% block header_actions %}{% endblock %}
 
         <div class="ml-auto flex shrink-0 items-center gap-2">
-            {% if not (request.state.perfil and request.state.perfil.tipo_usuario|string|lower|trim == 'provisional') %}
             {% include "componentes/notificaciones_header.html" %}
-            {% endif %}
 
             <!-- Menú desplegable de usuario -->
             <div class="relative" x-data="{ abierto: false }">
