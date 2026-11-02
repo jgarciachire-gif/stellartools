@@ -115,10 +115,12 @@ async def notificaciones_inventarios_provisionales(
 async def listar_inventarios_para_analisis(
     request: Request,
     tienda: str = "",
+    page: int = 1,
+    fecha: str = "",
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
-    """Lista inventarios completados permitidos para el usuario."""
+    """Lista hasta 20 inventarios completados por página, sin cargar sus productos."""
 
     user = await obtener_usuario_actual(
         access_token,
@@ -132,6 +134,18 @@ async def listar_inventarios_para_analisis(
         )
 
     try:
+        from datetime import date, timedelta
+        pagina = max(1, min(int(page), 10000))
+        fecha_filtro = None
+        if fecha:
+            try:
+                fecha_filtro = date.fromisoformat(fecha)
+                siguiente = fecha_filtro + timedelta(days=1)
+            except (ValueError, OverflowError):
+                return JSONResponse(status_code=400, content={"ok": False, "error": "Fecha no válida."})
+        tags = request.query_params.getlist("tags")
+        if len(tags) > 12 or any(len(tag) > 150 for tag in tags):
+            return JSONResponse(status_code=400, content={"ok": False, "error": "Demasiados criterios de búsqueda."})
         perfil = obtener_perfil_inventario(request)
         tienda_solicitada = str(tienda or "").strip()
         es_provisional = (
@@ -178,14 +192,32 @@ async def listar_inventarios_para_analisis(
         if tienda_solicitada:
             consulta = consulta.eq("tienda", tienda_solicitada)
 
-        respuesta = await consulta.order(
-            "updated_at",
-            desc=True
-        ).execute()
+        for tag in tags:
+            termino = re.sub(r"[^\w\s\-]", " ", tag, flags=re.UNICODE).strip()
+            if termino:
+                consulta = consulta.or_(
+                    f"nombre.ilike.%{termino}%,realizado_por.ilike.%{termino}%,tienda.ilike.%{termino}%"
+                )
+        if fecha_filtro:
+            inicio = f"{fecha_filtro.isoformat()}T00:00:00"
+            fin = f"{siguiente.isoformat()}T00:00:00"
+            consulta = consulta.or_(
+                f"and(updated_at.gte.{inicio},updated_at.lt.{fin}),"
+                f"and(updated_at.is.null,created_at.gte.{inicio},created_at.lt.{fin})"
+            )
+
+        # La fila adicional permite saber si hay otra página sin contar toda la tabla.
+        desde = (pagina - 1) * 20
+        respuesta = await consulta.order("updated_at", desc=True, nullsfirst=False).order(
+            "id", desc=True
+        ).range(desde, desde + 20).execute()
+        documentos = respuesta.data or []
 
         return {
             "ok": True,
-            "inventarios": respuesta.data or []
+            "inventarios": documentos[:20],
+            "pagina": pagina,
+            "hay_mas": len(documentos) > 20
         }
 
     except Exception as e:

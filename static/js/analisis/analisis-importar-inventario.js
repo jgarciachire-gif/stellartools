@@ -5,11 +5,26 @@
     const $ = id => document.getElementById(id);
 
     let inventarios = [];
-    let modo = 'tienda';
-    let seleccionados = new Map();
+    const seleccionados = new Map();
     let pendientes = [];
     let detallesPendientes = [];
     let procesando = false;
+    let criterios = [];
+    let tiendaFiltro = '';
+    let fechaFiltro = '';
+    let pagina = 1;
+    let hayMas = false;
+    let cargando = false;
+    let preparando = false;
+    let secuenciaCarga = 0;
+    let solicitudListado = null;
+    let solicitudDetalle = null;
+    const paginasCache = new Map();
+    const documentosSeleccionados = new Map();
+
+    const normalizarBusqueda = valor => String(valor || '')
+        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+        .trim().toLocaleLowerCase();
 
     const normalizarTienda = valor =>
         String(valor || '').trim().toUpperCase();
@@ -53,54 +68,10 @@
         ];
     }
 
-    function fechaDentroDelFiltro(documento) {
-        const fecha = fechaDocumento(documento).slice(0, 10);
-        const desde = $('inventario-fecha-desde').value;
-        const hasta = $('inventario-fecha-hasta').value;
-
-        return (!desde || fecha >= desde) && (!hasta || fecha <= hasta);
-    }
-
     function documentosFiltrados() {
-        const texto = $('inventario-buscar-texto').value
-            .trim()
-            .toLocaleLowerCase();
-
-        const tiendaFiltro = normalizarTienda(
-            $('inventario-filtro-tienda').value
-        );
-
-        const tiendaActiva = normalizarTienda(
-            window.tiendaActivaPestana
-        );
-
-        return inventarios.filter(documento => {
-            const tienda = normalizarTienda(documento.tienda);
-
-            if (modo === 'tienda' && tienda !== tiendaActiva) {
-                return false;
-            }
-
-            if (modo === 'multiple' && !listaTiendasDisponibles().includes(tienda)) {
-                return false;
-            }
-
-            if (tiendaFiltro && tienda !== tiendaFiltro) {
-                return false;
-            }
-
-            if (!fechaDentroDelFiltro(documento)) {
-                return false;
-            }
-
-            const contenido = [
-                documento.nombre,
-                documento.realizado_por,
-                documento.tienda
-            ].join(' ').toLocaleLowerCase();
-
-            return contenido.includes(texto);
-        });
+        const tiendasDisponibles = listaTiendasDisponibles();
+        // Los filtros y la paginación se aplican antes de leer los documentos en el servidor.
+        return inventarios.filter(documento => tiendasDisponibles.includes(normalizarTienda(documento.tienda)));
     }
 
     function documentosPorTienda() {
@@ -131,12 +102,21 @@
             : 'Selecciona un documento para continuar.';
 
         $('btn-previsualizar-importacion-inventario').disabled =
-            procesando || cantidad === 0;
+            procesando || preparando || cargando || cantidad === 0;
+        $('inventario-quitar-seleccion').classList.toggle('hidden', cantidad === 0);
+        const grupos = documentosPorTienda();
+        const todos = grupos.size > 0 && [...grupos].every(([tienda, documentos]) =>
+            documentos.some(documento => seleccionados.get(tienda) === String(documento.id)));
+        const boton = $('inventario-seleccionar-visibles');
+        boton.disabled = cargando || !grupos.size;
+        boton.textContent = todos ? 'Desmarcar visibles' : 'Seleccionar recientes';
     }
 
     function renderizarDocumentos() {
         const tbody = $('inventario-lista-documentos');
         const grupos = documentosPorTienda();
+        const cantidad = [...grupos.values()].reduce((total, documentos) => total + documentos.length, 0);
+        $('inventario-estado-buscador').textContent = `${cantidad} inventario(s) en esta página`;
 
         if (!grupos.size) {
             tbody.innerHTML = `
@@ -152,34 +132,26 @@
         const filas = [];
 
         grupos.forEach((documentos, tienda) => {
-            if (modo === 'multiple' && !seleccionados.has(tienda)) {
-                // En modo múltiple, la selección inicial usa el más reciente.
-                const seleccionado = seleccionados.get(tienda);
-                if (seleccionado) {
-                    seleccionados.delete(tienda);
-                }
-            }
-
-            documentos.forEach((documento, indice) => {
-                const claveTienda = tienda;
-                const esSeleccionado =
-                    seleccionados.get(claveTienda) === String(documento.id);
+            documentos.forEach(documento => {
+                const esSeleccionado = seleccionados.get(tienda) === String(documento.id);
 
                 const checked = esSeleccionado ? 'checked' : '';
-                const tipoControl = modo === 'tienda' ? 'radio' : 'checkbox';
-                const idControl = `inventario-doc-${documento.id}`;
+                const idControl = `inventario-doc-${escaparHTML(documento.id)}`;
 
                 filas.push(`
-                    <tr class="hover:bg-emerald-50/40">
+                    <tr class="transition-colors ${esSeleccionado ? 'bg-emerald-50/70' : 'hover:bg-slate-50'}">
                         <td class="px-3 py-3">
+                            <label class="relative inline-flex h-10 w-10 cursor-pointer items-center justify-center rounded-xl hover:bg-emerald-100/60 transition-colors">
                             <input
                                 id="${idControl}"
-                                type="${tipoControl}"
-                                name="${modo === 'tienda' ? 'inventario-documento-unico' : `inventario-${escaparHTML(tienda)}`}"
+                                type="checkbox"
+                                aria-label="Seleccionar ${escaparHTML(documento.nombre || `Inventario #${documento.id}`)} de ${escaparHTML(tienda)}"
                                 data-id="${escaparHTML(documento.id)}"
                                 data-tienda="${escaparHTML(tienda)}"
                                 ${checked}
-                                class="h-4 w-4 accent-emerald-600 cursor-pointer">
+                                class="peer h-5 w-5 appearance-none rounded-md border-2 border-slate-300 bg-white cursor-pointer transition-all checked:border-emerald-600 checked:bg-emerald-600 checked:shadow-sm focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-emerald-100">
+                            <i class="fa-solid fa-check pointer-events-none absolute text-[11px] text-white opacity-0 transition-opacity peer-checked:opacity-100" aria-hidden="true"></i>
+                            </label>
                         </td>
                         <td class="px-3 py-3">
                             <label for="${idControl}" class="cursor-pointer">
@@ -209,17 +181,16 @@
             input.addEventListener('change', () => {
                 const id = String(input.dataset.id);
                 const tienda = normalizarTienda(input.dataset.tienda);
-
                 if (input.checked) {
-                    if (modo === 'tienda') {
-                        seleccionados.clear();
-                    }
                     seleccionados.set(tienda, id);
+                    documentosSeleccionados.set(tienda, inventarios.find(documento => String(documento.id) === id));
                 } else if (seleccionados.get(tienda) === id) {
                     seleccionados.delete(tienda);
+                    documentosSeleccionados.delete(tienda);
                 }
 
                 renderizarDocumentos();
+                $(`inventario-doc-${id}`)?.focus();
             });
         });
 
@@ -227,22 +198,153 @@
     }
 
     function inicializarFiltroTiendas() {
-        const select = $('inventario-filtro-tienda');
-        const tiendas = listaTiendasDisponibles();
-        const actual = normalizarTienda(window.tiendaActivaPestana);
-
-        select.innerHTML =
-            '<option value="">Todas las tiendas</option>' +
-            tiendas.map(tienda =>
-                `<option value="${escaparHTML(tienda)}">${escaparHTML(tienda)}</option>`
-            ).join('');
-
-        if (tiendas.includes(actual)) {
-            select.value = actual;
-        }
+        const menu = $('inventario-menu-tiendas');
+        const tiendas = ['', ...listaTiendasDisponibles()];
+        menu.replaceChildren();
+        tiendas.forEach(tienda => {
+            const boton = document.createElement('button');
+            boton.type = 'button';
+            boton.className = 'block w-full rounded-lg px-3 py-2 text-left text-xs text-slate-600 hover:bg-indigo-50 hover:text-indigo-700';
+            boton.textContent = tienda || 'Todas las tiendas';
+            boton.addEventListener('click', () => {
+                tiendaFiltro = tienda;
+                cerrarMenuTiendas();
+                actualizarFiltros();
+            });
+            menu.appendChild(boton);
+        });
+        dibujarBadges();
     }
 
-    async function cargarInventarios() {
+    function cerrarMenuTiendas() {
+        $('inventario-menu-tiendas').classList.add('hidden');
+        $('inventario-btn-tiendas').setAttribute('aria-expanded', 'false');
+    }
+
+    function dibujarBadges() {
+        const contenedor = $('inventario-badges-buscador');
+        contenedor.replaceChildren();
+        const badge = (texto, quitar) => {
+            const elemento = document.createElement('span');
+            elemento.className = 'inline-flex max-w-full items-center gap-1 rounded-md border border-indigo-200 bg-indigo-50 px-2 py-1 text-[11px] font-semibold text-indigo-700';
+            const etiqueta = document.createElement('span');
+            etiqueta.className = 'max-w-[180px] truncate';
+            etiqueta.textContent = texto;
+            elemento.appendChild(etiqueta);
+            if (quitar) {
+                const boton = document.createElement('button');
+                boton.type = 'button';
+                boton.className = 'ml-0.5 text-indigo-400 hover:text-rose-600';
+                boton.textContent = '×';
+                boton.setAttribute('aria-label', `Quitar ${texto}`);
+                boton.addEventListener('click', () => { quitar(); actualizarFiltros(); });
+                elemento.appendChild(boton);
+            }
+            contenedor.appendChild(elemento);
+        };
+        criterios.forEach((texto, indice) => badge(texto, () => criterios.splice(indice, 1)));
+        if (tiendaFiltro) {
+            badge(tiendaFiltro, () => { tiendaFiltro = ''; });
+        }
+        if (fechaFiltro) {
+            const [anio, mes, dia] = fechaFiltro.split('-');
+            badge(`${dia}/${mes}/${anio}`, () => {
+                fechaFiltro = '';
+                $('inventario-fecha').value = '';
+            });
+        }
+        $('inventario-limpiar-buscador').classList.toggle('hidden',
+            !(criterios.length || tiendaFiltro || fechaFiltro || $('inventario-buscar-texto').value));
+    }
+
+    function actualizarFiltros() {
+        dibujarBadges();
+        return cargarInventarios(1);
+    }
+
+    function interpretarFecha(valor) {
+        const partes = valor.match(/^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2}|\d{4}))?$/);
+        if (!partes) return '';
+        const dia = Number(partes[1]), mes = Number(partes[2]);
+        const anio = !partes[3] ? new Date().getFullYear()
+            : partes[3].length === 2 ? 2000 + Number(partes[3]) : Number(partes[3]);
+        const fecha = new Date(anio, mes - 1, dia);
+        if (fecha.getFullYear() !== anio || fecha.getMonth() !== mes - 1 || fecha.getDate() !== dia) return '';
+        return `${anio}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+    }
+
+    function agregarCriterio() {
+        const input = $('inventario-buscar-texto');
+        const texto = input.value.trim();
+        if (!texto) return;
+        const fecha = interpretarFecha(texto);
+        if (fecha) {
+            fechaFiltro = fecha;
+            $('inventario-fecha').value = fecha;
+        } else if (!criterios.some(criterio => normalizarBusqueda(criterio) === normalizarBusqueda(texto))) {
+            if (criterios.length >= 12) {
+                $('inventario-estado-buscador').textContent = 'Puedes agregar hasta 12 criterios.';
+                return;
+            }
+            criterios.push(texto);
+        }
+        input.value = '';
+        actualizarFiltros();
+    }
+
+    function urlListado(numeroPagina) {
+        const params = new URLSearchParams({ page: String(numeroPagina) });
+        if (tiendaFiltro) params.set('tienda', tiendaFiltro);
+        if (fechaFiltro) params.set('fecha', fechaFiltro);
+        criterios.forEach(criterio => params.append('tags', criterio));
+        return `/api/analisis/inventarios?${params}`;
+    }
+
+    function obtenerPagina(url) {
+        if (solicitudListado && solicitudListado.url !== url) {
+            solicitudListado.controlador.abort();
+            solicitudListado = null;
+        }
+        const cache = paginasCache.get(url);
+        if (cache && cache.vence > Date.now()) return Promise.resolve(cache.datos);
+        if (solicitudListado?.url === url) return solicitudListado.promesa;
+        solicitudListado?.controlador.abort();
+        const controlador = new AbortController();
+        const timeout = setTimeout(() => controlador.abort(), 30000);
+        const solicitud = { url, controlador };
+        solicitudListado = solicitud;
+        solicitud.promesa = (async () => {
+            try {
+                const respuesta = await fetch(url, {
+                    signal: controlador.signal, credentials: 'same-origin',
+                    headers: { Accept: 'application/json' }
+                });
+                if (respuesta.redirected || respuesta.status === 401 || respuesta.status === 403) {
+                    paginasCache.clear();
+                    throw new Error('Tu sesión venció o no tienes permiso. Inicia sesión nuevamente.');
+                }
+                const datos = await respuesta.json();
+                if (!respuesta.ok || !datos.ok || !Array.isArray(datos.inventarios)) {
+                    throw new Error(datos.error || 'No se pudieron cargar los inventarios.');
+                }
+                paginasCache.set(url, { datos, vence: Date.now() + 60000 });
+                if (paginasCache.size > 30) paginasCache.delete(paginasCache.keys().next().value);
+                return datos;
+            } finally {
+                clearTimeout(timeout);
+                if (solicitudListado === solicitud) solicitudListado = null;
+            }
+        })();
+        return solicitud.promesa;
+    }
+
+    async function cargarInventarios(numeroPagina = 1) {
+        const turno = ++secuenciaCarga;
+        const url = urlListado(numeroPagina);
+        cargando = true;
+        inventarios = [];
+        actualizarResumen();
+        $('inventario-pagina-anterior').disabled = $('inventario-pagina-siguiente').disabled = true;
         const tbody = $('inventario-lista-documentos');
         tbody.innerHTML = `
             <tr><td colspan="6" class="px-4 py-8 text-center text-slate-500">
@@ -250,117 +352,86 @@
                 Cargando inventarios...
             </td></tr>`;
 
-        const respuesta = await fetch('/api/analisis/inventarios', {
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' }
-        });
-
-        const datos = await respuesta.json();
-
-        if (!respuesta.ok || !datos.ok) {
-            throw new Error(datos.error || 'No se pudieron cargar los inventarios.');
-        }
-
-        inventarios = datos.inventarios || [];
-        inicializarFiltroTiendas();
-
-        // En modo individual, seleccionar por defecto el documento más reciente de la tienda activa.
-        if (modo === 'tienda') {
-            const tienda = normalizarTienda(window.tiendaActivaPestana);
-            const documento = inventarios
-                .filter(item => normalizarTienda(item.tienda) === tienda)
-                .sort((a, b) => fechaDocumento(b).localeCompare(fechaDocumento(a)))[0];
-
-            seleccionados.clear();
-
-            if (documento) {
-                seleccionados.set(tienda, String(documento.id));
+        $('inventario-estado-buscador').textContent = 'Buscando inventarios…';
+        try {
+            const datos = await obtenerPagina(url);
+            if (turno !== secuenciaCarga) return;
+            inventarios = datos.inventarios;
+            pagina = numeroPagina;
+            hayMas = datos.hay_mas === true;
+            renderizarDocumentos();
+        } catch (error) {
+            if (turno !== secuenciaCarga) return;
+            hayMas = false;
+            $('inventario-estado-buscador').textContent = 'No se pudo cargar la lista. Puedes reintentar con Actualizar.';
+            tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-rose-600">${escaparHTML(
+                error.name === 'AbortError' ? 'Se agotó el tiempo de espera. Intenta nuevamente.' : error.message
+            )}</td></tr>`;
+        } finally {
+            if (turno === secuenciaCarga) {
+                cargando = false;
+                actualizarResumen();
+                $('inventario-pagina-info').textContent = `Página ${pagina}`;
+                $('inventario-pagina-anterior').disabled = pagina <= 1;
+                $('inventario-pagina-siguiente').disabled = !hayMas;
             }
         }
-
-        renderizarDocumentos();
     }
 
     window.abrirModalImportarInventarios = async function () {
+        solicitudDetalle?.abort();
+        solicitudDetalle = null;
+        preparando = false;
+        detallesPendientes = [];
+        $('btn-previsualizar-importacion-inventario').innerHTML = '<i class="fa-solid fa-eye mr-1"></i> Revisar importación';
         $('modal-importar-inventarios').classList.remove('hidden');
         $('modal-importar-inventarios').classList.add('flex');
-        $('inventario-tienda-activa-info').textContent =
-            `Tienda activa: ${normalizarTienda(window.tiendaActivaPestana) || '—'}`;
-
         $('inventario-buscar-texto').value = '';
-        $('inventario-fecha-desde').value = '';
-        $('inventario-fecha-hasta').value = '';
-        modo = 'tienda';
-        actualizarModoVisual();
+        $('inventario-fecha').value = '';
+        criterios = [];
+        tiendaFiltro = '';
+        fechaFiltro = '';
+        seleccionados.clear();
+        documentosSeleccionados.clear();
+        actualizarResumen();
+        inicializarFiltroTiendas();
+        cerrarMenuTiendas();
 
-        try {
-            await cargarInventarios();
-        } catch (error) {
-            $('inventario-lista-documentos').innerHTML = `
-                <tr><td colspan="6" class="px-4 py-8 text-center text-rose-600">
-                    ${escaparHTML(error.message)}
-                </td></tr>`;
-        }
+        await cargarInventarios();
     };
 
     window.cerrarModalImportarInventarios = function () {
         if (procesando) return;
+        secuenciaCarga++;
+        solicitudListado?.controlador.abort();
+        solicitudListado = null;
+        cargando = false;
+        solicitudDetalle?.abort();
+        solicitudDetalle = null;
+        preparando = false;
         $('modal-importar-inventarios').classList.add('hidden');
         $('modal-importar-inventarios').classList.remove('flex');
     };
 
-    window.cambiarModoImportacionInventario = function (nuevoModo) {
-        modo = nuevoModo === 'multiple' ? 'multiple' : 'tienda';
-        seleccionados.clear();
-
-        $('inventario-acciones-multiples').classList.toggle(
-            'hidden',
-            modo !== 'multiple'
-        );
-
-        $('inventario-filtro-tienda-wrap').classList.toggle(
-            'hidden',
-            modo === 'tienda'
-        );
-
-        if (modo === 'tienda') {
-            $('inventario-filtro-tienda').value =
-                normalizarTienda(window.tiendaActivaPestana);
-        } else {
-            $('inventario-filtro-tienda').value = '';
-        }
-
-        actualizarModoVisual();
+    window.seleccionarInventariosVisibles = function () {
+        const grupos = documentosPorTienda();
+        const todos = [...grupos].every(([tienda, documentos]) =>
+            documentos.some(documento => seleccionados.get(tienda) === String(documento.id)));
+        grupos.forEach((documentos, tienda) => {
+            if (todos) {
+                seleccionados.delete(tienda);
+                documentosSeleccionados.delete(tienda);
+            } else {
+                seleccionados.set(tienda, String(documentos[0].id));
+                documentosSeleccionados.set(tienda, documentos[0]);
+            }
+        });
         renderizarDocumentos();
     };
 
-    function actualizarModoVisual() {
-        const botones = [
-            ['btn-modo-inventario-tienda', modo === 'tienda'],
-            ['btn-modo-inventario-multiple', modo === 'multiple']
-        ];
-
-        botones.forEach(([id, activo]) => {
-            $(id).className = activo
-                ? 'px-4 py-2 rounded-lg text-xs font-semibold border border-emerald-600 bg-emerald-50 text-emerald-800'
-                : 'px-4 py-2 rounded-lg text-xs font-semibold border border-slate-200 bg-white text-slate-600 hover:bg-slate-50';
-        });
-    }
-
-    window.seleccionarTodasTiendasInventario = function () {
-        const grupos = documentosPorTienda();
+    window.limpiarSeleccionInventarios = function () {
         seleccionados.clear();
-
-        grupos.forEach((documentos, tienda) => {
-            const documento = documentos
-                .slice()
-                .sort((a, b) => fechaDocumento(b).localeCompare(fechaDocumento(a)))[0];
-
-            if (documento) {
-                seleccionados.set(tienda, String(documento.id));
-            }
-        });
-
+        documentosSeleccionados.clear();
         renderizarDocumentos();
     };
 
@@ -371,7 +442,11 @@
     };
 
     window.previsualizarImportacionInventarios = async function () {
-        if (!seleccionados.size || procesando) return;
+        if (!seleccionados.size || procesando || preparando || cargando) return;
+        preparando = true;
+        const controlador = new AbortController();
+        solicitudDetalle = controlador;
+        const timeout = setTimeout(() => controlador.abort(), 30000);
 
         const boton = $('btn-previsualizar-importacion-inventario');
         boton.disabled = true;
@@ -379,18 +454,19 @@
 
         try {
             pendientes = Array.from(seleccionados.entries()).map(([tienda, id]) => {
-                const documento = inventarios.find(item => String(item.id) === String(id));
-                if (!documento || normalizarTienda(documento.tienda) !== tienda) {
-                    throw new Error(`La selección de ${tienda} ya no es válida.`);
+                const documento = documentosSeleccionados.get(tienda);
+                if (!documento || String(documento.id) !== id || normalizarTienda(documento.tienda) !== tienda || !listaTiendasDisponibles().includes(tienda)) {
+                    throw new Error('Uno de los inventarios seleccionados ya no está disponible.');
                 }
                 return { tienda, documento };
             });
 
             // Obtener todos los detalles antes de modificar cualquier dato en memoria.
-            detallesPendientes = await Promise.all(pendientes.map(async item => {
+            detallesPendientes = [];
+            const leerDetalle = async item => {
                 const respuesta = await fetch(
                     `/api/analisis/inventarios/${encodeURIComponent(item.documento.id)}`,
-                    { credentials: 'same-origin', headers: { Accept: 'application/json' } }
+                    { signal: controlador.signal, credentials: 'same-origin', headers: { Accept: 'application/json' } }
                 );
 
                 const datos = await respuesta.json();
@@ -402,7 +478,15 @@
                 }
 
                 return { ...item, productos: datos.productos || [] };
-            }));
+            };
+            // Evitar una ráfaga de consultas al revisar varias tiendas.
+            const detalles = [];
+            for (let indice = 0; indice < pendientes.length; indice += 2) {
+                if (controlador.signal.aborted) return;
+                detalles.push(...await Promise.all(pendientes.slice(indice, indice + 2).map(leerDetalle)));
+            }
+            if (solicitudDetalle !== controlador || controlador.signal.aborted) return;
+            detallesPendientes = detalles;
 
             const codigosTabla = new Set(
                 Array.from(document.querySelectorAll('#filas-tabla-analisis tr'))
@@ -447,12 +531,12 @@
                             </div>
                         </div>
                         ${coincidencias === 0
-                        ? '<p class="mt-3 text-xs text-rose-600">No hay coincidencias. Este documento no se podrá importar.</p>'
+                        ? '<p class="mt-3 text-xs text-rose-600">No hay coincidencias para esta tienda. Revisa la selección antes de importar.</p>'
                         : ''}
                     </div>`;
             }).join('');
 
-            const hayCoincidencias = detallesPendientes.some(item => {
+            const hayCoincidencias = detallesPendientes.every(item => {
                 const codigos = new Set(
                     item.productos.map(p => normalizarCodigo(p.codigo)).filter(Boolean)
                 );
@@ -462,22 +546,30 @@
 
             $('inventario-vista-previa').innerHTML =
                 resumen +
-                '<p class="text-xs text-slate-600 mt-3">La importación reemplazará Inv-emp de los productos de la tabla. Los productos ausentes del documento quedarán en cero; los códigos ajenos al análisis se ignorarán.</p>';
+                '<p class="text-xs text-slate-600 mt-3">Se importará un documento por tienda para reemplazar Inv-emp. Los productos ausentes del documento quedarán en cero; los códigos ajenos al análisis se ignorarán.</p>';
 
             $('btn-confirmar-importacion-inventario').disabled = !hayCoincidencias;
             $('modal-confirmar-importacion-inventario').classList.remove('hidden');
             $('modal-confirmar-importacion-inventario').classList.add('flex');
 
         } catch (error) {
+            if (solicitudDetalle !== controlador) return;
             if (typeof mostrarNotificacion === 'function') {
-                mostrarNotificacion({ tipo: 'error', mensaje: error.message });
+                mostrarNotificacion({ tipo: 'error', mensaje: error.name === 'AbortError'
+                    ? 'Se agotó el tiempo de espera. Puedes volver a revisar la importación.' : error.message });
             } else {
                 alert(error.message);
             }
         } finally {
-            boton.disabled = false;
-            boton.innerHTML = '<i class="fa-solid fa-eye mr-1"></i> Revisar importación';
-            actualizarResumen();
+            clearTimeout(timeout);
+            if (solicitudDetalle === controlador) {
+                controlador.abort();
+                solicitudDetalle = null;
+                preparando = false;
+                boton.disabled = false;
+                boton.innerHTML = '<i class="fa-solid fa-eye mr-1"></i> Revisar importación';
+                actualizarResumen();
+            }
         }
     };
 
@@ -655,14 +747,54 @@
     };
 
     document.addEventListener('DOMContentLoaded', () => {
-        [
-            'inventario-buscar-texto',
-            'inventario-filtro-tienda',
-            'inventario-fecha-desde',
-            'inventario-fecha-hasta'
-        ].forEach(id => {
-            $(id)?.addEventListener('input', renderizarDocumentos);
-            $(id)?.addEventListener('change', renderizarDocumentos);
+        $('inventario-pagina-anterior').addEventListener('click', () => { if (!cargando && pagina > 1) cargarInventarios(pagina - 1); });
+        $('inventario-pagina-siguiente').addEventListener('click', () => { if (!cargando && hayMas) cargarInventarios(pagina + 1); });
+        $('inventario-actualizar-listado').addEventListener('click', () => {
+            if (cargando) return;
+            paginasCache.clear();
+            cargarInventarios(pagina);
+        });
+        const input = $('inventario-buscar-texto');
+        const fecha = $('inventario-fecha');
+        input.addEventListener('input', dibujarBadges);
+        input.addEventListener('keydown', evento => {
+            if (evento.isComposing) return;
+            if (evento.key === 'Enter') {
+                evento.preventDefault();
+                agregarCriterio();
+            } else if (evento.key === 'Backspace' && !input.value && criterios.length) {
+                criterios.pop();
+                actualizarFiltros();
+            }
+        });
+        $('inventario-btn-tiendas').addEventListener('click', () => {
+            const oculto = $('inventario-menu-tiendas').classList.toggle('hidden');
+            $('inventario-btn-tiendas').setAttribute('aria-expanded', String(!oculto));
+        });
+        document.addEventListener('click', evento => {
+            if (!$('inventario-selector-tiendas').contains(evento.target)) cerrarMenuTiendas();
+        });
+        document.addEventListener('keydown', evento => {
+            if (evento.key === 'Escape') cerrarMenuTiendas();
+        });
+        $('inventario-btn-fecha').addEventListener('click', () => {
+            try {
+                if (typeof fecha.showPicker === 'function') fecha.showPicker();
+                else { fecha.focus(); fecha.click(); }
+            } catch { fecha.focus(); fecha.click(); }
+        });
+        fecha.addEventListener('change', () => {
+            fechaFiltro = fecha.value;
+            actualizarFiltros();
+        });
+        $('inventario-limpiar-buscador').addEventListener('click', () => {
+            criterios = [];
+            tiendaFiltro = '';
+            fechaFiltro = '';
+            input.value = fecha.value = '';
+            cerrarMenuTiendas();
+            actualizarFiltros();
+            input.focus();
         });
     });
 })();

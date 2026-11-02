@@ -1,6 +1,17 @@
 /* Carga PDF: extraer, revisar y guardar sin perder los resultados parciales. */
-const cargaOC = { xhr: null, lote: false, guardando: 0, guardadas: 0 };
+const cargaOC = { xhr: null, lote: false, guardando: 0, guardadas: 0, detener: false, cerrarPendiente: false, incierto: false, controladores: new Set() };
 const ocElemento = id => document.getElementById(id);
+let ocConfirmacionAbierta = false;
+
+async function ocConfirmarAccion(opciones) {
+    if (ocConfirmacionAbierta) return false;
+    ocConfirmacionAbierta = true;
+    try {
+        return await window.mostrarConfirmacion({ tipo: 'warning', ...opciones });
+    } finally {
+        ocConfirmacionAbierta = false;
+    }
+}
 const ocEscapar = valor => String(valor ?? '').replace(/[&<>"']/g, caracter => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
 }[caracter]));
@@ -27,10 +38,16 @@ function abrirModalCargarOC() {
     ocElemento('input-pdf-modal').focus();
 }
 
-function cerrarModalCargarOC() {
-    if (cargaOC.xhr) {
-        if (!window.confirm('¿Cancelar la extracción? Todavía no se ha guardado ninguna orden de esta carga.')) return;
-        cargaOC.xhr.abort();
+async function cerrarModalCargarOC() {
+    const xhr = cargaOC.xhr;
+    if (xhr) {
+        if (!await ocConfirmarAccion({
+            titulo: 'Cancelar extracción',
+            mensaje: '¿Cancelar la extracción? Todavía no se ha guardado ninguna orden de esta carga.',
+            textoAceptar: 'Cancelar extracción', textoCancelar: 'Seguir procesando'
+        })) return;
+        if (cargaOC.xhr !== xhr) return;
+        xhr.abort();
     }
     ocElemento('modal-cargar-oc').classList.add('hidden');
 }
@@ -75,10 +92,7 @@ function validarYProcesarPDFModal(event) {
     archivos.forEach(archivo => datos.append('archivos_pdf', archivo));
     const xhr = new XMLHttpRequest();
     cargaOC.xhr = xhr;
-    xhr.open('POST', '/escanear/procesar', true);
     xhr.timeout = 120000;
-    xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
-    xhr.setRequestHeader('Accept', 'application/json');
     xhr.upload.onprogress = evento => {
         if (!evento.lengthComputable) return;
         const valor = Math.round(evento.loaded / evento.total * 100);
@@ -94,14 +108,20 @@ function validarYProcesarPDFModal(event) {
                 : 'El servidor devolvió una respuesta inesperada. No se guardó ninguna orden; vuelve a procesar el lote.', true);
             return;
         }
-        if (xhr.status >= 200 && xhr.status < 300 && resultado.success && Array.isArray(resultado.ordenes) && resultado.ordenes.length) {
-            renderizarTablaDetalleOC(resultado.ordenes, resultado);
+        if (xhr.status >= 200 && xhr.status < 300 && resultado?.success && Array.isArray(resultado.ordenes) && resultado.ordenes.length) {
+            try {
+                renderizarTablaDetalleOC(resultado.ordenes, resultado);
+            } catch {
+                ocElemento('contenedor-tarjetas-oc').replaceChildren();
+                ocMensaje(mensaje, 'No se pudo preparar la revisión. No se guardó ninguna orden. Intenta procesar los archivos por separado.', true);
+                return;
+            }
             ocElemento('modal-cargar-oc').classList.add('hidden');
             ocElemento('modal-detalle-extraido-oc').classList.remove('hidden');
             ocElemento('titulo-revision-oc').focus();
             input.value = '';
         } else {
-            const detalles = Array.isArray(resultado.errores) ? resultado.errores.map(e => `${e.archivo}: ${e.mensaje}`) : [];
+            const detalles = Array.isArray(resultado?.errores) ? resultado.errores.map(e => `${e?.archivo}: ${e?.mensaje}`) : [];
             ocMensaje(mensaje, [ocRespuestaError(xhr.status, resultado), ...detalles].join('\n'), true);
         }
     };
@@ -115,7 +135,12 @@ function validarYProcesarPDFModal(event) {
         spinner.classList.add('hidden');
         progreso.classList.add('hidden');
     };
-    try { xhr.send(datos); } catch {
+    try {
+        xhr.open('POST', '/escanear/procesar', true);
+        xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.send(datos);
+    } catch {
         xhr.onloadend();
         xhr.onerror();
     }
@@ -125,6 +150,8 @@ function renderizarTablaDetalleOC(ordenes, resultado = {}) {
     const contenedor = ocElemento('contenedor-tarjetas-oc');
     contenedor.replaceChildren();
     cargaOC.guardadas = 0;
+    cargaOC.incierto = false;
+    cargaOC.cerrarPendiente = false;
     ocElemento('total-ordenes-count').textContent = ordenes.length;
     const avisos = [...(resultado.advertencias || [])];
     for (const error of resultado.errores || []) avisos.push(`${error.archivo}: ${error.mensaje}`);
@@ -226,7 +253,7 @@ function renderizarTablaDetalleOC(ordenes, resultado = {}) {
                     </div>
                 </details>
                 <p class="mensaje-orden" hidden aria-live="polite"></p>
-                <div class="flex justify-end"><button type="submit" class="btn-guardar-individual bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl text-sm disabled:opacity-50">Guardar orden</button></div>
+                <div class="flex flex-wrap justify-end gap-3"><button type="button" class="btn-omitir-orden px-4 py-2 rounded-xl text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200">Omitir orden</button><button type="submit" class="btn-guardar-individual bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6 py-2 rounded-xl text-sm disabled:opacity-50">Guardar orden</button></div>
             </form>`;
         contenedor.appendChild(tarjeta);
     }
@@ -239,18 +266,28 @@ function ocActualizarResumen() {
     const forms = ocFormularios();
     const guardadas = forms.filter(f => f.dataset.estado === 'guardada').length;
     const duplicadas = forms.filter(f => f.dataset.estado === 'duplicada').length;
-    const pendientes = forms.length - guardadas - duplicadas;
-    ocMensaje(ocElemento('resumen-guardado-oc'), `${guardadas} guardada(s) · ${duplicadas} ya registrada(s) · ${pendientes} pendiente(s).`);
+    const omitidas = forms.filter(f => f.dataset.estado === 'omitida').length;
+    const pendientes = forms.length - guardadas - duplicadas - omitidas;
+    ocMensaje(ocElemento('resumen-guardado-oc'), `${guardadas} guardada(s) · ${duplicadas} ya registrada(s) · ${omitidas} omitida(s) · ${pendientes} pendiente(s).`);
     const boton = ocElemento('btn-guardar-todo-modal');
     boton.disabled = cargaOC.lote || cargaOC.guardando > 0 || pendientes === 0;
     boton.textContent = cargaOC.lote ? 'Guardando…' : 'Guardar pendientes';
+    ocElemento('btn-detener-guardado-oc').hidden = !cargaOC.lote && !cargaOC.guardando;
+    forms.forEach(form => {
+        const omitir = form.querySelector('.btn-omitir-orden');
+        omitir.disabled = ['guardada', 'guardando'].includes(form.dataset.estado);
+        omitir.textContent = form.dataset.estado === 'omitida' ? 'Volver a incluir' : 'Omitir orden';
+    });
+    if (cargaOC.cerrarPendiente && !cargaOC.guardando && !cargaOC.lote) ocFinalizarCierre();
 }
 
 async function guardarOrdenModal(form, desdeLote = false) {
-    if (form.dataset.estado === 'guardada' || form.dataset.estado === 'guardando' || (cargaOC.lote && !desdeLote)) return false;
+    if (['guardada', 'guardando', 'omitida'].includes(form.dataset.estado) || (cargaOC.lote && !desdeLote)) return false;
     const mensaje = form.querySelector('.mensaje-orden');
     delete form.dataset.detenerLote;
     if (!form.reportValidity()) {
+        form.dataset.estado = 'error';
+        ocActualizarResumen();
         ocMensaje(mensaje, 'Completa los campos indicados antes de guardar esta orden.', true);
         return false;
     }
@@ -308,6 +345,8 @@ async function guardarOrdenModal(form, desdeLote = false) {
 
         campoProductos.value = JSON.stringify(actualizados);
     } catch (error) {
+        form.dataset.estado = 'error';
+        ocActualizarResumen();
         ocMensaje(mensaje, error.message, true);
         return false;
     }
@@ -332,6 +371,7 @@ async function guardarOrdenModal(form, desdeLote = false) {
     ocMensaje(mensaje, 'Guardando esta orden…');
     ocActualizarResumen();
     const controller = new AbortController();
+    cargaOC.controladores.add(controller);
     const timeout = setTimeout(() => controller.abort(), 60000);
     try {
         const response = await fetch('/ordenes/crear', {
@@ -345,10 +385,12 @@ async function guardarOrdenModal(form, desdeLote = false) {
         let resultado;
         try { resultado = await response.json(); } catch {
             form.dataset.detenerLote = '1';
+            cargaOC.incierto = true;
             throw new Error('El servidor devolvió una respuesta inesperada. Comprueba el diario antes de reintentar; la orden podría haberse guardado.');
         }
         if (!response.ok || resultado.status !== 'ok') {
             if ([401, 403, 429].includes(response.status) || response.status >= 500) form.dataset.detenerLote = '1';
+            if (response.status >= 500) cargaOC.incierto = true;
             form.dataset.estado = response.status === 409 || resultado.codigo === 'orden_duplicada' ? 'duplicada' : 'error';
             throw new Error(ocRespuestaError(response.status, resultado));
         }
@@ -359,10 +401,13 @@ async function guardarOrdenModal(form, desdeLote = false) {
         ocMensaje(mensaje, 'Orden guardada en el diario. Puedes continuar con las pendientes.');
         return true;
     } catch (error) {
-        if (error.name === 'AbortError' || error instanceof TypeError) form.dataset.detenerLote = '1';
+        if (error.name === 'AbortError' || error instanceof TypeError) {
+            form.dataset.detenerLote = '1';
+            cargaOC.incierto = true;
+        }
         if (form.dataset.estado === 'guardando') form.dataset.estado = 'error';
         const texto = error.name === 'AbortError'
-            ? 'El guardado tardó demasiado. Comprueba el diario antes de reintentar; la orden podría haberse guardado.'
+            ? 'El guardado se interrumpió. Comprueba el diario antes de reintentar; la orden podría haberse guardado.'
             : error instanceof TypeError
                 ? 'Se perdió la conexión. Comprueba el diario antes de reintentar; la orden podría haberse guardado.' : error.message;
         ocMensaje(mensaje, texto, true);
@@ -370,6 +415,7 @@ async function guardarOrdenModal(form, desdeLote = false) {
         return false;
     } finally {
         clearTimeout(timeout);
+        cargaOC.controladores.delete(controller);
         cargaOC.guardando--;
         const guardada = form.dataset.estado === 'guardada';
         entradas.forEach(input => { input.disabled = guardada; });
@@ -380,19 +426,28 @@ async function guardarOrdenModal(form, desdeLote = false) {
 
 function activarEventosFormulariosModal() {
     ocFormularios().forEach(form => {
+        form.querySelector('.btn-omitir-orden').onclick = () => {
+            if (['guardada', 'guardando'].includes(form.dataset.estado)) return;
+            form.dataset.estado = form.dataset.estado === 'omitida' ? 'pendiente' : 'omitida';
+            ocMensaje(form.querySelector('.mensaje-orden'), form.dataset.estado === 'omitida'
+                ? 'Orden omitida. Puedes continuar con las demás o volver a incluirla.' : 'Orden incluida nuevamente. Revisa sus datos antes de guardar.');
+            ocActualizarResumen();
+        };
         form.addEventListener('submit', evento => { evento.preventDefault(); guardarOrdenModal(form); });
         form.addEventListener('input', () => {
-            if (!['guardada', 'guardando'].includes(form.dataset.estado)) form.dataset.estado = 'pendiente';
+            if (!['guardada', 'guardando', 'omitida'].includes(form.dataset.estado)) form.dataset.estado = 'pendiente';
             ocActualizarResumen();
         });
     });
     ocElemento('btn-guardar-todo-modal').onclick = async () => {
         if (cargaOC.lote || cargaOC.guardando) return;
+        cargaOC.detener = false;
         cargaOC.lote = true;
         ocActualizarResumen();
         try {
             for (const form of ocFormularios()) {
-                if (['guardada', 'duplicada'].includes(form.dataset.estado)) continue;
+                if (cargaOC.detener) break;
+                if (['guardada', 'duplicada', 'omitida'].includes(form.dataset.estado)) continue;
                 await guardarOrdenModal(form, true);
                 if (form.dataset.detenerLote) break;
             }
@@ -403,20 +458,57 @@ function activarEventosFormulariosModal() {
     };
 }
 
-function cerrarModalDetalleOC() {
-    if (cargaOC.guardando || cargaOC.lote) {
-        ocMensaje(ocElemento('resumen-guardado-oc'), 'Espera a que termine el guardado para cerrar la revisión.', true);
-        return;
-    }
-    const pendientes = ocFormularios().some(f => !['guardada', 'duplicada'].includes(f.dataset.estado));
-    if (pendientes && !window.confirm('Hay órdenes sin guardar. ¿Cerrar y descartar las pendientes? Las órdenes guardadas se conservarán.')) return;
+function ocInterrumpirGuardado() {
+    cargaOC.detener = true;
+    cargaOC.controladores.forEach(controller => controller.abort());
+    ocMensaje(ocElemento('resumen-guardado-oc'), 'Guardado detenido. Las órdenes pendientes se conservan. Si una orden estaba enviándose, comprueba el diario antes de reintentar.');
+}
+
+async function detenerGuardadoOC() {
+    if (!cargaOC.guardando && !cargaOC.lote) return;
+    if (!await ocConfirmarAccion({
+        titulo: 'Detener guardado',
+        mensaje: 'Se conservarán las órdenes guardadas y las pendientes. La orden en curso podría haberse guardado; comprueba el diario antes de reintentar.',
+        textoAceptar: 'Detener guardado', textoCancelar: 'Seguir guardando'
+    })) return;
+    if (cargaOC.guardando || cargaOC.lote) ocInterrumpirGuardado();
+}
+
+function ocFinalizarCierre() {
+    cargaOC.cerrarPendiente = false;
     ocElemento('modal-detalle-extraido-oc').classList.add('hidden');
     ocElemento('contenedor-tarjetas-oc').replaceChildren();
-    if (cargaOC.guardadas) window.location.reload();
+    if (cargaOC.guardadas || cargaOC.incierto) window.location.reload();
+}
+
+async function cerrarModalDetalleOC() {
+    if (cargaOC.guardando || cargaOC.lote) {
+        if (!await ocConfirmarAccion({
+            titulo: 'Detener guardado y cerrar',
+            mensaje: 'Las órdenes guardadas se conservan. Se descartarán las pendientes al cerrar. Comprueba el diario: la orden en curso podría haberse guardado.',
+            textoAceptar: 'Detener y cerrar', textoCancelar: 'Seguir revisando'
+        })) return;
+        if (!cargaOC.guardando && !cargaOC.lote) {
+            ocFinalizarCierre();
+            return;
+        }
+        cargaOC.cerrarPendiente = true;
+        ocInterrumpirGuardado();
+        return;
+    }
+    const pendientes = ocFormularios().some(f => !['guardada', 'duplicada', 'omitida'].includes(f.dataset.estado));
+    if (pendientes && !await ocConfirmarAccion({
+        titulo: 'Cerrar revisión',
+        mensaje: 'Hay órdenes sin guardar. ¿Cerrar y descartar las pendientes? Las órdenes guardadas se conservarán.',
+        textoAceptar: 'Descartar y cerrar', textoCancelar: 'Seguir revisando'
+    })) return;
+    // Durante la confirmación pudo iniciarse un guardado desde otro control.
+    if (cargaOC.guardando || cargaOC.lote) return;
+    ocFinalizarCierre();
 }
 
 window.addEventListener('beforeunload', evento => {
-    if (cargaOC.guardando || cargaOC.lote || ocFormularios().some(f => !['guardada', 'duplicada'].includes(f.dataset.estado))) {
+    if (cargaOC.guardando || cargaOC.lote || ocFormularios().some(f => !['guardada', 'duplicada', 'omitida'].includes(f.dataset.estado))) {
         evento.preventDefault();
         evento.returnValue = '';
     }
