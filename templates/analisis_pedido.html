@@ -3382,14 +3382,18 @@ ${nodosProductosXML.join('\n')}
                         claveDemandaTooltip(sede, codigo)
                     );
 
-                    // Descuenta inventario antes de aplicar crecimiento.
+                    // Calcula la demanda de cobertura y aplica el crecimiento.
+                    const demandaProyectada = demanda * dias *
+                        (1 + crecimiento / 100);
+
+                    // Convierte el inventario de empaques a unidades y lo descuenta.
                     const necesidad = Math.max(
                         0,
-                        demanda * dias - invEmp * pre
+                        demandaProyectada - invEmp * pre
                     );
 
-                    const cantidad = necesidad *
-                        (1 + crecimiento / 100) / pre;
+                    // Convierte las unidades faltantes a empaques.
+                    const cantidad = necesidad / pre;
 
                     // Redondea hacia arriba evitando errores decimales mínimos.
                     const emp = cantidad > 0
