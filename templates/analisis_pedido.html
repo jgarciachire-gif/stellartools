@@ -337,8 +337,12 @@
 
 <!-- Encabezado compacto: las acciones están en el header principal. -->
 <div class="mb-5">
-    <h1 class="text-xl font-semibold tracking-tight text-slate-800">
-        Análisis de Pedido
+    <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
+        <div
+            class="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-400 to-teal-600 flex items-center justify-center text-white text-2xl shadow-lg shadow-teal-500/30 group-hover:scale-105 transition-transform">
+            <i class="fa-solid fa-calculator"></i>
+        </div>
+        <span>Analisis de Pedido</span>
     </h1>
 
     <p class="mt-1 text-xs text-slate-500">
@@ -543,8 +547,8 @@
 
     <!-- Resultados comparativos: no modifican los sugeridos actuales -->
     <div id="kardex-comparacion-contenedor"
-        class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl bg-white"
-        role="region" aria-labelledby="titulo-comparacion-periodos">
+        class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl bg-white" role="region"
+        aria-labelledby="titulo-comparacion-periodos">
 
         <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
             <h3 id="titulo-comparacion-periodos" class="flex items-center gap-2 text-sm font-semibold text-slate-800">
@@ -561,8 +565,8 @@
 
         <!-- Indicador de carga exclusivo del comparativo de períodos -->
         <div id="cargando-comparacion-periodos"
-            class="hidden min-h-[140px] flex-col items-center justify-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-6 text-center" role="status"
-            aria-live="polite">
+            class="hidden min-h-[140px] flex-col items-center justify-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-6 text-center"
+            role="status" aria-live="polite">
 
             <span class="h-8 w-8 shrink-0 animate-spin rounded-full border-4 border-slate-200 border-t-teal-600"
                 aria-hidden="true"></span>
@@ -822,7 +826,7 @@
 
     <!-- TABLA DE DETALLE DE PRODUCTOS -->
     <div class="bg-white border border-slate-300 rounded-2xl shadow-xs overflow-hidden">
-        <div class="overflow-x-auto">
+        <div id="contenedor-tabla-productos-analisis" class="overflow-x-auto">
             <!-- Cuadrícula compacta con bordes definidos estilo hoja de cálculo -->
             <table class="w-full text-left border-collapse border border-slate-900" id="tabla-analisis">
                 <!-- Se agregan eventos click para ordenar y cursores interactivos en la cabecera -->
@@ -1285,6 +1289,7 @@
     <script src="{{ asset_url('js/componentes/modal.js') }}"></script>
     <script src="{{ asset_url('js/componentes/buscador-productos.js') }}"></script>
     <script src="{{ asset_url('js/analisis/analisis-productos.js') }}"></script>
+    <script src="{{ asset_url('js/analisis/analisis-tabla-transicion.js') }}" defer></script>
     <script src="{{ asset_url('js/analisis/analisis-importar-inventario.js') }}"></script>
     <script src="{{ asset_url('js/analisis/analisis-interaccion.js') }}"></script>
     <script src="{{ asset_url('js/analisis/analisis-cambios.js') }}"></script>
@@ -3724,8 +3729,10 @@ ${nodosProductosXML.join('\n')}
                 .filter(elemento => elemento.getClientRects().length && elemento.textContent.trim())
                 .map(elemento => elemento.animate(
                     [{ opacity: 0 }, { opacity: 1 }],
-                    { duration: movimientoReducido ? 180 : 320, delay: movimientoReducido ? 0 : 100,
-                        easing: 'ease-out', fill: 'backwards' }
+                    {
+                        duration: movimientoReducido ? 180 : 320, delay: movimientoReducido ? 0 : 100,
+                        easing: 'ease-out', fill: 'backwards'
+                    }
                 ));
 
             if (Math.abs(alturaInicial - alturaFinal) < 1) {
@@ -5354,10 +5361,11 @@ ${nodosProductosXML.join('\n')}
             </header>
 
             <div id="estado-carga-clasificacion-productos"
-                class="hidden border-b border-indigo-100 bg-indigo-50 px-5 py-3 text-sm text-indigo-700"
-                role="status" aria-live="polite">
+                class="hidden border-b border-indigo-100 bg-indigo-50 px-5 py-3 text-sm text-indigo-700" role="status"
+                aria-live="polite">
                 <div class="flex items-center gap-2">
-                    <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700"
+                    <span
+                        class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700"
                         aria-hidden="true"></span>
                     <span>Cargando departamentos, grupos, subgrupos y marcas...</span>
                 </div>
