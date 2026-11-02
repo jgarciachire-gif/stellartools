@@ -164,6 +164,30 @@ test('descartar un proveedor reduce el conteo y se conserva al cambiar de págin
     assert.equal(JSON.parse([...view.storage.values()][0]).notificaciones.length, 2);
 });
 
+test('descartar mantiene abierta la lista y mueve el foco antes de retirar el botón', async () => {
+    const view = setup();
+    const aviso = {proveedor: 'Proveedor A', version_estado: 'a1', tiendas: []};
+    const loaded = view.state.cargar();
+    view.respond(0, {notificaciones: [aviso], total: 1}); await loaded;
+    view.state.abierto = true;
+    let focused = false;
+    view.state.$refs = {campana: {focus(options) {
+        assert.equal(view.state.notificaciones.length, 1);
+        assert.equal(options.preventScroll, true);
+        focused = true;
+    }}};
+    view.state.descartar(aviso);
+    assert.equal(focused, true);
+    assert.equal(view.state.abierto, true);
+    assert.equal(view.state.total, 0);
+    assert.equal(view.state.notificaciones.length, 0);
+    const markup = fs.readFileSync('templates/componentes/notificaciones_header.html', 'utf8');
+    assert.match(markup, /@click\.stop="descartar\(aviso\)"/);
+    assert.doesNotMatch(markup, /@focusout=/);
+    assert.match(markup, /@click\.outside="abierto = false"/);
+    assert.match(markup, /@keydown\.escape\.prevent\.stop=/);
+});
+
 test('la alerta permanece descartada con el mismo estado y reaparece cuando cambia', async () => {
     const view = setup();
     const aviso = {proveedor: 'Proveedor A', version_estado: 'a1', tiendas: [{dias_inventario: 'Quedan 2d'}]};

@@ -83,6 +83,8 @@ window.notificacionesHeader = (usuarioId = '') => ({
 
     descartar(aviso) {
         if (!aviso.version_estado) return;
+        // El botón desaparecerá: conserva el foco dentro del desplegable antes de retirarlo.
+        this.$refs?.campana?.focus({preventScroll: true});
         this.descartadas = this.descartadas.filter(descartada => descartada.proveedor !== aviso.proveedor);
         this.descartadas.push({proveedor: aviso.proveedor, version: aviso.version_estado});
         this.guardarDescartadas();

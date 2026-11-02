@@ -375,18 +375,24 @@ ASSET_VERSION = (
 
 def asset_url(path: str) -> str:
     """
-    Genera la URL de un recurso estático con su versión.
+    Genera la URL con la versión del despliegue y la revisión del archivo.
 
     Ejemplo:
         asset_url("js/calendario.js")
 
     devuelve:
-        /static/js/calendario.js?v=<version>
+        /static/js/calendario.js?v=<version>-<revision>
     """
 
     path = str(path).lstrip("/")
+    version = ASSET_VERSION
+    try:
+        archivo = os.stat(os.path.join(os.path.dirname(__file__), "static", path))
+        version = f"{version}-{archivo.st_mtime_ns:x}-{archivo.st_size:x}"
+    except OSError:
+        pass
 
-    return f"/static/{path}?v={ASSET_VERSION}"
+    return f"/static/{path}?v={version}"
 
 
 # Hace la función disponible directamente desde cualquier
