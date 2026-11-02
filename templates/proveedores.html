@@ -1,4 +1,178 @@
 {% extends "base.html" %}
+{% block page_styles %}
+<style>
+    #lista-proveedores {
+        transition: opacity .2s ease;
+    }
+
+    #lista-proveedores[aria-busy="true"] {
+        opacity: .45;
+    }
+
+    /* Barra integrada al header. */
+    .proveedores-header-menu {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        width: 100%;
+        order: 3;
+    }
+
+    .proveedores-header-menu .proveedores-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 6px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #e2e8f0;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background .15s, color .15s;
+    }
+
+    .proveedores-header-menu .proveedores-trigger:hover,
+    .proveedores-header-menu .proveedores-trigger[aria-expanded="true"] {
+        background: rgba(255, 255, 255, .12);
+        color: #fff;
+    }
+
+    .proveedores-header-menu .proveedores-trigger:focus-visible {
+        outline: 2px solid #6ee7b7;
+        outline-offset: 2px;
+    }
+
+    .proveedores-header-menu .proveedores-trigger>i {
+        font-size: 8px;
+        opacity: .65;
+        transition: transform .15s;
+    }
+
+    .proveedores-header-menu .proveedores-trigger[aria-expanded="true"]>i {
+        transform: rotate(180deg);
+    }
+
+    /* En móvil, el desplegable se alinea con la barra completa. */
+    .proveedores-header-menu .proveedores-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        z-index: 60;
+        width: min(288px, calc(100vw - 32px));
+        max-height: min(420px, 65vh);
+        overflow-y: auto;
+        padding: 6px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+        color: #334155;
+    }
+
+    .proveedores-header-menu .proveedores-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 11px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #334155;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .proveedores-header-menu .proveedores-item>i {
+        width: 18px;
+        flex-shrink: 0;
+        color: #64748b;
+        text-align: center;
+    }
+
+    .proveedores-header-menu .proveedores-item:hover,
+    .proveedores-header-menu .proveedores-item:focus-visible {
+        background: #f1f5f9;
+        outline: none;
+    }
+
+    .proveedores-header-menu .proveedores-item:disabled {
+        opacity: .5;
+        cursor: default;
+    }
+
+    @media (min-width: 640px) {
+        .proveedores-header-menu .proveedores-menu {
+            position: relative;
+        }
+
+        .proveedores-header-menu .proveedores-trigger {
+            padding: 8px 12px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .proveedores-header-menu {
+            order: 0;
+            width: auto;
+            flex: 1;
+        }
+    }
+</style>
+{% endblock %}
+{% block header_actions %}
+<nav class="proveedores-header-menu" aria-label="Acciones de proveedores" x-data="{ abierto: null }"
+    @click.outside="abierto = null" @click="if ($event.target.closest('[data-accion-proveedores]')) abierto = null"
+    @focusout="if (!$el.contains($event.relatedTarget)) abierto = null" @keydown.stop @keydown.escape.prevent.stop="
+        const anterior = abierto;
+        abierto = null;
+        if (anterior) $refs[anterior].focus();
+    ">
+
+    <div class="proveedores-menu">
+        <button type="button" class="proveedores-trigger" x-ref="archivo" aria-controls="menu-proveedores-archivo"
+            :aria-expanded="abierto === 'archivo'" @click="abierto = abierto === 'archivo' ? null : 'archivo'">
+            Archivo
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-proveedores-archivo" class="proveedores-panel" x-show="abierto === 'archivo'" x-cloak
+            x-transition.opacity.duration.120ms>
+            <button type="button" class="proveedores-item" data-accion-proveedores onclick="abrirModalCrear()">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span>Crear nuevo</span>
+            </button>
+        </div>
+    </div>
+    <div class="proveedores-menu">
+        <button type="button" class="proveedores-trigger" x-ref="opciones" aria-controls="menu-proveedores-opciones"
+            :aria-expanded="abierto === 'opciones'" @click="abierto = abierto === 'opciones' ? null : 'opciones'">
+            Opciones
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-proveedores-opciones" class="proveedores-panel" x-show="abierto === 'opciones'" x-cloak
+            x-transition.opacity.duration.120ms>
+            <button type="button" class="proveedores-item" data-accion-proveedores
+                onclick="document.getElementById('modal-xml-menu').classList.remove('hidden')">
+                <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+                <span>Importar Lista</span>
+            </button>
+            <a href="/proveedores/exportar-xml" class="proveedores-item" data-accion-proveedores>
+                <i class="fa-solid fa-file-export" aria-hidden="true"></i>
+                <span>Exportar Lista</span>
+            </a>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
 {% block content %}
 
 <!-- ENCABEZADO -->
@@ -11,82 +185,150 @@
         <span>Gestión de Proveedores</span>
     </h1>
 
-    <div class="relative">
-        <button type="button" onclick="toggleMenuOpciones()"
-            class="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none">
-            <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
-        </button>
-        <div id="dropdown-opciones"
-            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20">
-            <button type="button" onclick="abrirModalCrear(); toggleMenuOpciones();"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                <i class="fa-solid fa-plus text-blue-600"></i> Crear nuevo
-            </button>
-            <button type="button"
-                onclick="document.getElementById('modal-xml-menu').classList.remove('hidden'); toggleMenuOpciones();"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                <i class="fa-solid fa-file-code text-indigo-600"></i> Cargar Data XML
-            </button>
-            <a href="/proveedores/exportar-xml" onclick="toggleMenuOpciones();"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 block">
-                <i class="fa-solid fa-file-export text-emerald-600"></i> Exportar Data XML
-            </a>
-        </div>
-    </div>
+
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-    <!-- Columna Izquierda: Buscador y Lista Limpia de Proveedores -->
-    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-1">
-        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <i class="fa-solid fa-address-book text-blue-600"></i> Directorio
-        </h3>
-
-        <!-- Buscador de Proveedores -->
-        <div class="mb-4 relative">
-            <div id="contenedor-buscador"
-                class="w-full pl-9 pr-4 py-1.5 border border-slate-300 rounded-xl bg-white shadow-sm flex flex-wrap items-center gap-1.5 min-h-[42px] focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all cursor-text">
-                <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
-
-                <!-- Renderizado dinámico de badges/etiquetas -->
-                <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
-
-                <input autocomplete="off" type="text" id="busqueda_proveedores"
-                    placeholder="Buscar código, descripción, contacto..."
-                    class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
-            </div>
-        </div>
-
-        <!-- Lista de Proveedores -->
-        <div class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
-            {% for p in proveedores %}
-            <!-- Colocar dentro de la lista de proveedores en el div .space-y-2 reemplazando la etiqueta <a ...> -->
-            <a href="?select={{ p.id }}"
-                class="prov-item block p-3 rounded-xl border transition {{ 'border-blue-400 bg-blue-50' if prov_obj and prov_obj.id == p.id else 'border-slate-100 bg-slate-50 hover:bg-blue-50' }}"
-                data-codigo="{{ p.codigo or '' }}" data-nombre="{{ p.nombre or '' }}"
-                data-contacto="{{ p.contacto or '' }}"
-                data-categorias='{{ p.categorias | tojson if p.categorias else "[]" }}'>
-                <p class="font-semibold text-slate-800 text-sm">{{ p.nombre }}</p>
-                <p class="text-xs text-slate-500">Cód: {{ p.codigo or 'N/A' }} • Crédito: {{ p.dias_credito }}d •
-                    Despacho: {{ p.dias_despacho or 3 }}d</p>
-            </a>
-            {% else %}
-            <p class="text-sm text-slate-500 text-center py-4">No se encontraron proveedores.</p>
-            {% endfor %}
+<div>
+    <!-- Buscador de Proveedores -->
+    <div class="mx-auto mb-5 w-full max-w-[720px] relative">
+        <div id="contenedor-buscador"
+            class="w-full pl-9 pr-4 py-1.5 border border-slate-300 rounded-xl bg-white shadow-sm flex flex-wrap items-center gap-1.5 min-h-[42px] focus-within:ring-2 focus-within:ring-slate-500 focus-within:border-slate-500 transition-all cursor-text">
+            <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
+            <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
+            <input autocomplete="off" type="text" id="busqueda_proveedores"
+                placeholder="Escribe un filtro y presiona Enter..."
+                class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
         </div>
     </div>
 
-    <!-- Columna Derecha: Ficha de Datos del Proveedor Seleccionado -->
-    <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2">
 
+    <div class="relative">
+        <div id="cargando-listado-proveedores" hidden role="status" aria-live="polite"
+            class="absolute inset-x-0 top-0 z-10 rounded-t-2xl border border-indigo-100 bg-indigo-50 px-5 py-3 text-sm text-indigo-700 shadow-sm">
+            <div class="flex items-center gap-2">
+                <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700"
+                    aria-hidden="true"></span>
+                <span>Buscando proveedores...</span>
+            </div>
+        </div>
+        <div id="lista-proveedores" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="border-b border-slate-200 bg-slate-900">
+                        <tr>
+                            {% for columna, etiqueta in [('codigo', 'Código'), ('nombre', 'Nombre / Razón Social'),
+                            ('contacto', 'Contacto / Atención'), ('telefono', 'Teléfono'),
+                            ('email', 'Correo Electrónico')] %}
+                            <th scope="col" class="text-left font-semibold text-white"
+                                aria-sort="{{ ('descending' if direccion_proveedores == 'desc' else 'ascending') if orden_proveedores == columna else 'none' }}">
+                                <a data-listado-proveedores
+                                    href="{{ url_listado.include_query_params(page=1, sort=columna, dir='desc' if orden_proveedores == columna and direccion_proveedores == 'asc' else 'asc') }}"
+                                    class="flex items-center gap-2 px-5 py-2.5 hover:bg-slate-800 transition-colors">
+                                    {{ etiqueta }}
+                                    <i class="fa-solid {{ ('fa-sort-down' if direccion_proveedores == 'desc' else 'fa-sort-up') if orden_proveedores == columna else 'fa-sort' }} text-[10px] opacity-70"
+                                        aria-hidden="true"></i>
+                                </a>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for p in proveedores %}
+                        <tr class="fila-proveedor prov-item cursor-pointer transition-colors hover:bg-slate-50 focus-within:bg-blue-50"
+                            data-ficha-url="{{ url_listado.include_query_params(select=p.id) }}"
+                            data-categorias='{{ (p.categorias or []) | tojson }}'>
+                            <td class="px-5 py-3 whitespace-nowrap font-medium text-slate-700">
+                                <a href="{{ url_listado.include_query_params(select=p.id) }}"
+                                    class="rounded focus-visible:outline-blue-500"
+                                    aria-label="Ver ficha de {{ p.nombre }}">{{ p.codigo or '—' }}</a>
+                            </td>
+                            <td class="px-5 py-3 text-slate-800">{{ p.nombre }}</td>
+                            <td class="px-5 py-3 text-slate-600">{{ p.contacto or '—' }}</td>
+                            <td class="px-5 py-3 whitespace-nowrap text-slate-600">{{ p.telefono or '—' }}</td>
+                            <td class="px-5 py-3 text-slate-600 break-all">{{ p.email or '—' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="px-5 py-12 text-center text-sm text-slate-500">No se encontraron
+                                proveedores.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div
+                class="flex flex-col items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row">
+                <p class="text-xs text-slate-500">Página <span class="font-semibold text-slate-700">{{ pagina_actual
+                        }}</span>
+                    de <span class="font-semibold text-slate-700">{{ total_paginas }}</span> · {{ total_proveedores }}
+                    proveedores</p>
+                <nav class="flex items-center gap-1" aria-label="Paginación de proveedores">
+                    {% for destino, icono, texto, habilitado in [(pagina_actual - 1, 'left', 'Página anterior',
+                    pagina_actual > 1), (pagina_actual + 1, 'right', 'Página siguiente', pagina_actual < total_paginas)]
+                        %} {% if loop.index==2 %}<span
+                        class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white"
+                        aria-current="page">{{ pagina_actual }}</span>{% endif %}
+                        {% if habilitado %}
+                        <a data-listado-proveedores href="{{ url_listado.include_query_params(page=destino) }}"
+                            title="{{ texto }}" aria-label="{{ texto }}"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fa-solid fa-chevron-{{ icono }} text-xs" aria-hidden="true"></i>
+                        </a>
+                        {% else %}
+                        <span aria-disabled="true" aria-label="{{ texto }}"
+                            class="inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-lg border border-slate-100 text-slate-300">
+                            <i class="fa-solid fa-chevron-{{ icono }} text-xs" aria-hidden="true"></i>
+                        </span>
+                        {% endif %}
+                        {% endfor %}
+                </nav>
+            </div>
+        </div>
+    </div>
+    <p id="estado-listado-proveedores" class="mt-3 text-sm text-rose-600" role="status" aria-live="polite"></p>
+</div>
+
+<template id="plantilla-carga-ficha-proveedor">
+    <div class="flex items-center justify-between gap-4 border-b border-slate-100 pb-3 mb-4">
+        <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <i class="fa-solid fa-id-card text-blue-600" aria-hidden="true"></i> Ficha de Proveedor
+        </h3>
+        <button type="button" onclick="cerrarFichaProveedor()" aria-label="Cerrar ficha del proveedor"
+            class="w-9 h-9 shrink-0 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700">
+            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+        </button>
+    </div>
+    <div class="mb-3 flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-2 text-sm text-indigo-700"
+        role="status" aria-live="polite">
+        <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700" aria-hidden="true"></span>
+        <span>Cargando ficha del proveedor…</span>
+    </div>
+    <div class="grid grid-cols-1 gap-3 md:grid-cols-2" aria-hidden="true">
+        {% for campo in ['Código', 'Nombre / Razón Social', 'Contacto / Atención', 'Teléfono', 'Correo Electrónico', 'Días Crédito', 'Días Inventario'] %}
+        <div>
+            <p class="mb-1 text-xs font-medium text-slate-600">{{ campo }}</p>
+            <div class="h-9 animate-pulse rounded-xl border border-slate-200 bg-slate-100 motion-reduce:animate-none"></div>
+        </div>
+        {% endfor %}
+        <div>
+            <p class="mb-1 text-xs font-medium text-slate-600">Categorías / Etiquetas</p>
+            <div class="h-7 w-32 animate-pulse rounded-lg bg-slate-100 motion-reduce:animate-none"></div>
+        </div>
+    </div>
+</template>
+
+<dialog id="modal-ficha-proveedor" aria-label="Ficha del proveedor" onclose="alCerrarFichaProveedor()"
+    class="m-auto w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-2xl border-0 bg-white p-5 sm:p-6 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-sm"
+    style="width:calc(100% - 2rem)">
+    <div id="contenido-ficha-proveedor">
         {% if prov_obj %}
-        <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
+        <div class="flex justify-between items-center border-b border-slate-100 pb-3 mb-4">
             <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <i class="fa-solid fa-id-card text-blue-600"></i> Ficha de Proveedor
             </h3>
 
             <div class="flex items-center gap-2">
+
                 <div id="modo_vista">
                     <button type="button" onclick="habilitarEdicion()" title="Editar Proveedor"
                         class="w-9 h-9 flex justify-center items-center bg-slate-50 text-slate-600 hover:bg-slate-200 rounded-lg text-sm transition">
@@ -101,6 +343,11 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
+
+                <button type="button" onclick="cerrarFichaProveedor()" aria-label="Cerrar ficha del proveedor"
+                    class="w-9 h-9 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
             </div>
         </div>
 
@@ -108,6 +355,10 @@
         <!-- FORMULARIO PROVEEDOR (FICHA) -->
         <form id="form-proveedor-ficha" action="/proveedores/guardar" method="POST"
             onsubmit="sincronizarCategoriasSubmit(this)" class="space-y-4">
+            <input type="hidden" name="tags" value="{{ filtros_proveedores | join(',') }}">
+            <input type="hidden" name="page" value="{{ pagina_actual }}">
+            <input type="hidden" name="sort" value="{{ orden_proveedores }}">
+            <input type="hidden" name="dir" value="{{ direccion_proveedores }}">
             <input type="hidden" name="id" value="{{ prov_obj.id }}">
             <input type="hidden" name="categorias"
                 value='{{ prov_obj.categorias | tojson if prov_obj and prov_obj.categorias else "[]" }}'>
@@ -143,7 +394,7 @@
                         <div>
                             <label class="block text-xs font-medium text-slate-600 mb-1 whitespace-nowrap">Días
                                 Crédito</label>
-                            <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito }}" min="0"
+                            <input type="number" name="dias_credito" value="{{ prov_obj.dias_credito or 0 }}" min="0"
                                 max="99" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
                                 disabled
                                 class="w-15 px-2 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
@@ -151,7 +402,7 @@
                         <div>
                             <label class="block text-xs font-medium text-slate-600 mb-1 whitespace-nowrap">Días
                                 Inventario</label>
-                            <input type="number" name="dias_despacho" value="{{ prov_obj.dias_despacho or 3 }}" min="0"
+                            <input type="number" name="dias_despacho" value="{{ prov_obj.get('dias_despacho') if prov_obj.get('dias_despacho') is not none else 3 }}" min="0"
                                 max="99" oninput="if(this.value.length > 2) this.value = this.value.slice(0, 2);"
                                 disabled
                                 class="w-15 px-2 py-2 text-center border border-slate-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-slate-50 disabled:text-slate-500 transition-colors">
@@ -220,99 +471,17 @@
         </form>
 
 
-        <script>
-            function habilitarEdicion() {
-                document.querySelectorAll('#form-proveedor-ficha input:not([type="hidden"])').forEach(inp => inp.disabled = false);
-                document.getElementById('modo_vista').classList.add('hidden');
-                document.getElementById('modo_edicion').classList.remove('hidden');
-                document.getElementById('control-agregar-badge').classList.remove('hidden');
-                document.querySelectorAll('.boton-eliminar-badge').forEach(b => b.classList.remove('hidden'));
-            }
-
-            function cancelarEdicion() {
-                document.querySelectorAll('#form-proveedor-ficha input:not([type="hidden"])').forEach(inp => inp.disabled = true);
-                document.getElementById('modo_vista').classList.remove('hidden');
-                document.getElementById('modo_edicion').classList.add('hidden');
-                document.getElementById('control-agregar-badge').classList.add('hidden');
-                document.querySelectorAll('.boton-eliminar-badge').forEach(b => b.classList.add('hidden'));
-                document.getElementById('form-proveedor-ficha').reset();
-            }
-
-            // Agregar etiqueta dinámicamente al contenedor local del formulario
-            function agregarBadgeFicha(btn) {
-                const seccion = btn.closest('.seccion-badges'); // Localiza la sección actual
-                const input = seccion.querySelector('.input-badge');
-                const valor = input.value.trim();
-                if (!valor) return;
-
-                const contenedor = seccion.querySelector('.contenedor-badges');
-                const msgVacio = seccion.querySelector('.sin-badges-msg');
-                if (msgVacio) msgVacio.remove();
-
-                const span = document.createElement('span');
-                span.className = 'badge-tag inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2.5 py-1 rounded-lg';
-                span.innerHTML = `
-        <span class="nombre-badge">${valor}</span>
-        <button type="button" onclick="eliminarBadgeFicha(this)" class="boton-eliminar-badge text-indigo-400 hover:text-rose-600 transition-colors">
-            <i class="fa-solid fa-xmark text-xs"></i>
-        </button>
-    `;
-                contenedor.appendChild(span);
-                input.value = '';
-                const menuSugerencias = seccion.querySelector('.sugerencias-etiquetas');
-                if (menuSugerencias) menuSugerencias.classList.add('hidden');
-            }
-
-            // Remover la etiqueta seleccionada
-            function eliminarBadgeFicha(btn) {
-                btn.closest('.badge-tag').remove();
-            }
-
-            // Recolectar dinámicamente las etiquetas activas del formulario antes de enviar el POST
-            function sincronizarCategoriasSubmit(formElement) {
-                formElement.querySelectorAll('input').forEach(inp => {
-                    inp.disabled = false;
-                });
-
-                const badges = formElement.querySelectorAll('.nombre-badge');
-                const lista = Array.from(badges).map(b => b.textContent.trim());
-                const inputOculto = formElement.querySelector('input[name="categorias"]');
-                if (inputOculto) {
-                    inputOculto.value = JSON.stringify(lista);
-                }
-            }
-
-            // Permite presionar Enter en el input de agregar badge sin enviar el formulario principal
-            document.addEventListener('DOMContentLoaded', () => {
-                const inputBadge = document.querySelector('#form-proveedor-ficha .input-badge');
-                if (inputBadge) {
-                    inputBadge.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault(); // Previene el submit accidental del formulario
-                            const btnAgregar = inputBadge.nextElementSibling;
-                            if (btnAgregar) agregarBadgeFicha(btnAgregar);
-                        }
-                    });
-                }
-            });
-        </script>
-
-        {% else %}
-        <div class="text-center py-24 text-slate-400">
-            <i class="fa-solid fa-hand-pointer text-4xl mb-3 text-slate-300"></i>
-            <p class="text-base font-medium text-slate-600">Selecciona un proveedor de la lista de la izquierda</p>
-            <p class="text-sm">Para ver su ficha completa, editar su información o eliminarlo del sistema.</p>
-        </div>
         {% endif %}
     </div>
-</div>
+</dialog>
+
 {% endblock %}
 
 {% block modals %}
 <!-- Modal para Crear/Editar Proveedor -->
 <div id="modal-proveedor"
     class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
-    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 shadow-xl border border-slate-100 max-h-[90vh] overflow-y-auto">
         <!-- Título del modal -->
         <h3 id="titulo-modal-prov" class="text-lg font-bold text-slate-800 mb-4">Crear Nuevo Proveedor</h3>
 
@@ -433,134 +602,151 @@
     </div>
 </div>
 
+<script id="datos-etiquetas-proveedores" type="application/json">{{ etiquetas_proveedores | tojson }}</script>
 <script>
 
-    let etiquetasFiltro = [];
 
-    // Cargar estado previo de búsqueda desde sessionStorage
+    function habilitarEdicion() {
+        const form = document.getElementById('form-proveedor-ficha');
+        if (!form) return;
+        form.categoriasAntesDeEditar = form.querySelector('.contenedor-badges').innerHTML;
+        form.querySelectorAll('input:not([type="hidden"])').forEach(inp => inp.disabled = false);
+        document.getElementById('modo_vista').classList.add('hidden');
+        document.getElementById('modo_edicion').classList.remove('hidden');
+        document.getElementById('control-agregar-badge').classList.remove('hidden');
+        form.querySelectorAll('.boton-eliminar-badge').forEach(b => b.classList.remove('hidden'));
+    }
+
+    function cancelarEdicion() {
+        const form = document.getElementById('form-proveedor-ficha');
+        if (!form) return;
+        if (form.categoriasAntesDeEditar !== undefined) {
+            form.querySelector('.contenedor-badges').innerHTML = form.categoriasAntesDeEditar;
+            delete form.categoriasAntesDeEditar;
+        }
+        form.querySelectorAll('input:not([type="hidden"])').forEach(inp => inp.disabled = true);
+        document.getElementById('modo_vista').classList.remove('hidden');
+        document.getElementById('modo_edicion').classList.add('hidden');
+        document.getElementById('control-agregar-badge').classList.add('hidden');
+        form.querySelectorAll('.boton-eliminar-badge').forEach(b => b.classList.add('hidden'));
+        form.reset();
+    }
+
+    // Agregar etiqueta dinámicamente al contenedor local del formulario
+    function agregarBadgeFicha(btn) {
+        const seccion = btn.closest('.seccion-badges'); // Localiza la sección actual
+        const input = seccion.querySelector('.input-badge');
+        const valor = input.value.trim();
+        if (!valor) return;
+
+        const contenedor = seccion.querySelector('.contenedor-badges');
+        if (Array.from(contenedor.querySelectorAll('.nombre-badge'))
+            .some(badge => normalizarTexto(badge.textContent) === normalizarTexto(valor))) {
+            input.value = '';
+            seccion.querySelector('.sugerencias-etiquetas')?.classList.add('hidden');
+            return;
+        }
+        const msgVacio = seccion.querySelector('.sin-badges-msg');
+        if (msgVacio) msgVacio.remove();
+
+        const span = document.createElement('span');
+        span.className = 'badge-tag inline-flex items-center gap-1.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2.5 py-1 rounded-lg';
+        span.innerHTML = `
+        <span class="nombre-badge"></span>
+        <button type="button" onclick="eliminarBadgeFicha(this)" class="boton-eliminar-badge text-indigo-400 hover:text-rose-600 transition-colors">
+            <i class="fa-solid fa-xmark text-xs"></i>
+        </button>
+    `;
+        span.querySelector('.nombre-badge').textContent = valor;
+        contenedor.appendChild(span);
+        input.value = '';
+        const menuSugerencias = seccion.querySelector('.sugerencias-etiquetas');
+        if (menuSugerencias) menuSugerencias.classList.add('hidden');
+    }
+
+    // Remover la etiqueta seleccionada
+    function eliminarBadgeFicha(btn) {
+        const contenedor = btn.closest('.contenedor-badges');
+        btn.closest('.badge-tag').remove();
+        if (!contenedor.querySelector('.badge-tag')) {
+            contenedor.innerHTML = '<p class="sin-badges-msg text-xs text-slate-400 italic">Sin categorías asignadas.</p>';
+        }
+    }
+
+    // Recolectar dinámicamente las etiquetas activas del formulario antes de enviar el POST
+    function sincronizarCategoriasSubmit(formElement) {
+        formElement.querySelectorAll('input').forEach(inp => {
+            inp.disabled = false;
+        });
+
+        const badges = formElement.querySelectorAll('.nombre-badge');
+        const lista = Array.from(badges).map(b => b.textContent.trim());
+        const inputOculto = formElement.querySelector('input[name="categorias"]');
+        if (inputOculto) {
+            inputOculto.value = JSON.stringify(lista);
+        }
+    }
+
+    document.addEventListener('keydown', evento => {
+        if (evento.key !== 'Enter' || evento.isComposing || !evento.target.matches('.input-badge')) return;
+        evento.preventDefault();
+        const boton = evento.target.closest('.seccion-badges').querySelector('button[onclick="agregarBadgeFicha(this)"]');
+        if (boton) agregarBadgeFicha(boton);
+    });
+    let etiquetasFiltro = (new URLSearchParams(window.location.search).get('tags') || '').split(',').filter(Boolean);
+    const etiquetasProveedoresDisponibles = JSON.parse(document.getElementById('datos-etiquetas-proveedores').textContent);
+
     function cargarEstadoBusqueda() {
-        const textoGuardado = sessionStorage.getItem('prov_busqueda_texto') || '';
-        const etiquetasGuardadas = sessionStorage.getItem('prov_busqueda_etiquetas');
-
-        if (etiquetasGuardadas) {
-            try {
-                etiquetasFiltro = JSON.parse(etiquetasGuardadas);
-            } catch (e) {
-                etiquetasFiltro = [];
-            }
+        const url = new URL(window.location.href);
+        const anterior = (url.searchParams.get('q') || '').trim();
+        if (anterior && !etiquetasFiltro.some(f => f.toLowerCase() === anterior.toLowerCase())) etiquetasFiltro.push(anterior);
+        if (anterior) {
+            url.searchParams.delete('q');
+            url.searchParams.set('tags', etiquetasFiltro.join(','));
+            window.history.replaceState({}, '', url);
         }
+        renderizarEtiquetas();
+    }
 
-        const busquedaInput = document.getElementById('busqueda_proveedores');
-        if (busquedaInput) {
-            busquedaInput.value = textoGuardado;
-        }
-
+    function agregarEtiqueta(tipo, valor) {
+        const termino = valor.trim();
+        if (!termino || etiquetasFiltro.some(f => f.toLowerCase() === termino.toLowerCase())) return;
+        etiquetasFiltro.push(termino);
+        document.getElementById('busqueda_proveedores').value = '';
         renderizarEtiquetas();
         filtrarProveedores();
     }
 
-    // Guardar el estado actual en sessionStorage
-    function guardarEstadoBusqueda() {
-        const busquedaInput = document.getElementById('busqueda_proveedores');
-        const valorInput = busquedaInput ? busquedaInput.value : '';
-
-        sessionStorage.setItem('prov_busqueda_texto', valorInput);
-        sessionStorage.setItem('prov_busqueda_etiquetas', JSON.stringify(etiquetasFiltro));
-    }
-
-    // Agregar etiqueta dinámica
-    function agregarEtiqueta(tipo, valor) {
-        const existe = etiquetasFiltro.some(f => f.tipo === tipo && f.valor.toLowerCase() === valor.toLowerCase());
-        if (!existe) {
-            etiquetasFiltro.push({ tipo, valor });
-            guardarEstadoBusqueda();
-            renderizarEtiquetas();
-            filtrarProveedores();
-        }
-    }
-
-    // Remover etiqueta individual
     function removerEtiqueta(index) {
         etiquetasFiltro.splice(index, 1);
-        guardarEstadoBusqueda();
         renderizarEtiquetas();
         filtrarProveedores();
     }
 
-    // Renderizar badges en el buscador
     function renderizarEtiquetas() {
         const contenedor = document.getElementById('lista-etiquetas');
-        if (!contenedor) return;
-
         contenedor.innerHTML = '';
-        etiquetasFiltro.forEach((f, idx) => {
+        etiquetasFiltro.forEach((valor, indice) => {
             const badge = document.createElement('span');
             badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
-            badge.innerHTML = `
-            <span class="text-[10px] text-blue-500 uppercase font-bold">${f.tipo}:</span>
-            <span>${f.valor}</span>
-            <button type="button" onclick="removerEtiqueta(${idx})" class="hover:text-rose-600 ml-0.5 focus:outline-none">
-                <i class="fa-solid fa-xmark text-xs"></i>
-            </button>
-        `;
+            badge.innerHTML = `<span></span><button type="button" onclick="removerEtiqueta(${indice})" class="hover:text-rose-600 ml-0.5 focus:outline-none"><i class="fa-solid fa-xmark text-xs" aria-hidden="true"></i></button>`;
+            badge.querySelector('span').textContent = valor;
             contenedor.appendChild(badge);
         });
     }
 
     function normalizarTexto(texto) {
-        if (!texto) return '';
-        return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        return String(texto || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
     }
 
-    // Filtrar la lista del directorio en tiempo real por datos y etiquetas/categorías
     function filtrarProveedores() {
-        const busquedaInput = document.getElementById('busqueda_proveedores');
-        const textoInput = normalizarTexto(busquedaInput ? busquedaInput.value : '');
-        const elementos = document.querySelectorAll('.prov-item');
-
-        elementos.forEach(item => {
-            const codigo = normalizarTexto(item.getAttribute('data-codigo'));
-            const nombre = normalizarTexto(item.getAttribute('data-nombre'));
-            const contacto = normalizarTexto(item.getAttribute('data-contacto'));
-
-            let categorias = [];
-            try {
-                categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
-            } catch (e) {
-                categorias = [];
-            }
-            const textoCategorias = normalizarTexto(categorias.join(' '));
-
-            const contenidoCompleto = `${codigo} ${nombre} ${contacto} ${textoCategorias}`;
-
-            const matchTexto = textoInput === '' || contenidoCompleto.includes(textoInput);
-
-            const matchEtiquetas = etiquetasFiltro.every(f => {
-                const val = normalizarTexto(f.valor);
-                return contenidoCompleto.includes(val);
-            });
-
-            if (matchTexto && matchEtiquetas) {
-                item.style.display = '';
-            } else {
-                item.style.display = 'none';
-            }
-        });
+        const url = new URL(window.location.href);
+        url.searchParams.delete('select');
+        url.searchParams.delete('q');
+        url.searchParams.set('page', '1');
+        url.searchParams.set('tags', etiquetasFiltro.join(','));
+        cargarListadoProveedores(url);
     }
-
-    // Alternar visibilidad del menú de tres puntos
-    function toggleMenuOpciones() {
-        const dropdown = document.getElementById('dropdown-opciones');
-        if (dropdown) dropdown.classList.toggle('hidden');
-    }
-
-    // Cerrar menú desplegable al hacer clic fuera
-    document.addEventListener('click', (e) => {
-        const dropdown = document.getElementById('dropdown-opciones');
-        if (dropdown && !dropdown.contains(e.target) && !e.target.closest('button[onclick="toggleMenuOpciones()"]')) {
-            dropdown.classList.add('hidden');
-        }
-    });
 
     // Abrir Modal para crear nuevo proveedor
     function abrirModalCrear() {
@@ -601,7 +787,7 @@
 
     // Extrae todas las etiquetas únicas creadas en los proveedores existentes
     function obtenerTodasLasEtiquetasExistentes() {
-        const etiquetasSet = new Set();
+        const etiquetasSet = new Set(etiquetasProveedoresDisponibles);
         document.querySelectorAll('.prov-item').forEach(item => {
             try {
                 const categorias = JSON.parse(item.getAttribute('data-categorias') || '[]');
@@ -678,27 +864,26 @@
 
         if (busquedaInput) {
             busquedaInput.addEventListener('keydown', (e) => {
+                if (e.isComposing) return;
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     if (busquedaInput.value.trim() !== '') {
                         agregarEtiqueta('Buscar', busquedaInput.value.trim());
                         busquedaInput.value = '';
-                        guardarEstadoBusqueda();
+
                     }
                 } else if (e.key === 'Backspace' && busquedaInput.value === '' && etiquetasFiltro.length > 0) {
                     removerEtiqueta(etiquetasFiltro.length - 1);
                 }
             });
 
-            busquedaInput.addEventListener('input', () => {
-                guardarEstadoBusqueda();
-                filtrarProveedores();
-            });
+
         }
 
-        // Restaurar el texto y etiquetas del buscador guardados en la sesión
+        // Restaurar los filtros confirmados de la URL
         cargarEstadoBusqueda();
     });
 </script>
+<script src="{{ asset_url('js/proveedores-listado.js') }}" defer></script>
 
 {% endblock %}

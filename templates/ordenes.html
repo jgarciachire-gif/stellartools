@@ -1,7 +1,173 @@
 {% extends "base.html" %}
+{% block page_styles %}
+<style>
+    /* Barra integrada al header. */
+    .ordenes-header-menu {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        width: 100%;
+        order: 3;
+    }
+
+    .ordenes-header-menu .ordenes-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 6px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #e2e8f0;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background .15s, color .15s;
+    }
+
+    .ordenes-header-menu .ordenes-trigger:hover,
+    .ordenes-header-menu .ordenes-trigger[aria-expanded="true"] {
+        background: rgba(255, 255, 255, .12);
+        color: #fff;
+    }
+
+    .ordenes-header-menu .ordenes-trigger:focus-visible {
+        outline: 2px solid #6ee7b7;
+        outline-offset: 2px;
+    }
+
+    .ordenes-header-menu .ordenes-trigger>i {
+        font-size: 8px;
+        opacity: .65;
+        transition: transform .15s;
+    }
+
+    .ordenes-header-menu .ordenes-trigger[aria-expanded="true"]>i {
+        transform: rotate(180deg);
+    }
+
+    /* En móvil, el desplegable se alinea con la barra completa. */
+    .ordenes-header-menu .ordenes-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        z-index: 60;
+        width: min(288px, calc(100vw - 32px));
+        max-height: min(420px, 65vh);
+        overflow-y: auto;
+        padding: 6px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+        color: #334155;
+    }
+
+    .ordenes-header-menu .ordenes-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 11px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #334155;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .ordenes-header-menu .ordenes-item>i {
+        width: 18px;
+        flex-shrink: 0;
+        color: #64748b;
+        text-align: center;
+    }
+
+    .ordenes-header-menu .ordenes-item:hover,
+    .ordenes-header-menu .ordenes-item:focus-visible {
+        background: #f1f5f9;
+        outline: none;
+    }
+
+    .ordenes-header-menu .ordenes-item:disabled {
+        opacity: .5;
+        cursor: default;
+    }
+
+    @media (min-width: 640px) {
+        .ordenes-header-menu .ordenes-menu {
+            position: relative;
+        }
+
+        .ordenes-header-menu .ordenes-trigger {
+            padding: 8px 12px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .ordenes-header-menu {
+            order: 0;
+            width: auto;
+            flex: 1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+<nav class="ordenes-header-menu" aria-label="Acciones de órdenes" x-data="{ abierto: null }"
+    @click.outside="abierto = null" @click="if ($event.target.closest('[data-accion-ordenes]')) abierto = null"
+    @focusout="if (!$el.contains($event.relatedTarget)) abierto = null" @keydown.stop @keydown.escape.prevent.stop="
+        const anterior = abierto;
+        abierto = null;
+        if (anterior) $refs[anterior].focus();
+    ">
+
+    <div class="ordenes-menu">
+        <button type="button" class="ordenes-trigger" x-ref="archivo" aria-controls="menu-ordenes-archivo"
+            :aria-expanded="abierto === 'archivo'" @click="abierto = abierto === 'archivo' ? null : 'archivo'">
+            Archivo
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-ordenes-archivo" class="ordenes-panel" x-show="abierto === 'archivo'" x-cloak
+            x-transition.opacity.duration.120ms>
+            <button type="button" class="ordenes-item" data-accion-ordenes onclick="abrirModalCargarOC()">
+                <i class="fa-solid fa-file-pdf" aria-hidden="true"></i>
+                <span>Cargar Órdenes (PDF)</span>
+            </button>
+            <button type="button" class="ordenes-item" data-accion-ordenes onclick="abrirModalCargarXML()">
+                <i class="fa-solid fa-file-code" aria-hidden="true"></i>
+                <span>Cargar Recepciones (XML)</span>
+            </button>
+        </div>
+    </div>
+    <div class="ordenes-menu">
+        <button type="button" class="ordenes-trigger" x-ref="documentos" aria-controls="menu-ordenes-documentos"
+            :aria-expanded="abierto === 'documentos'" @click="abierto = abierto === 'documentos' ? null : 'documentos'">
+            Opciones
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-ordenes-documentos" class="ordenes-panel" x-show="abierto === 'documentos'" x-cloak
+            x-transition.opacity.duration.120ms>
+            <button type="button" id="btn-activar-seleccion" class="ordenes-item" data-accion-ordenes>
+                <i class="fa-solid fa-list-check" aria-hidden="true"></i>
+                <span>Selección múltiple</span>
+            </button>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="max-w-[1800px] mx-auto space-y-6">
-    <!-- Encabezado con título, buscador unificado estilo Odoo y menú de opciones -->
+    <!-- Encabezado con título y buscador unificado estilo Odoo -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 relative z-10">
         <h1 class="text-2xl font-bold text-slate-800 flex items-center gap-3">
             <div
@@ -62,35 +228,6 @@
                         <i class="fa-solid fa-calendar-days text-xs"></i>
                     </button>
                     <input type="date" id="filtro-fecha" class="sr-only">
-                </div>
-            </div>
-
-            <!-- Botón Menú 3 Puntos -->
-            <div class="relative">
-                <button id="btn-menu-opciones"
-                    class="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none">
-                    <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
-                </button>
-
-                <div id="dropdown-opciones"
-                    class="hidden absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl border border-slate-200 z-50">
-                    <!-- Opción para Cargar Órdenes (PDF) -->
-                    <button type="button" onclick="abrirModalCargarOC();"
-                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
-                        <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes (PDF)
-                    </button>
-
-                    <!-- Opción para Cargar Recepciones (XML) -->
-                    <button type="button" onclick="abrirModalCargarXML();"
-                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-indigo-600 flex items-center gap-2 transition-colors">
-                        <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML)
-                    </button>
-
-                    <div class="border-t border-slate-100 my-1"></div>
-                    <button id="btn-activar-seleccion"
-                        class="w-full text-left px-4 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-50 hover:text-blue-600 rounded-xl flex items-center gap-2 transition-colors">
-                        <i class="fa-solid fa-list-check"></i> Selección Múltiple
-                    </button>
                 </div>
             </div>
         </div>
@@ -605,12 +742,6 @@
 
     document.addEventListener('DOMContentLoaded', () => {
 
-        const btnMenuOpciones =
-            document.getElementById('btn-menu-opciones');
-
-        const dropdownOpciones =
-            document.getElementById('dropdown-opciones');
-
         const btnActivarSeleccion =
             document.getElementById('btn-activar-seleccion');
 
@@ -634,21 +765,6 @@
 
         const rows =
             document.querySelectorAll('.row-orden');
-
-
-        // ========================================================
-        // MENÚ DE OPCIONES
-        // ========================================================
-
-        if (btnMenuOpciones) {
-            btnMenuOpciones.addEventListener('click', (e) => {
-                e.stopPropagation();
-
-                if (dropdownOpciones) {
-                    dropdownOpciones.classList.toggle('hidden');
-                }
-            });
-        }
 
 
         // ========================================================
@@ -787,13 +903,7 @@
                     col.classList.remove('hidden');
                 });
 
-                if (btnMenuOpciones) {
-                    btnMenuOpciones.classList.add('hidden');
-                }
-
-                if (dropdownOpciones) {
-                    dropdownOpciones.classList.add('hidden');
-                }
+                btnActivarSeleccion.disabled = true;
 
                 actualizarEstadoSeleccion();
 
@@ -805,9 +915,7 @@
                     col.classList.add('hidden');
                 });
 
-                if (btnMenuOpciones) {
-                    btnMenuOpciones.classList.remove('hidden');
-                }
+                btnActivarSeleccion.disabled = false;
 
                 // Al salir del modo selección se limpia todo.
                 checkboxes.forEach(chk => {
@@ -1120,7 +1228,6 @@
     }
 
     function abrirModalCargarXML() {
-        xmlElemento('dropdown-opciones')?.classList.add('hidden');
         xmlElemento('input-xml-modal').onchange = actualizarBotonXML;
         actualizarBotonXML();
         xmlElemento('modal-cargar-xml').classList.remove('hidden');

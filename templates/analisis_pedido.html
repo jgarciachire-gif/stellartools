@@ -541,48 +541,36 @@
         </div>
     </div>
 
-    <!-- Encabezado visible únicamente al ejecutar la comparación. -->
-    <div id="panel-consultas-pedido" class="hidden bg-white p-4 rounded-2xl border border-slate-200 shadow-xs mb-6">
-
-        <h3 class="text-sm font-bold text-slate-800">
-            <i class="fa-solid fa-chart-column text-violet-600 mr-1"></i>
-            Comparación de períodos
-        </h3>
-
-        <p class="text-xs text-slate-500 mt-1">
-            Resultados de los períodos seleccionados en Estadísticas.
-        </p>
-
-        <!-- Conserva los mensajes compartidos del Kardex. -->
-        <p id="kardex-mensaje" class="text-xs text-slate-500 mt-3" role="status">
-        </p>
-    </div>
-
-
     <!-- Resultados comparativos: no modifican los sugeridos actuales -->
     <div id="kardex-comparacion-contenedor"
-        class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl">
+        class="hidden relative mt-4 overflow-x-auto border border-slate-200 rounded-xl bg-white"
+        role="region" aria-labelledby="titulo-comparacion-periodos">
+
+        <div class="flex items-center justify-between gap-3 border-b border-slate-200 px-3 py-2.5">
+            <h3 id="titulo-comparacion-periodos" class="flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <i class="fa-solid fa-chart-column text-violet-600" aria-hidden="true"></i>
+                Comparación de períodos
+            </h3>
+            <button type="button" onclick="cerrarResultadosKardex('kardex-comparacion-contenedor')"
+                class="relative z-30 inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-rose-50 hover:text-rose-600"
+                aria-label="Cerrar comparación de períodos">
+                <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                <span>Cerrar</span>
+            </button>
+        </div>
 
         <!-- Indicador de carga exclusivo del comparativo de períodos -->
         <div id="cargando-comparacion-periodos"
-            class="hidden absolute inset-0 z-20 flex-col items-center justify-center gap-3 bg-white/90" role="status"
+            class="hidden min-h-[140px] flex-col items-center justify-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-6 text-center" role="status"
             aria-live="polite">
 
-            <i class="fa-solid fa-spinner fa-spin text-3xl text-teal-600"></i>
+            <span class="h-8 w-8 shrink-0 animate-spin rounded-full border-4 border-slate-200 border-t-teal-600"
+                aria-hidden="true"></span>
 
             <span class="text-sm font-semibold text-slate-700">
                 Actualizando comparación de períodos...
             </span>
         </div>
-
-        <!-- Cierra el encabezado y los resultados de la comparación. -->
-        <button type="button" onclick="cerrarResultadosKardex('kardex-comparacion-contenedor')"
-            class="absolute right-2 top-2 z-30 inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 shadow-sm transition hover:bg-rose-50 hover:text-rose-600"
-            aria-label="Cerrar comparación de períodos">
-            <i class="fa-solid fa-xmark" aria-hidden="true"></i>
-            <span>Cerrar</span>
-        </button>
-
 
         <!-- Mensaje exclusivo de la comparación de períodos -->
         <p id="kardex-comparacion-mensaje" class="hidden px-3 py-2 text-xs text-slate-600" role="status"
@@ -1572,6 +1560,14 @@
         let importandoProductosProveedor = false;
         let focoAntesModalProductos = null;
 
+        function mostrarCargaClasificacionProductos(cargando) {
+            document.getElementById('estado-carga-clasificacion-productos')
+                .classList.toggle('hidden', !cargando);
+            const seccion = document.getElementById('sec-filtros-clasificacion');
+            seccion.setAttribute('aria-busy', String(cargando));
+            seccion.inert = cargando || document.getElementById('btn_importar_productos').disabled;
+        }
+
         function abrirModalProductosProveedor() {
             const proveedor = document.getElementById(
                 'proveedor_id_analisis'
@@ -1583,14 +1579,6 @@
                 mostrarNotificacion({
                     tipo: 'info',
                     mensaje: 'Selecciona primero un proveedor.'
-                });
-                return;
-            }
-
-            if (boton.disabled) {
-                mostrarNotificacion({
-                    tipo: 'info',
-                    mensaje: 'Espera a que carguen los filtros del proveedor.'
                 });
                 return;
             }
@@ -1610,7 +1598,8 @@
             modal.classList.remove('hidden');
             modal.classList.add('flex');
 
-            document.getElementById('buscar_depto_analisis').focus();
+            document.getElementById(boton.disabled
+                ? 'btn-cerrar-productos-proveedor' : 'buscar_depto_analisis').focus();
         }
 
         function cerrarModalProductosProveedor() {
@@ -1658,7 +1647,7 @@
                 ...evento.currentTarget.querySelectorAll(
                     'button:not(:disabled), input:not(:disabled):not([type="hidden"])'
                 )
-            ].filter(el => el.getClientRects().length);
+            ].filter(el => el.getClientRects().length && !el.closest('[inert]'));
 
             if (!controles.length) {
                 evento.preventDefault();
@@ -1730,6 +1719,7 @@
 
         // --- SELECCIÓN LIMPIA Y CARGA AUTOMÁTICA DEL PROVEEDOR DESDE LA BD ---
         async function seleccionarProveedorAnalisis(id, nombre) {
+            const seleccion = ++solicitudClasificacionProductos;
             const inputBuscar = document.getElementById('buscar_proveedor_analisis'); // Campo de búsqueda visible
             const inputId = document.getElementById('proveedor_id_analisis'); // Campo de ID oculto
 
@@ -1761,6 +1751,8 @@
                 if (secFiltros) secFiltros.classList.add('opacity-50', 'pointer-events-none');
                 if (inpDepto) inpDepto.disabled = true;
                 if (btnImportar) btnImportar.disabled = true;
+                datosClasificacionAnalisis = [];
+                mostrarCargaClasificacionProductos(false);
 
                 if (document.getElementById('prov_contacto')) document.getElementById('prov_contacto').value = '-';
                 if (document.getElementById('prov_telefono')) document.getElementById('prov_telefono').value = '-';
@@ -1776,6 +1768,9 @@
             if (secFiltros) secFiltros.classList.add('opacity-50', 'pointer-events-none');
             if (inpDepto) inpDepto.disabled = true;
             if (btnImportar) btnImportar.disabled = true;
+            datosClasificacionAnalisis = [];
+            mostrarCargaClasificacionProductos(true);
+            abrirModalProductosProveedor();
 
             try {
                 // Consulta asíncrona a la API de FastAPI
@@ -1783,7 +1778,7 @@
                 if (respuesta.ok) {
                     const data = await respuesta.json();
                     // Evita mostrar información de una selección anterior.
-                    if (String(inputId.value) !== String(id)) return;
+                    if (seleccion !== solicitudClasificacionProductos || String(inputId.value) !== String(id)) return;
 
                     // Vuelca los datos obtenidos de Supabase a los inputs del HTML
                     const elemContacto = document.getElementById('prov_contacto');
@@ -1818,14 +1813,9 @@
                 console.error("Error al obtener los datos del proveedor:", error);
             }
 
-            if (String(inputId.value) !== String(id)) return;
+            if (seleccion !== solicitudClasificacionProductos || String(inputId.value) !== String(id)) return;
 
-            // Abre el modal únicamente cuando los filtros estén preparados.
-            const preparado = await cargarClasificacionProveedor(id);
-
-            if (preparado && String(inputId.value) === String(id)) {
-                abrirModalProductosProveedor();
-            }
+            await cargarClasificacionProveedor(id);
         }
 
         function limpiarProveedorAnalisis() {
@@ -1879,6 +1869,7 @@
 
             boton.disabled = true;
             seccion.classList.add('opacity-50', 'pointer-events-none');
+            mostrarCargaClasificacionProductos(true);
 
             try {
                 const res = await fetch(
@@ -1925,6 +1916,10 @@
                 }
 
                 return false;
+            } finally {
+                if (solicitud === solicitudClasificacionProductos) {
+                    mostrarCargaClasificacionProductos(false);
+                }
             }
         }
 
@@ -3660,26 +3655,10 @@ ${nodosProductosXML.join('\n')}
 
 
         function mostrarMensajeKardex(mensaje, error = false) {
-            const elemento = document.getElementById('kardex-mensaje');
-
-            if (elemento) {
-                elemento.textContent = mensaje;
-                elemento.className = error
-                    ? 'text-xs text-rose-600 mt-3'
-                    : 'text-xs text-slate-500 mt-3';
-            }
-
-            const panelOculto = document.getElementById(
-                'panel-consultas-pedido'
-            )?.classList.contains('hidden');
-
-            // Permite informar errores sin abrir el contenedor.
-            if (error && panelOculto) {
-                mostrarNotificacion({
-                    tipo: 'error',
-                    mensaje
-                });
-            }
+            mostrarNotificacion({
+                tipo: error ? 'error' : 'info',
+                mensaje
+            });
         }
 
 
@@ -3700,6 +3679,65 @@ ${nodosProductosXML.join('\n')}
 
             indicador.classList.toggle('hidden', !mostrar);
             indicador.classList.toggle('flex', mostrar);
+        }
+
+        let animacionAlturaComparacion = null;
+        let animacionesContenidoComparacion = [];
+        let revisionAlturaComparacion = 0;
+
+        async function ajustarAlturaComparacion(actualizar, mantenerAltura = false) {
+            const panel = document.getElementById('kardex-comparacion-contenedor');
+            const revision = ++revisionAlturaComparacion;
+            // Parte de la altura visible, incluso si la transición anterior sigue activa.
+            const alturaInicial = panel.getBoundingClientRect().height;
+            animacionAlturaComparacion?.cancel();
+            animacionAlturaComparacion = null;
+            animacionesContenidoComparacion.forEach(animacion => animacion.cancel());
+            animacionesContenidoComparacion = [];
+
+            actualizar();
+            panel.style.height = 'auto';
+            const alturaFinal = panel.getBoundingClientRect().height;
+            panel.style.height = `${alturaInicial}px`;
+            panel.style.overflowY = 'hidden';
+
+            const terminar = () => {
+                if (revision !== revisionAlturaComparacion) return;
+                panel.style.height = mantenerAltura ? `${alturaFinal}px` : '';
+                if (!mantenerAltura) {
+                    panel.style.overflowY = '';
+                }
+                animacionAlturaComparacion?.cancel();
+                animacionAlturaComparacion = null;
+            };
+
+            // Conserva un fotograma con la altura de origen antes de expandir o contraer.
+            await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            if (revision !== revisionAlturaComparacion) return;
+
+            // Da tiempo a percibir el cambio sin acelerar los listados más altos.
+            const movimientoReducido = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            const duracion = movimientoReducido ? 180
+                : Math.min(1000, 750 + Math.abs(alturaFinal - alturaInicial) * .2);
+            animacionesContenidoComparacion = Array.from(panel.children)
+                .slice(1)
+                .filter(elemento => elemento.getClientRects().length && elemento.textContent.trim())
+                .map(elemento => elemento.animate(
+                    [{ opacity: 0 }, { opacity: 1 }],
+                    { duration: movimientoReducido ? 180 : 320, delay: movimientoReducido ? 0 : 100,
+                        easing: 'ease-out', fill: 'backwards' }
+                ));
+
+            if (Math.abs(alturaInicial - alturaFinal) < 1) {
+                terminar();
+                return;
+            }
+
+            animacionAlturaComparacion = panel.animate(
+                [{ height: `${alturaInicial}px` }, { height: `${alturaFinal}px` }],
+                { duration: duracion, easing: 'cubic-bezier(0.4, 0, 0.15, 1)', fill: 'both' }
+            );
+            animacionAlturaComparacion.onfinish = terminar;
         }
 
 
@@ -3969,16 +4007,22 @@ ${nodosProductosXML.join('\n')}
 
 
         function cerrarResultadosKardex(idContenedor) {
+            if (idContenedor === 'kardex-comparacion-contenedor') {
+                revisionAlturaComparacion++;
+                animacionAlturaComparacion?.cancel();
+                animacionAlturaComparacion = null;
+                animacionesContenidoComparacion.forEach(animacion => animacion.cancel());
+                animacionesContenidoComparacion = [];
+                const panel = document.getElementById(idContenedor);
+                panel.style.height = '';
+                panel.style.overflowY = '';
+            }
+
             document.getElementById(
                 idContenedor
             )?.classList.add('hidden');
 
             if (idContenedor === 'kardex-comparacion-contenedor') {
-                // Oculta también el encabezado y los calendarios XML.
-                document.getElementById(
-                    'panel-consultas-pedido'
-                )?.classList.add('hidden');
-
                 // Devuelve el foco al acceso del header.
                 document.getElementById(
                     'btn-menu-estadisticas'
@@ -4946,25 +4990,19 @@ ${nodosProductosXML.join('\n')}
 
             boton.disabled = true;
 
-            // Muestra el encabezado y los resultados al iniciar la consulta.
-            document.getElementById(
-                'panel-consultas-pedido'
-            )?.classList.remove('hidden');
+            await ajustarAlturaComparacion(() => {
+                panel.classList.remove('hidden');
+                cabecera.replaceChildren();
+                tbody.replaceChildren();
+                etiqueta.textContent = '';
 
-            panel.classList.remove('hidden');
-            cabecera.replaceChildren();
-            tbody.replaceChildren();
-            etiqueta.textContent = '';
+                mostrarEstadoPanelKardex(
+                    'kardex-comparacion-mensaje',
+                    'Validando meses e intervalos...'
+                );
 
-            mostrarEstadoPanelKardex(
-                'kardex-comparacion-mensaje',
-                'Validando meses e intervalos...'
-            );
-
-            alternarCargaPanelKardex(
-                'cargando-comparacion-periodos',
-                true
-            );
+                alternarCargaPanelKardex('cargando-comparacion-periodos', true);
+            }, true);
 
             try {
                 // Revalida la disponibilidad en la tienda actual.
@@ -5262,11 +5300,9 @@ ${nodosProductosXML.join('\n')}
                 ultimaConfiguracionPeriodosKardex =
                     periodos.map(p => ({ ...p }));
 
-                mostrarEstadoPanelKardex(
-                    'kardex-comparacion-mensaje',
-                    `Comparación completada: ${codigos.length} productos · ` +
-                    `${sede} · ${periodos.length} mes(es).`
-                );
+                const mensajeComparacion = document.getElementById('kardex-comparacion-mensaje');
+                mensajeComparacion.textContent = '';
+                mensajeComparacion.classList.add('hidden');
 
             } catch (error) {
                 cabecera.replaceChildren();
@@ -5279,10 +5315,9 @@ ${nodosProductosXML.join('\n')}
                 );
 
             } finally {
-                alternarCargaPanelKardex(
-                    'cargando-comparacion-periodos',
-                    false
-                );
+                await ajustarAlturaComparacion(() => {
+                    alternarCargaPanelKardex('cargando-comparacion-periodos', false);
+                });
 
                 boton.disabled = false;
             }
@@ -5317,6 +5352,16 @@ ${nodosProductosXML.join('\n')}
                     <i class="fa-solid fa-xmark" aria-hidden="true"></i>
                 </button>
             </header>
+
+            <div id="estado-carga-clasificacion-productos"
+                class="hidden border-b border-indigo-100 bg-indigo-50 px-5 py-3 text-sm text-indigo-700"
+                role="status" aria-live="polite">
+                <div class="flex items-center gap-2">
+                    <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700"
+                        aria-hidden="true"></span>
+                    <span>Cargando departamentos, grupos, subgrupos y marcas...</span>
+                </div>
+            </div>
 
             <div class="px-5 py-5">
                 <p class="mb-4 text-xs leading-relaxed text-slate-500">

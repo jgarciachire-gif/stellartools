@@ -1,4 +1,175 @@
 {% extends "base.html" %}
+{% block page_styles %}
+<style>
+    #lista-productos {
+        transition: opacity .2s ease;
+    }
+
+    #lista-productos[aria-busy="true"] {
+        opacity: .45;
+    }
+
+    /* Barra integrada al header. */
+    .productos-header-menu {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 2px;
+        width: 100%;
+        order: 3;
+    }
+
+    .productos-header-menu .productos-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 6px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #e2e8f0;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background .15s, color .15s;
+    }
+
+    .productos-header-menu .productos-trigger:hover,
+    .productos-header-menu .productos-trigger[aria-expanded="true"] {
+        background: rgba(255, 255, 255, .12);
+        color: #fff;
+    }
+
+    .productos-header-menu .productos-trigger:focus-visible {
+        outline: 2px solid #6ee7b7;
+        outline-offset: 2px;
+    }
+
+    .productos-header-menu .productos-trigger>i {
+        font-size: 8px;
+        opacity: .65;
+        transition: transform .15s;
+    }
+
+    .productos-header-menu .productos-trigger[aria-expanded="true"]>i {
+        transform: rotate(180deg);
+    }
+
+    /* En móvil, el desplegable se alinea con la barra completa. */
+    .productos-header-menu .productos-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        z-index: 60;
+        width: min(288px, calc(100vw - 32px));
+        max-height: min(420px, 65vh);
+        overflow-y: auto;
+        padding: 6px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+        color: #334155;
+    }
+
+    .productos-header-menu .productos-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 11px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #334155;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+
+    .productos-header-menu .productos-item>i {
+        width: 18px;
+        flex-shrink: 0;
+        color: #64748b;
+        text-align: center;
+    }
+
+    .productos-header-menu .productos-item:hover,
+    .productos-header-menu .productos-item:focus-visible {
+        background: #f1f5f9;
+        outline: none;
+    }
+
+    .productos-header-menu .productos-item:disabled {
+        opacity: .5;
+        cursor: default;
+    }
+
+    @media (min-width: 640px) {
+        .productos-header-menu .productos-menu {
+            position: relative;
+        }
+
+        .productos-header-menu .productos-trigger {
+            padding: 8px 12px;
+        }
+    }
+
+    @media (min-width: 1024px) {
+        .productos-header-menu {
+            order: 0;
+            width: auto;
+            flex: 1;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+<nav class="productos-header-menu" aria-label="Acciones de productos" x-data="{ abierto: null }"
+    @click.outside="abierto = null" @click="if ($event.target.closest('[data-accion-productos]')) abierto = null"
+    @focusout="if (!$el.contains($event.relatedTarget)) abierto = null" @keydown.stop @keydown.escape.prevent.stop="
+        const anterior = abierto;
+        abierto = null;
+        if (anterior) $refs[anterior].focus();
+    ">
+
+    <div class="productos-menu">
+        <button type="button" class="productos-trigger" x-ref="archivo" aria-controls="menu-productos-archivo"
+            :aria-expanded="abierto === 'archivo'" @click="abierto = abierto === 'archivo' ? null : 'archivo'">
+            Archivo
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-productos-archivo" class="productos-panel" x-show="abierto === 'archivo'" x-cloak
+            x-transition.opacity.duration.120ms>
+            <button type="button" class="productos-item" data-accion-productos onclick="abrirModalCrear()">
+                <i class="fa-solid fa-plus" aria-hidden="true"></i>
+                <span>Crear nuevo</span>
+            </button>
+        </div>
+    </div>
+    <div class="productos-menu">
+        <button type="button" class="productos-trigger" x-ref="opciones" aria-controls="menu-productos-opciones"
+            :aria-expanded="abierto === 'opciones'" @click="abierto = abierto === 'opciones' ? null : 'opciones'">
+            Opciones
+            <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-productos-opciones" class="productos-panel" x-show="abierto === 'opciones'" x-cloak
+            x-transition.opacity.duration.120ms>
+            <button type="button" class="productos-item" data-accion-productos
+                onclick="document.getElementById('input_archivo_excel').click()">
+                <i class="fa-solid fa-file-import" aria-hidden="true"></i>
+                <span>Importar Lista de Productos</span>
+            </button>
+        </div>
+    </div>
+</nav>
+{% endblock %}
+
 {% block content %}
 
 <!-- ENCABEZADO -->
@@ -11,86 +182,118 @@
         <span>Listado de Productos</span>
     </h1>
 
-    <div class="relative">
-        <button type="button" onclick="toggleMenuOpciones()"
-            class="p-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 rounded-lg transition-colors focus:outline-none">
-            <i class="fa-solid fa-ellipsis-vertical text-lg"></i>
-        </button>
-        <div id="dropdown-opciones"
-            class="hidden absolute right-0 mt-2 w-48 bg-white rounded-xl shadow-lg border border-slate-100 py-1.5 z-20">
-            <button type="button" onclick="abrirModalCrear(); toggleMenuOpciones();"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2">
-                <i class="fa-solid fa-plus text-blue-600"></i> Crear nuevo
-            </button>
-            <button type="button"
-                onclick="document.getElementById('input_archivo_excel').click(); toggleMenuOpciones();"
-                class="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100">
-                <i class="fa-solid fa-file-excel text-emerald-600"></i> Cargar lista de Productos
-            </button>
-        </div>
-    </div>
+
 </div>
 
-<div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-
-    <!-- Columna Izquierda: Buscador y Lista de Productos -->
-    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs lg:col-span-1">
-        <h3 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
-            <i class="fa-solid fa-magnifying-glass text-slate-500"></i> Búsqueda
-        </h3>
-
-        <!-- Buscador de Productos -->
-        <div class="mb-4 relative">
-            <div id="contenedor-buscador"
-                class="w-full pl-9 pr-4 py-1.5 border border-slate-300 rounded-xl bg-white shadow-sm flex flex-wrap items-center gap-1.5 min-h-[42px] focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all cursor-text">
-                <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
-                <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
-                <input autocomplete="off" type="text" id="busqueda_productos"
-                    placeholder="Buscar código ST, EAN, descripción, proveedor..."
-                    class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
-            </div>
-        </div>
-
-        <!-- Lista de Productos -->
-        <div id="lista-productos" class="space-y-2 max-h-[550px] overflow-y-auto pr-1">
-
-            {% for p in productos %}
-            <a href="?select={{ p.id }}&q={{ request.query_params.get('q', '') }}&tags={{ request.query_params.get('tags', '') }}"
-                class="prod-item block p-3 rounded-xl border transition {{ 'border-blue-400 bg-blue-50' if prov_obj and prov_obj.id|string == p.id|string else 'border-slate-100 bg-slate-50 hover:bg-blue-50' }}"
-                data-codigo-st="{{ p.codigo_st or '' }}" data-codigo-ean="{{ p.codigo_ean or '' }}"
-                data-descripcion="{{ p.descripcion or '' }}" data-marca="{{ p.marca or '' }}"
-                data-departamento="{{ p.departamento or '' }}" data-grupo="{{ p.grupo or '' }}">
-                <div class="flex justify-between items-start gap-2">
-                    <p class="font-semibold text-slate-800 text-sm leading-snug">{{ p.descripcion }}</p>
-                </div>
-                <p class="text-xs text-slate-500 mt-1">
-                    Código: <span class="font-semibold text-slate-700">{{ p.codigo_st }}</span>
-                </p>
-                <div class="flex flex-wrap gap-1 mt-1.5">
-                    <span
-                        class="text-[11px] bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md border border-indigo-100">{{
-                        p.departamento }}</span>
-                    <span
-                        class="text-[11px] bg-sky-100 text-slate-700 px-2 py-0.5 rounded-md border border-indigo-100">{{
-                        p.grupo }}</span>
-                    <span
-                        class="text-[11px] bg-sky-100 text-slate-700 px-2 py-0.5 rounded-md border border-indigo-100">{{
-                        p.subgrupo
-                        }}</span>
-                </div>
-            </a>
-            {% else %}
-            <p class="text-sm text-slate-500 text-center py-4">No se encontraron productos.</p>
-            {% endfor %}
+<div>
+    <!-- Buscador de Productos -->
+    <div class="mx-auto mb-5 w-full max-w-[720px] relative">
+        <div id="contenedor-buscador"
+            class="w-full pl-9 pr-4 py-1.5 border border-slate-300 rounded-xl bg-white shadow-sm flex flex-wrap items-center gap-1.5 min-h-[42px] focus-within:ring-2 focus-within:ring-slate-500 focus-within:border-slate-500 transition-all cursor-text">
+            <i class="fa-solid fa-search absolute left-3 top-3 text-slate-400"></i>
+            <div id="lista-etiquetas" class="flex flex-wrap items-center gap-1.5"></div>
+            <input autocomplete="off" type="text" id="busqueda_productos"
+                placeholder="Escribe un filtro y presiona Enter..."
+                class="flex-1 bg-transparent text-sm focus:outline-none min-w-[120px] py-1 text-slate-800 placeholder-slate-400">
         </div>
     </div>
 
-    <!-- Columna Derecha: Ficha Técnica del Producto Seleccionado -->
-    <div class="bg-white p-8 rounded-2xl border border-slate-200 shadow-xs lg:col-span-2">
 
+    <div class="relative">
+        <div id="cargando-listado-productos" hidden role="status" aria-live="polite"
+            class="absolute inset-x-0 top-0 z-10 rounded-t-2xl border border-indigo-100 bg-indigo-50 px-5 py-3 text-sm text-indigo-700 shadow-sm">
+            <div class="flex items-center gap-2">
+                <span class="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-indigo-200 border-t-indigo-700"
+                    aria-hidden="true"></span>
+                <span>Buscando productos...</span>
+            </div>
+        </div>
+        <div id="lista-productos" class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead class="border-b border-slate-200 bg-slate-900">
+                        <tr>
+                            {% for columna, etiqueta in [('codigo', 'Código'), ('descripcion', 'Descripción'), ('um',
+                            'UM'),
+                            ('precio', 'Precio')] %}
+                            <th scope="col"
+                                class="text-white font-semibold {{ 'text-right' if columna in ['um', 'precio'] else 'text-left' }}"
+                                aria-sort="{{ ('descending' if direccion_productos == 'desc' else 'ascending') if orden_productos == columna else 'none' }}">
+                                <a data-listado-productos
+                                    href="{{ url_listado.include_query_params(page=1, sort=columna, dir='desc' if orden_productos == columna and direccion_productos == 'asc' else 'asc') }}"
+                                    class="flex items-center gap-2 px-5 py-2.5 hover:bg-slate-800 transition-colors {{ 'justify-end' if columna in ['um', 'precio'] else '' }}"
+                                    {% if columna=='um' %}title="Unidad de manejo" {% endif %}>
+                                    {{ etiqueta }}
+                                    <i class="fa-solid {{ ('fa-sort-down' if direccion_productos == 'desc' else 'fa-sort-up') if orden_productos == columna else 'fa-sort' }} text-[10px] opacity-70"
+                                        aria-hidden="true"></i>
+                                </a>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        {% for p in productos %}
+                        <tr class="fila-producto cursor-pointer transition-colors hover:bg-slate-50 focus-within:bg-blue-50"
+                            data-ficha-url="{{ url_listado.include_query_params(select=p.id) }}">
+                            <td class="px-5 py-3 whitespace-nowrap font-medium text-slate-700">
+                                <a href="{{ url_listado.include_query_params(select=p.id) }}"
+                                    class="rounded focus-visible:outline-blue-500"
+                                    aria-label="Ver ficha de {{ p.descripcion }}">{{ p.codigo_st or '—' }}</a>
+                            </td>
+                            <td class="px-5 py-3 text-slate-800">{{ p.descripcion }}</td>
+                            <td class="px-5 py-3 text-right tabular-nums text-slate-600">{{ p.unidad_manejo or
+                                p.unidad_empaque or 1 }}</td>
+                            <td class="px-5 py-3 text-right whitespace-nowrap tabular-nums text-slate-600">{{
+                                '{:,.2f}'.format(p.precio or 0) }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="px-5 py-12 text-center text-sm text-slate-500">No se encontraron
+                                productos.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div
+                class="flex flex-col items-center justify-between gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row">
+                <p class="text-xs text-slate-500">Página <span class="font-semibold text-slate-700">{{ pagina_actual
+                        }}</span>
+                    de <span class="font-semibold text-slate-700">{{ total_paginas }}</span> · {{ total_productos }}
+                    productos</p>
+                <nav class="flex items-center gap-1" aria-label="Paginación de productos">
+                    {% for destino, icono, texto, habilitado in [(pagina_actual - 1, 'left', 'Página anterior',
+                    pagina_actual > 1), (pagina_actual + 1, 'right', 'Página siguiente', pagina_actual < total_paginas)]
+                        %} {% if loop.index==2 %}<span
+                        class="inline-flex h-9 min-w-9 items-center justify-center rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white"
+                        aria-current="page">{{ pagina_actual }}</span>{% endif %}
+                        {% if habilitado %}
+                        <a data-listado-productos href="{{ url_listado.include_query_params(page=destino) }}"
+                            title="{{ texto }}" aria-label="{{ texto }}"
+                            class="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 text-slate-600 transition-colors hover:bg-slate-50 hover:text-slate-900">
+                            <i class="fa-solid fa-chevron-{{ icono }} text-xs" aria-hidden="true"></i>
+                        </a>
+                        {% else %}
+                        <span aria-disabled="true" aria-label="{{ texto }}"
+                            class="inline-flex h-9 w-9 cursor-not-allowed items-center justify-center rounded-lg border border-slate-100 text-slate-300">
+                            <i class="fa-solid fa-chevron-{{ icono }} text-xs" aria-hidden="true"></i>
+                        </span>
+                        {% endif %}
+                        {% endfor %}
+                </nav>
+            </div>
+        </div>
+    </div>
+    <p id="estado-listado-productos" class="mt-3 text-sm text-rose-600" role="status" aria-live="polite"></p>
+</div>
+
+<dialog id="modal-ficha-producto" aria-label="Ficha del producto" onclose="alCerrarFichaProducto()"
+    class="m-auto w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl border-0 bg-white p-5 sm:p-8 shadow-2xl backdrop:bg-slate-900/40 backdrop:backdrop-blur-sm"
+    style="width:calc(100% - 2rem)">
+    <div id="contenido-ficha-producto">
         {% if prov_obj %}
         <div class="flex justify-between items-center border-b border-slate-100 pb-4 mb-6">
-            <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <h3 id="titulo-ficha-producto" class="text-xl font-bold text-slate-800 flex items-center gap-2">
                 <i class="fa-solid fa-box-archive text-blue-600"></i> Ficha del Producto
             </h3>
 
@@ -109,6 +312,11 @@
                         <i class="fa-solid fa-trash"></i>
                     </button>
                 </form>
+
+                <button type="button" onclick="cerrarFichaProducto()" aria-label="Cerrar ficha del producto"
+                    class="w-9 h-9 rounded-lg text-slate-400 hover:bg-slate-200 hover:text-slate-700">
+                    <i class="fa-solid fa-xmark" aria-hidden="true"></i>
+                </button>
             </div>
         </div>
 
@@ -117,6 +325,9 @@
             <input type="hidden" name="id" value="{{ prov_obj.id }}">
             <input type="hidden" name="q" id="form_ficha_q" value="{{ request.query_params.get('q', '') }}">
             <input type="hidden" name="tags" id="form_ficha_tags" value="{{ request.query_params.get('tags', '') }}">
+            <input type="hidden" name="page" value="{{ pagina_actual }}">
+            <input type="hidden" name="sort" value="{{ orden_productos }}">
+            <input type="hidden" name="dir" value="{{ direccion_productos }}">
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -229,16 +440,9 @@
             </div>
         </form>
 
-        {% else %}
-        <div class="text-center py-24 text-slate-400">
-            <i class="fa-solid fa-hand-pointer text-4xl mb-3 text-slate-300"></i>
-            <p class="text-base font-medium text-slate-600">Selecciona un producto de la lista</p>
-            <p class="text-sm">Para ver su ficha técnica, editar su información o eliminarlo.</p>
-        </div>
         {% endif %}
     </div>
-
-</div>
+</dialog>
 
 <!-- Modal para Crear Nuevo Producto -->
 <div id="modal-producto"
@@ -352,11 +556,6 @@
 </div>
 
 <script>
-    function toggleMenuOpciones() {
-        const dropdown = document.getElementById('dropdown-opciones');
-        if (dropdown) dropdown.classList.toggle('hidden');
-    }
-
     function abrirModalCrear() {
         const modal = document.getElementById('modal-producto');
         if (modal) modal.classList.remove('hidden');
@@ -390,26 +589,11 @@
     }
 
     function actualizarEnlacesConFiltro() {
-        const busquedaInput = document.getElementById('busqueda_productos');
-        const q = busquedaInput ? busquedaInput.value.trim() : '';
         const tagsStr = etiquetasFiltroProds.join(',');
 
-        document.querySelectorAll('.prod-item').forEach(item => {
-            const hrefOriginal = item.getAttribute('href');
-            if (hrefOriginal) {
-                const url = new URL(hrefOriginal, window.location.origin);
-                const selectId = url.searchParams.get('select');
-
-                let nuevoHref = `?select=${selectId}`;
-                if (q) nuevoHref += `&q=${encodeURIComponent(q)}`;
-                if (tagsStr) nuevoHref += `&tags=${encodeURIComponent(tagsStr)}`;
-
-                item.setAttribute('href', nuevoHref);
-            }
-        });
         const inputFichaQ = document.getElementById('form_ficha_q');
         const inputFichaTags = document.getElementById('form_ficha_tags');
-        if (inputFichaQ) inputFichaQ.value = q;
+        if (inputFichaQ) inputFichaQ.value = '';
         if (inputFichaTags) inputFichaTags.value = tagsStr;
     }
 
@@ -422,11 +606,12 @@
             const badge = document.createElement('span');
             badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
             badge.innerHTML = `
-                <span>${val}</span>
+                <span></span>
                 <button type="button" onclick="removerEtiquetaProd(${idx})" class="hover:text-rose-600 ml-0.5 focus:outline-none">
                     <i class="fa-solid fa-xmark text-xs"></i>
                 </button>
             `;
+            badge.querySelector('span').textContent = val;
             contenedor.appendChild(badge);
         });
     }
@@ -448,36 +633,14 @@
         ejecutarBusquedaServidor();
     }
 
-    let debounceTimerFetch = null;
-
     function ejecutarBusquedaServidor() {
-        const busquedaInput = document.getElementById('busqueda_productos'); // Obtiene el campo de búsqueda
-        const q = busquedaInput ? busquedaInput.value.trim() : ''; // Extrae el texto ingresado
-        const tagsStr = etiquetasFiltroProds.join(','); // Convierte las etiquetas a texto
-        const selectId = urlParams.get('select') || ''; // Conserva el producto seleccionado
-
-        let url = `/productos?`;
-        if (selectId) url += `select=${selectId}&`;
-        if (q) url += `q=${encodeURIComponent(q)}&`;
-        if (tagsStr) url += `tags=${encodeURIComponent(tagsStr)}`;
-
-        // Actualiza la URL en la barra de direcciones sin refrescar la pantalla
-        window.history.replaceState({}, '', url);
-
-        // Consulta en segundo plano al servidor para traer los resultados de Supabase
-        fetch(url)
-            .then(response => response.text())
-            .then(html => {
-                const parser = new DOMParser();
-                const doc = parser.parseFromString(html, 'text/html');
-                // Extrae la nueva lista de productos devuelta por el servidor
-                const nuevaLista = doc.getElementById('lista-productos'); // Obtiene la nueva lista devuelta por el servidor
-                const listaActual = document.getElementById('lista-productos'); // Obtiene el contenedor actual de la pantalla
-                if (nuevaLista && listaActual) { // Verifica que ambos elementos existan correctamente
-                    listaActual.innerHTML = nuevaLista.innerHTML; // Reemplaza únicamente el contenido del catálogo
-                }
-            })
-            .catch(err => console.error("Error filtrando productos:", err));
+        actualizarEnlacesConFiltro();
+        const url = new URL(window.location.href);
+        url.searchParams.delete('select');
+        url.searchParams.set('page', '1');
+        url.searchParams.delete('q');
+        url.searchParams.set('tags', etiquetasFiltroProds.join(','));
+        cargarListadoProductos(url);
     }
 
     let indiceDestacado = { ficha: -1, modal: -1 };
@@ -584,33 +747,30 @@
     document.addEventListener('DOMContentLoaded', () => {
         const busquedaInput = document.getElementById('busqueda_productos');
 
-        // Cargar valor inicial desde URL si existe
-        if (urlParams.get('q') && busquedaInput) {
-            busquedaInput.value = urlParams.get('q');
+        // Representa también las búsquedas de enlaces anteriores como filtros confirmados.
+        const terminoAnterior = (urlParams.get('q') || '').trim();
+        if (terminoAnterior && !etiquetasFiltroProds.some(e => e.toLowerCase() === terminoAnterior.toLowerCase())) {
+            etiquetasFiltroProds.push(terminoAnterior);
+        }
+        if (terminoAnterior) {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('q');
+            url.searchParams.set('tags', etiquetasFiltroProds.join(','));
+            window.history.replaceState({}, '', url);
         }
 
         renderizarEtiquetasProds();
         actualizarEnlacesConFiltro();
 
         if (busquedaInput) {
-            // Escucha la escritura y espera 300ms para consultar al servidor sin cortar el tipeo
-            busquedaInput.addEventListener('input', () => {
-                actualizarEnlacesConFiltro(); // Mantiene los enlaces actualizados
-                clearTimeout(debounceTimerFetch); // Cancela peticiones previas si sigue escribiendo
-                debounceTimerFetch = setTimeout(() => {
-                    ejecutarBusquedaServidor(); // Realiza la búsqueda en segundo plano
-                }, 300);
-            });
-
             busquedaInput.addEventListener('keydown', (e) => {
+                if (e.isComposing) return;
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     const val = busquedaInput.value.trim();
                     if (val !== '') {
                         agregarEtiquetaProd(val);
                         busquedaInput.value = '';
-                    } else {
-                        ejecutarBusquedaServidor();
                     }
                 } else if (e.key === 'Backspace' && busquedaInput.value === '' && etiquetasFiltroProds.length > 0) {
                     removerEtiquetaProd(etiquetasFiltroProds.length - 1);
@@ -625,4 +785,5 @@
         onchange="document.getElementById('form-cargar-archivo').submit();">
 </form>
 
+<script src="{{ asset_url('js/productos-listado.js') }}" defer></script>
 {% endblock %}

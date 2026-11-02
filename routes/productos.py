@@ -46,7 +46,7 @@ async def vista_productos(
     busqueda_query = request.query_params.get("q", "")
     tags_query = request.query_params.get("tags", "")
     
-    builder = config.supabase_async.table("productos").select("*, proveedores(nombre)")
+    builder = config.supabase_async.table("productos").select("*, proveedores(nombre)", count="exact")
 
     terminos = []
     if busqueda_query.strip():
@@ -88,14 +88,26 @@ async def vista_productos(
         condicion_or = ",".join(condiciones)
         builder = builder.or_(condicion_or)
 
-    page = int(request.query_params.get("page", 1))
-    limit = 50
+    try:
+        page = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        page = 1
+    columnas_orden = {"codigo": "codigo_st", "descripcion": "descripcion", "um": "unidad_manejo", "precio": "precio"}
+    orden = request.query_params.get("sort", "descripcion")
+    if orden not in columnas_orden:
+        orden = "descripcion"
+    direccion = "desc" if request.query_params.get("dir") == "desc" else "asc"
+    limit = 20
     offset = (page - 1) * limit
 
     # Consulta paginada asíncrona
     productos_res = await ejecutar_supabase_con_reintento_async(
-        lambda: builder.order("descripcion", desc=False).range(offset, offset + limit - 1).execute()
+        lambda: builder.order(columnas_orden[orden], desc=direccion == "desc").order("id").range(offset, offset + limit - 1).execute()
     )
+    total_productos = productos_res.count or 0
+    total_paginas = max(1, (total_productos + limit - 1) // limit)
+    if page > total_paginas:
+        return RedirectResponse(url=str(request.url.include_query_params(page=total_paginas)), status_code=303)
     productos = productos_res.data or []
 
     res_prov = await config.supabase_async.table("proveedores").select("id, nombre").order("nombre").execute()
@@ -113,26 +125,19 @@ async def vista_productos(
         except Exception as e:
             print("Error al obtener producto seleccionado:", e)
 
-    if term_limpio and term_limpio.isdigit() and productos:
-        def evaluar_prioridad(prod):
-            cod_st = str(prod.get("codigo_st", "") or "")
-            if cod_st == term_limpio:
-                return 0
-            elif cod_st.startswith(term_limpio):
-                return 1
-            elif term_limpio in cod_st:
-                return 2
-            return 3
-
-        productos.sort(key=evaluar_prioridad)
-
     return templates.TemplateResponse(
         request=request,
         name="productos.html",
         context={
             "productos": productos,
             "prov_obj": prov_obj,
-            "proveedores": proveedores
+            "proveedores": proveedores,
+            "pagina_actual": page,
+            "total_paginas": total_paginas,
+            "total_productos": total_productos,
+            "orden_productos": orden,
+            "direccion_productos": direccion,
+            "url_listado": request.url.remove_query_params("select")
         }
     )
 
@@ -152,6 +157,9 @@ async def guardar_producto(
     marca: str = Form(""),
     q: str = Form(""), 
     tags: str = Form(""),
+    page: str = Form("1"),
+    sort: str = Form("descripcion"),
+    dir: str = Form("asc"),
     access_token: str = Cookie(None),
     refresh_token: str = Cookie(None)
 ):
@@ -185,6 +193,7 @@ async def guardar_producto(
         redirect_url += f"&q={urllib.parse.quote(q.strip())}"
     if tags.strip():
         redirect_url += f"&tags={urllib.parse.quote(tags.strip())}"
+    redirect_url += "&" + urllib.parse.urlencode({"page": page, "sort": sort, "dir": dir})
 
     return RedirectResponse(url=redirect_url, status_code=303)
 

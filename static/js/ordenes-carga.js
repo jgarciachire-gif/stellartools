@@ -23,7 +23,6 @@ function ocRespuestaError(status, datos) {
 }
 
 function abrirModalCargarOC() {
-    ocElemento('dropdown-opciones')?.classList.add('hidden');
     ocElemento('modal-cargar-oc').classList.remove('hidden');
     ocElemento('input-pdf-modal').focus();
 }

@@ -1,4 +1,6 @@
 import json  # Manejo de formatos JSON
+import unicodedata
+from urllib.parse import urlencode
 from typing import Optional  # Anotaciones de tipos opcionales
 import xml.etree.ElementTree as ET  # Procesamiento de archivos XML
 from datetime import datetime  # Fechas
@@ -35,15 +37,49 @@ async def vista_proveedores(
 
     client = await _db()
 
-    res = await (
-        client
-        .table("proveedores")
-        .select("*")
-        .order("nombre")
-        .execute()
-    )
+    # Lee también los registros posteriores al límite de la API para mantener
+    # la búsqueda por categorías y paginar todo el directorio.
+    directorio = []
+    offset = 0
+    while True:
+        res = await client.table("proveedores").select("*").order("id").range(offset, offset + 999).execute()
+        lote = res.data or []
+        directorio.extend(lote)
+        if len(lote) < 1000:
+            break
+        offset += 1000
 
-    proveedores = res.data if res and res.data else []
+    def normalizar(valor):
+        return ''.join(c for c in unicodedata.normalize('NFD', str(valor or ''))
+                       if unicodedata.category(c) != 'Mn').casefold()
+
+    terminos = [t.strip() for t in request.query_params.get("tags", "").split(',') if t.strip()]
+    if request.query_params.get("q", "").strip():
+        terminos.append(request.query_params["q"].strip())
+    proveedores = []
+    for proveedor in directorio:
+        categorias = proveedor.get("categorias") or []
+        texto = normalizar(' '.join(str(proveedor.get(campo) or '') for campo in
+                                  ['codigo', 'nombre', 'contacto', 'telefono', 'email']) + ' ' +
+                           (' '.join(map(str, categorias)) if isinstance(categorias, list) else str(categorias)))
+        if all(normalizar(termino) in texto for termino in terminos):
+            proveedores.append(proveedor)
+
+    columnas = {"codigo", "nombre", "contacto", "telefono", "email"}
+    orden = request.query_params.get("sort", "nombre")
+    if orden not in columnas:
+        orden = "nombre"
+    direccion = "desc" if request.query_params.get("dir") == "desc" else "asc"
+    proveedores.sort(key=lambda p: (normalizar(p.get(orden)), p['id']), reverse=direccion == "desc")
+    total_proveedores = len(proveedores)
+    total_paginas = max(1, (total_proveedores + 19) // 20)
+    try:
+        pagina = max(1, int(request.query_params.get("page", 1)))
+    except (TypeError, ValueError):
+        pagina = 1
+    if pagina > total_paginas:
+        return RedirectResponse(url=str(request.url.include_query_params(page=total_paginas)), status_code=303)
+    proveedores = proveedores[(pagina - 1) * 20:pagina * 20]
 
     res_cats = await (
         client
@@ -60,20 +96,9 @@ async def vista_proveedores(
         else []
     )
 
-    prov_obj = None
-
-    if select:
-        res_sel = await (
-            client
-            .table("proveedores")
-            .select("*")
-            .eq("id", select)
-            .maybe_single()
-            .execute()
-        )
-
-        if res_sel and res_sel.data:
-            prov_obj = res_sel.data
+    prov_obj = next((p for p in directorio if p['id'] == select), None)
+    etiquetas_proveedores = sorted({str(cat) for p in directorio
+                                   if isinstance(p.get('categorias'), list) for cat in p['categorias']})
 
     return templates.TemplateResponse(
         request=request,
@@ -82,6 +107,14 @@ async def vista_proveedores(
             "proveedores": proveedores,
             "prov_obj": prov_obj,
             "categorias_disponibles": categorias_disponibles,
+            "etiquetas_proveedores": etiquetas_proveedores,
+            "filtros_proveedores": terminos,
+            "pagina_actual": pagina,
+            "total_paginas": total_paginas,
+            "total_proveedores": total_proveedores,
+            "orden_proveedores": orden,
+            "direccion_proveedores": direccion,
+            "url_listado": request.url.remove_query_params("select"),
         }
     )
     
@@ -440,6 +473,10 @@ async def guardar_proveedor(
     dias_credito: Optional[str] = Form("0"),
     dias_despacho: Optional[str] = Form("3"),
     categorias: str = Form("[]"),
+    tags: str = Form(""),
+    page: str = Form("1"),
+    sort: str = Form("nombre"),
+    dir: str = Form("asc"),
     access_token: str = Cookie(None)
 ):
     user = await obtener_usuario_actual(access_token)
@@ -564,7 +601,7 @@ async def guardar_proveedor(
         )
 
     return RedirectResponse(
-        url=redirect_url,
+        url=redirect_url + '&' + urlencode({"tags": tags, "page": page, "sort": sort, "dir": dir}),
         status_code=303
     )
 
