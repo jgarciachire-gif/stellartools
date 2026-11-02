@@ -99,7 +99,8 @@
         const cantidad = seleccionados.size;
         $('inventario-resumen-seleccion').textContent = cantidad
             ? `${cantidad} documento(s) seleccionado(s).`
-            : 'Selecciona un documento para continuar.';
+            : '';
+        $('inventario-resumen-seleccion').hidden = cantidad === 0;
 
         $('btn-previsualizar-importacion-inventario').disabled =
             procesando || preparando || cargando || cantidad === 0;
@@ -371,7 +372,8 @@
             if (turno === secuenciaCarga) {
                 cargando = false;
                 actualizarResumen();
-                $('inventario-pagina-info').textContent = `Página ${pagina}`;
+                $('inventario-pagina-info').textContent = String(pagina);
+                $('inventario-pagina-info').setAttribute('aria-label', `Página ${pagina}`);
                 $('inventario-pagina-anterior').disabled = pagina <= 1;
                 $('inventario-pagina-siguiente').disabled = !hayMas;
             }
@@ -383,7 +385,7 @@
         solicitudDetalle = null;
         preparando = false;
         detallesPendientes = [];
-        $('btn-previsualizar-importacion-inventario').innerHTML = '<i class="fa-solid fa-eye mr-1"></i> Revisar importación';
+        $('btn-previsualizar-importacion-inventario').innerHTML = '<i class="fa-solid fa-file-import"></i> importar';
         $('modal-importar-inventarios').classList.remove('hidden');
         $('modal-importar-inventarios').classList.add('flex');
         $('inventario-buscar-texto').value = '';
@@ -555,8 +557,10 @@
         } catch (error) {
             if (solicitudDetalle !== controlador) return;
             if (typeof mostrarNotificacion === 'function') {
-                mostrarNotificacion({ tipo: 'error', mensaje: error.name === 'AbortError'
-                    ? 'Se agotó el tiempo de espera. Puedes volver a revisar la importación.' : error.message });
+                mostrarNotificacion({
+                    tipo: 'error', mensaje: error.name === 'AbortError'
+                        ? 'Se agotó el tiempo de espera. Puedes volver a revisar la importación.' : error.message
+                });
             } else {
                 alert(error.message);
             }
@@ -567,7 +571,7 @@
                 solicitudDetalle = null;
                 preparando = false;
                 boton.disabled = false;
-                boton.innerHTML = '<i class="fa-solid fa-eye mr-1"></i> Revisar importación';
+                boton.innerHTML = '<i class="fa-solid fa-file-import"></i> Importar';
                 actualizarResumen();
             }
         }
@@ -742,7 +746,7 @@
         } finally {
             procesando = false;
             boton.disabled = false;
-            boton.textContent = 'Confirmar e importar';
+            boton.textContent = 'Confirmar';
         }
     };
 
