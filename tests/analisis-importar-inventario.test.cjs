@@ -420,5 +420,6 @@ test('cerrar durante la lectura del detalle cancela solicitudes y evita abrir la
     await preview;
     assert.equal(app.get('modal-confirmar-importacion-inventario').classList.contains('hidden'), true);
     await app.window.abrirModalImportarInventarios();
-    assert.match(app.get('btn-previsualizar-importacion-inventario').innerHTML, /Revisar importación/);
+    const etiqueta = app.get('btn-previsualizar-importacion-inventario').innerHTML.replace(/<[^>]*>/g, '').trim();
+    assert.equal(etiqueta.toLocaleLowerCase(), 'importar');
 });
