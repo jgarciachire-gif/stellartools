@@ -4,6 +4,7 @@
 
     let modalActivo = null;
     let resolverActivo = null;
+    let limpiarModalActivo = null;
 
 
     function escaparHTML(valor) {
@@ -51,6 +52,8 @@
         }
 
         const modal = modalActivo;
+        limpiarModalActivo?.();
+        limpiarModalActivo = null;
 
         modal.classList.add('opacity-0');
 
@@ -216,9 +219,13 @@
             modal.classList.remove('opacity-0');
         });
 
-        setTimeout(() => {
+        const focoPendiente = setTimeout(() => {
             botonAceptar?.focus();
         }, 50);
+        limpiarModalActivo = () => {
+            clearTimeout(focoPendiente);
+            document.removeEventListener('keydown', manejarEscape);
+        };
     }
 
     function mostrarNotificacion({
@@ -309,6 +316,8 @@
         textoAceptar = 'Entendido'
     } = {}) {
 
+        // Resolver la solicitud anterior antes de registrar la siguiente.
+        if (modalActivo) cerrarModalInterno(false);
         return new Promise(resolve => {
 
             resolverActivo = resolve;
@@ -332,6 +341,7 @@
         textoCancelar = 'Cancelar'
     } = {}) {
 
+        if (modalActivo) cerrarModalInterno(false);
         return new Promise(resolve => {
 
             resolverActivo = resolve;

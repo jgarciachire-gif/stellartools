@@ -1,5 +1,127 @@
 {% extends "base.html" %}
 
+{% block page_styles %}
+<style>
+    .inventario-documento-header {
+        display: none;
+        position: relative;
+        align-items: center;
+        width: 100%;
+        order: 3;
+    }
+    .inventario-documento-header .inventario-trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #e2e8f0;
+        font-size: 14px;
+        font-weight: 500;
+        white-space: nowrap;
+        cursor: pointer;
+        transition: background .15s, color .15s;
+    }
+    .inventario-documento-header .inventario-trigger:hover,
+    .inventario-documento-header .inventario-trigger[aria-expanded="true"] {
+        background: rgba(255, 255, 255, .12);
+        color: #fff;
+    }
+    .inventario-documento-header .inventario-trigger:focus-visible {
+        outline: 2px solid #6ee7b7;
+        outline-offset: 2px;
+    }
+    .inventario-documento-header .inventario-trigger > i {
+        font-size: 8px;
+        opacity: .65;
+        transition: transform .15s;
+    }
+    .inventario-documento-header .inventario-trigger[aria-expanded="true"] > i {
+        transform: rotate(180deg);
+    }
+    .inventario-documento-header .inventario-panel {
+        position: absolute;
+        top: calc(100% + 8px);
+        left: 0;
+        z-index: 60;
+        width: min(288px, calc(100vw - 32px));
+        max-height: min(420px, 65vh);
+        overflow-y: auto;
+        padding: 6px;
+        border: 1px solid #e2e8f0;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, .18);
+        color: #334155;
+    }
+    .inventario-documento-header .inventario-item {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 11px 12px;
+        border: 0;
+        border-radius: 9px;
+        background: transparent;
+        color: #334155;
+        text-align: left;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+    }
+    .inventario-documento-header .inventario-item > i { width: 18px; text-align: center; }
+    .inventario-documento-header .inventario-item:hover,
+    .inventario-documento-header .inventario-item:focus-visible { background: #f1f5f9; outline: none; }
+    .inventario-documento-header .inventario-item:disabled { opacity: .5; cursor: wait; }
+    .inventario-documento-header .inventario-completar { color: #047857; }
+    .inventario-documento-header .inventario-reabrir { color: #4338ca; }
+    .inventario-documento-header .inventario-eliminar { color: #e11d48; }
+    @media (min-width: 768px) { .inventario-documento-header { display: flex; } }
+    @media (min-width: 1024px) {
+        .inventario-documento-header { order: 0; width: auto; flex: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block header_actions %}
+{% if inventario.estado == 'borrador' or not es_provisional %}
+<nav id="inventario-documento-header" class="inventario-documento-header" aria-label="Acciones del inventario">
+    <div class="relative">
+        <button type="button" id="btn-menu-acciones-escritorio" class="inventario-trigger"
+            aria-controls="menu-acciones-escritorio" aria-expanded="false">
+            Opciones <i class="fa-solid fa-chevron-down" aria-hidden="true"></i>
+        </button>
+        <div id="menu-acciones-escritorio" class="inventario-panel hidden">
+            {% if inventario.estado == 'borrador' %}
+            <button type="button" id="btn-importar-productos-escritorio" class="inventario-item">
+                <i class="fa-solid fa-file-import text-slate-500" aria-hidden="true"></i><span>Importar</span>
+            </button>
+            <button type="button" id="btn-vaciar-lista-escritorio" class="inventario-item">
+                <i class="fa-solid fa-broom text-slate-500" aria-hidden="true"></i><span>Vaciar lista</span>
+            </button>
+            <button type="button" id="btn-guardar-inventario" class="inventario-item inventario-completar">
+                <i class="fa-solid fa-check" aria-hidden="true"></i><span>Completar</span>
+            </button>
+            {% endif %}
+            {% if inventario.estado == 'completado' and not es_provisional %}
+            <button type="button" class="btn-reabrir-inventario inventario-item inventario-reabrir">
+                <i class="fa-solid fa-rotate-left" aria-hidden="true"></i><span>Reabrir en borrador</span>
+            </button>
+            {% endif %}
+            {% if not es_provisional or (es_provisional and inventario.estado == 'borrador' and es_creador_inventario) %}
+            <button type="button" id="btn-eliminar-inventario-escritorio" class="inventario-item inventario-eliminar">
+                <i class="fa-solid fa-trash-can" aria-hidden="true"></i><span>Eliminar</span>
+            </button>
+            {% endif %}
+        </div>
+    </div>
+</nav>
+{% endif %}
+{% endblock %}
+
 {% block content %}
 
 <style>
@@ -67,220 +189,7 @@
             </a>
 
 
-            <!-- MENÚ DE ACCIONES -->
-            {% if inventario.estado == 'borrador'
-            or not es_provisional %}
 
-            <div class="relative">
-
-                <button type="button" id="btn-menu-acciones-escritorio" class="w-8 h-8
-                           inline-flex
-                           items-center
-                           justify-center
-                           rounded-xl
-                           border border-slate-200
-                           bg-slate-100
-                           text-slate-700
-                           hover:bg-slate-200
-                           transition
-                           shadow-sm" aria-label="Más acciones" aria-expanded="false">
-
-                    <i class="fa-solid fa-ellipsis-vertical"></i>
-
-                </button>
-
-
-                <div id="menu-acciones-escritorio" class="hidden
-                        absolute
-                        right-0
-                        top-12
-                        z-50
-                        w-36
-                        bg-white
-                        border border-slate-200
-                        rounded-xl
-                        shadow-xl
-                        overflow-hidden">
-
-                    {% if inventario.estado == 'borrador' %}
-
-                    <!-- IMPORTAR PRODUCTOS -->
-                    <button type="button" id="btn-importar-productos-escritorio" class="w-full
-                               flex
-                               items-center
-                               gap-3
-                               px-4
-                               py-2
-                               text-left
-                               text-sm
-                               font-semibold
-                               text-slate-700
-                               hover:bg-slate-50
-                               transition">
-
-                        <span class="w-2 h-2
-                                 shrink-0
-                                 inline-flex
-                                 items-center
-                                 justify-center
-                                 rounded-xl
-                                 bg-indigo-50
-                                 text-indigo-600">
-
-                            <i class="fa-solid fa-file-import"></i>
-
-                        </span>
-
-                        <span>
-                            Importar
-                        </span>
-
-                    </button>
-
-
-                    <!-- VACIAR LISTA -->
-                    <button type="button" id="btn-vaciar-lista-escritorio" class="w-full
-                               flex
-                               items-center
-                               gap-3
-                               px-4
-                               py-2
-                               text-left
-                               text-sm
-                               font-semibold
-                               text-slate-700
-                               border-t border-slate-100
-                               hover:bg-slate-50
-                               transition">
-
-                        <span class="w-2 h-2
-                                 shrink-0
-                                 inline-flex
-                                 items-center
-                                 justify-center
-                                 rounded-xl
-                                 bg-amber-50
-                                 text-amber-600">
-
-                            <i class="fa-solid fa-broom"></i>
-
-                        </span>
-
-                        <span>
-                            Vaciar lista
-                        </span>
-
-                    </button>
-
-
-                    <!-- COMPLETAR -->
-                    <button type="button" id="btn-guardar-inventario" class="w-full
-                               flex
-                               items-center
-                               gap-3
-                               px-4
-                               py-2
-                               text-left
-                               text-sm
-                               font-semibold
-                               text-emerald-700
-                               border-t border-slate-100
-                               hover:bg-emerald-50
-                               transition">
-
-                        <span class="w-2 h-2
-                                 shrink-0
-                                 inline-flex
-                                 items-center
-                                 justify-center
-                                 rounded-xl
-                                 bg-emerald-50
-                                 text-emerald-600">
-
-                            <i class="fa-solid fa-check"></i>
-
-                        </span>
-
-                        <span>
-                            Completar
-                        </span>
-
-                    </button>
-
-                    {% endif %}
-
-
-                    {% if inventario.estado == 'completado'
-                    and not es_provisional %}
-
-                    <!-- Reabrir solo para usuarios normales y documentos completados. -->
-                    <button type="button" class="btn-reabrir-inventario w-full flex items-center gap-3
-                                    px-4 py-2 text-left text-sm font-semibold
-                                    text-indigo-700 border-t border-slate-100
-                                    hover:bg-indigo-50 transition">
-
-                        <span class="w-2 h-2 shrink-0 inline-flex items-center
-                                justify-center rounded-xl bg-indigo-50
-                                text-indigo-600">
-                            <i class="fa-solid fa-rotate-left"></i>
-                        </span>
-
-                        <span>Reabrir en borrador</span>
-                    </button>
-
-                    {% endif %}
-
-
-                    {% if (
-                    not es_provisional
-                    )
-                    or (
-                    es_provisional
-                    and inventario.estado == 'borrador'
-                    and es_creador_inventario
-                    ) %}
-
-                    <!-- ELIMINAR INVENTARIO -->
-                    <button type="button" id="btn-eliminar-inventario-escritorio" class="w-full
-                               flex
-                               items-center
-                               gap-3
-                               px-4
-                               py-2
-                               text-left
-                               text-sm
-                               font-semibold
-                               text-rose-700
-                               border-t border-slate-100
-                               hover:bg-rose-100
-                               transition">
-
-                        <span class="w-2 h-2
-                                 shrink-0
-                                 inline-flex
-                                 items-center
-                                 justify-center
-                                 rounded-xl
-                                 bg-rose-50
-                                 text-rose-600">
-
-                            <i class="fa-solid fa-trash-can"></i>
-
-                        </span>
-
-                        <span>
-                            Eliminar
-                        </span>
-
-                    </button>
-
-                    {% endif %}
-
-                </div>
-
-            </div>
-
-            {% endif %}
 
         </div>
 
@@ -5584,6 +5493,25 @@
         // =========================================================
         // ACCIONES DE ESCRITORIO
         // =========================================================
+
+        const accionesHeaderInventario = document.getElementById('inventario-documento-header');
+        const cerrarAccionesHeaderInventario = () => {
+            document.getElementById('menu-acciones-escritorio')?.classList.add('hidden');
+            document.getElementById('btn-menu-acciones-escritorio')?.setAttribute('aria-expanded', 'false');
+        };
+        accionesHeaderInventario?.addEventListener('click', evento => {
+            if (evento.target.closest('.inventario-item')) cerrarAccionesHeaderInventario();
+        });
+        accionesHeaderInventario?.addEventListener('keydown', evento => {
+            if (evento.key !== 'Escape') return;
+            evento.preventDefault();
+            evento.stopPropagation();
+            cerrarAccionesHeaderInventario();
+            document.getElementById('btn-menu-acciones-escritorio')?.focus();
+        });
+        accionesHeaderInventario?.addEventListener('focusout', evento => {
+            if (!accionesHeaderInventario.contains(evento.relatedTarget)) cerrarAccionesHeaderInventario();
+        });
 
         // Abrir / cerrar menú de acciones.
         document
