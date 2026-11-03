@@ -71,6 +71,25 @@ async def procesar_recepciones_xml(
     def fecha(valor):
         valor = str(valor or "").strip()
 
+        # Los reportes incluyen horas locales, por ejemplo:
+        # 2/11/2026 2:02:02 p. m. (también con espacios no separables).
+        con_hora = re.fullmatch(
+            r"(\d{1,2}[/-]\d{1,2}[/-]\d{2}(?:\d{2})?)\s+"
+            r"(\d{1,2}):(\d{2})(?::(\d{2}))?"
+            r"(?:\s*([ap])\s*\.?\s*m\s*\.?)?",
+            valor, re.I
+        )
+        if con_hora:
+            dia, hora, minuto, segundo, periodo = con_hora.groups()
+            hora = int(hora)
+            if periodo:
+                if not 1 <= hora <= 12:
+                    raise ValueError("Hora de recepción inválida.")
+                hora = hora % 12 + (12 if periodo.lower() == "p" else 0)
+            # Validar la hora antes de conservar únicamente la fecha.
+            datetime(2000, 1, 1, hora, int(minuto), int(segundo or 0))
+            valor = dia
+
         for formato in (
             "%d/%m/%Y", "%d/%m/%y",
             "%d-%m-%Y", "%d-%m-%y"
