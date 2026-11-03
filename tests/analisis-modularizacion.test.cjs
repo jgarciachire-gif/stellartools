@@ -78,7 +78,7 @@ test('la plantilla carga una sola vez los archivos del análisis y conserva la s
     const names = scripts.map(script => script.path.split('/').at(-1));
     assert.equal(new Set(names).size, names.length);
     const relocated = ['analisis-core.js', 'analisis-proveedores.js', 'analisis-tabla.js', 'analisis-exportacion.js',
-        'analisis-pedidos.js', 'analisis-tiendas.js', 'analisis-sugeridos.js', 'analisis-exportacion-tiendas.js', 'analisis-kardex.js', 'analisis-vista.js'];
+        'analisis-pedidos.js', 'analisis-tiendas.js', 'analisis-sugeridos.js', 'analisis-exportacion-tiendas.js', 'analisis-tendencia-periodos.js', 'analisis-kardex.js', 'analisis-vista.js'];
     assert.deepEqual(names.slice(-relocated.length), relocated);
     assert.equal(scripts.filter(script => script.attributes.includes('defer')).length, 1);
     assert.equal(template.includes('type="module"'), false);

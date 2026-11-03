@@ -1408,6 +1408,7 @@
             boton.disabled = true;
 
             await ajustarAlturaComparacion(() => {
+                window.tendenciaPeriodosKardex?.limpiar();
                 panel.classList.remove('hidden');
                 cabecera.replaceChildren();
                 tbody.replaceChildren();
@@ -1712,6 +1713,20 @@
                     `${formatearFechaKardex(p.fin)}`
                 ).join(' | ') +
                     ` · ${periodos[0].dias} días por intervalo.`;
+
+                window.tendenciaPeriodosKardex?.actualizar({
+                    sede,
+                    periodos: periodos.map(p => ({
+                        inicio: p.inicio,
+                        nombre: nombreMesesKardex(p),
+                        intervalo: `${formatearFechaKardex(p.inicio)} a ${formatearFechaKardex(p.fin)}`
+                    })),
+                    productos: codigos.map(codigo => ({
+                        codigo,
+                        descripcion: descripciones.get(codigo) || 'Sin descripción',
+                        ventas: resultados.map(({ porCodigo }) => Number(porCodigo.get(codigo)?.unidades_vendidas ?? 0))
+                    }))
+                }, ajustarAlturaComparacion);
 
                 // Permite actualizar la comparación al cambiar de tienda.
                 ultimaConfiguracionPeriodosKardex =

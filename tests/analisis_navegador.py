@@ -141,6 +141,26 @@ async def exercise(port, browser_port, state):
                 window.stage='Comparación'; await compararDemandaKardexDesdeAnalisis([{anio:2026,mes:10,inicio:'2026-10-01',fin:'2026-10-07',dias:7}]);
                 check(document.getElementById('kardex-comparacion-resultados').rows.length===2,'Comparación Kardex');
                 check(document.getElementById('kardex-comparacion-mensaje').classList.contains('hidden'),'Comparación sin errores');
+                check(document.getElementById('btn-tendencia-periodos').disabled,'Un mes no habilita tendencia');
+                await compararDemandaKardexDesdeAnalisis([
+                    {anio:2026,mes:10,inicio:'2026-10-01',fin:'2026-10-07',dias:7},
+                    {anio:2026,mes:9,inicio:'2026-09-01',fin:'2026-09-07',dias:7}
+                ]);
+                const botonTendencia=document.getElementById('btn-tendencia-periodos');
+                check(!botonTendencia.disabled,'Dos meses habilitan tendencia');
+                const solicitudes=()=>performance.getEntriesByType('resource').filter(r=>r.name.includes('/analisis/demanda-kardex?')).length;
+                const consultasAntes=solicitudes();
+                botonTendencia.click();
+                const descripcion=()=>document.querySelector('#kardex-tendencia-grafico desc').textContent;
+                check(/Sep\.? 2026: 28 unidades.*Oct\.? 2026: 56 unidades/i.test(descripcion()),'Totales cronológicos: '+descripcion());
+                const selectorTendencia=document.getElementById('kardex-tendencia-producto');
+                selectorTendencia.value='000001'; selectorTendencia.dispatchEvent(new Event('change'));
+                check(/Sep\.? 2026: 14 unidades.*Oct\.? 2026: 28 unidades/i.test(descripcion()),'Tendencia de un producto: '+descripcion());
+                check(solicitudes()===consultasAntes,'El gráfico no genera consultas');
+                botonTendencia.click();
+                check(botonTendencia.getAttribute('aria-expanded')==='false','Ocultar tendencia');
+                await compararDemandaKardexDesdeAnalisis([{anio:2026,mes:10,inicio:'2026-10-01',fin:'2026-10-07',dias:7}]);
+                check(document.getElementById('kardex-tendencia-grafico').children.length===0,'Nueva comparación limpia el gráfico');
                 window.stage='Cancelar limpieza'; const pending=limpiarListaProductos();
                 await waitFor(()=>document.querySelector('[data-modal-cancelar]'));
                 document.querySelector('[data-modal-cancelar]').click(); await pending;
@@ -219,9 +239,10 @@ def main():
             if path == '/analisis/cobertura-kardex':
                 return self.respond(dict(status='ok', data=[dict(sede=sede, fecha_minima='2026-10-01', fecha_maxima='2026-10-31') for sede in STORES]))
             if path == '/analisis/meses-kardex':
-                return self.respond(dict(status='ok', data=[dict(anio=2026, mes=10, fecha_minima='2026-10-01', fecha_maxima='2026-10-31')]))
+                return self.respond(dict(status='ok', data=[dict(anio=2026, mes=m, fecha_minima=f'2026-{m:02}-01', fecha_maxima=f'2026-{m:02}-30') for m in [9,10]]))
             if path == '/analisis/demanda-kardex':
-                return self.respond(dict(data=[dict(sede=sede, codigo=product['codigo'], unidades_vendidas=28, dias_con_ventas=7) for sede in STORES for product in PRODUCTS]))
+                units=14 if 'fecha_inicio=2026-09' in self.path else 28
+                return self.respond(dict(data=[dict(sede=sede, codigo=product['codigo'], unidades_vendidas=units, dias_con_ventas=7) for sede in STORES for product in PRODUCTS]))
             self.send_error(404)
 
         def do_POST(self):
@@ -237,7 +258,8 @@ def main():
     server = ThreadingHTTPServer(('127.0.0.1', 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     edge = Path(os.environ.get('PROGRAMFILES(X86)', 'C:/Program Files (x86)')) / 'Microsoft/Edge/Application/msedge.exe'
-    with tempfile.TemporaryDirectory(prefix='analisis-browser-') as temp:
+    # Edge puede mantener archivos de caché abiertos durante unos instantes al salir.
+    with tempfile.TemporaryDirectory(prefix='analisis-browser-', ignore_cleanup_errors=True) as temp:
         browser = subprocess.Popen([str(edge), '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
                                     '--remote-debugging-port=0', '--remote-allow-origins=*', '--window-size=1440,1000',
                                     '--user-data-dir=' + temp, 'about:blank'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
