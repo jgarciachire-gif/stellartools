@@ -454,10 +454,13 @@
                         });
                         const detalle = `Recibido: ${cantidad} unidades`;
 
-                        // El tooltip principal ignora el puntero. Este punto sí lo recibe.
-                        punto.style.pointerEvents = 'auto';
-                        // Muestra el detalle con los mismos colores del tooltip principal.
                         punto.style.position = 'relative';
+
+                        const zonaPuntero = document.createElement('span');
+                        zonaPuntero.setAttribute('aria-hidden', 'true');
+                        zonaPuntero.style.cssText =
+                            'position:absolute;inset:-8px;pointer-events:auto;';
+                        punto.appendChild(zonaPuntero);
 
                         const aviso = document.createElement('span');
                         aviso.textContent = detalle;
