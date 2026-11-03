@@ -6,3 +6,26 @@ exclude = false
 
 [tool.vercel.scripts]
 build = "npm ci --include=dev --ignore-scripts && npm run build:css"
+
+[project]
+name = "stellartools"
+version = "2.0.0"
+requires-python = ">=3.12,<3.13"
+# Vercel installs from this manifest when it is present. Keep this list in
+# sync with requirements.txt, which is also used for local installations.
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "gunicorn",
+    "jinja2",
+    "python-multipart",
+    "pandas",
+    "pdfplumber",
+    "supabase",
+    "itsdangerous",
+    "python-dotenv",
+]
+
+# This repository is an application, not an installable Python package.
+[tool.uv]
+package = false

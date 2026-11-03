@@ -100,6 +100,13 @@ transferencia y trabajo del navegador: reducir bytes no elimina un RPC lento.
 
 ## Compilación y despliegue
 
+Corrección del 3 de noviembre: Vercel selecciona `pyproject.toml` para instalar
+dependencias cuando está presente. Este archivo declara ahora las mismas
+dependencias que `requirements.txt`, Python 3.12 y `tool.uv.package = false`.
+El manifiesto anterior solo contenía ajustes del build y podía dejar fuera las
+dependencias necesarias para importar la aplicación y recopilar sus estáticos.
+La confirmación de la recopilación CDN requiere un nuevo build en Vercel.
+
 El CSS generado está incluido en el repositorio. Para modificar clases:
 
 ```sh
