@@ -20,37 +20,70 @@ async def listar_ordenes(
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    res = await (
-        config.supabase_async
-        .table("ordenes_compra")
-        .select(
-            "id, numero_orden, proveedor, tienda_destino, "
-            "fecha_envio, fecha_recepcion, monto_total, "
-            "estatus, proveedor_id, "
-            "proveedores(nombre, dias_credito), "
-            "detalles_productos(codigo, descripcion, cantidad, "
-            "precio_unitario, pre, emp)"
+    # Only document headers are read here; product lines load on demand.
+    ordenes = []
+    offset = 0
+    while True:
+        res = await (
+            config.supabase_async.table("ordenes_compra")
+            .select("id, numero_orden, proveedor, tienda_destino, fecha_envio, "
+                    "fecha_recepcion, monto_total, estatus, proveedor_id, "
+                    "proveedores(nombre, dias_credito)")
+            .eq("usuario_id", user.id)
+            .order("fecha_envio", desc=True).order("id", desc=True)
+            .range(offset, offset + 999).execute()
         )
-        .eq("usuario_id", user.id)
-        .order("fecha_envio", desc=True)
-        .execute()
-    )
-    
+        lote = res.data or []
+        ordenes.extend(lote)
+        if len(lote) < 1000:
+            break
+        offset += 1000
+
+    texto = request.query_params.get("q", "").strip().lower()
+    fecha = request.query_params.get("fecha", "").strip()
+    try:
+        etiquetas = json.loads(request.query_params.get("tags", "[]"))
+    except (ValueError, TypeError):
+        etiquetas = []
+    if not isinstance(etiquetas, list):
+        etiquetas = []
+    etiquetas = [e for e in etiquetas if isinstance(e, dict) and isinstance(e.get("valor"), str)]
+    criterios = [texto] + [e["valor"].strip().lower() for e in etiquetas]
+    filtradas = []
+    for orden in ordenes:
+        proveedor = orden.get("proveedores") or {}
+        nombre = proveedor.get("nombre") or orden.get("proveedor") or ""
+        recibida = str(orden.get("fecha_recepcion") or "").strip()
+        tiene_recepcion = recibida.lower() not in ("", "none", "nan", "nat", "null")
+        estatus = "Despacho Recibido" if tiene_recepcion else "Enviada"
+        vencimiento = ""
+        if tiene_recepcion and proveedor.get("dias_credito", 30):
+            try:
+                vencimiento = (datetime.strptime(recibida, "%Y-%m-%d") + timedelta(
+                    days=int(proveedor.get("dias_credito", 30)))).strftime("%d/%m/%Y")
+            except (ValueError, TypeError):
+                pass
+        monto = "{:,.2f}".format(orden.get("monto_total") or 0).replace(",", "X").replace(".", ",").replace("X", ".")
+        contenido = " ".join(str(v) for v in (orden.get("numero_orden") or "", nombre,
+                    orden.get("tienda_destino") or "", vencimiento, "$" + monto, estatus)).lower()
+        if all(c in contenido for c in criterios) and (
+            not fecha or fecha in (orden.get("fecha_envio"), orden.get("fecha_recepcion"))
+        ):
+            filtradas.append(orden)
+    total = len(filtradas)
+    total_paginas = max(1, (total + 19) // 20)
+    try:
+        pagina = min(total_paginas, max(1, int(request.query_params.get("page", "1"))))
+    except (ValueError, TypeError):
+        pagina = 1
+    ordenes = filtradas[(pagina - 1) * 20:pagina * 20]
+
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     ordenes_agrupadas = {}
     
-    if res.data:
-        for row in res.data:
+    if ordenes:
+        for row in ordenes:
             o = row.copy()
-            
-            dp_raw = o.get("detalles_productos")
-            if isinstance(dp_raw, str):
-                try:
-                    o['detalles_productos'] = json.loads(dp_raw)
-                except (json.JSONDecodeError, TypeError):
-                    o['detalles_productos'] = []
-            elif not isinstance(dp_raw, list):
-                o['detalles_productos'] = []
             
             prov_obj = o.get("proveedores")
             if prov_obj:
@@ -87,7 +120,35 @@ async def listar_ordenes(
                 ordenes_agrupadas[mes_anio] = []
             ordenes_agrupadas[mes_anio].append(o)
             
-    return templates.TemplateResponse(request=request, name="ordenes.html", context={"ordenes_agrupadas": ordenes_agrupadas})
+    return templates.TemplateResponse(request=request, name="ordenes.html", context={
+        "ordenes_agrupadas": ordenes_agrupadas, "pagina_actual": pagina,
+        "total_paginas": total_paginas, "total_ordenes": total,
+        "filtros_ordenes": {"q": request.query_params.get("q", ""), "fecha": fecha, "tags": etiquetas}
+    })
+
+@router.get("/ordenes/{orden_id}/detalle")
+async def detalle_orden_listado(
+    orden_id: int, request: Request,
+    access_token: str = Cookie(None), refresh_token: str = Cookie(None)
+):
+    user = await obtener_usuario_actual(access_token, refresh_token)
+    if not user:
+        return JSONResponse({"mensaje": "Tu sesión venció. Inicia sesión nuevamente."}, status_code=401)
+    try:
+        res = await (config.supabase_async.table("ordenes_compra")
+            .select("id, monto_total, detalles_productos(codigo, descripcion, cantidad, precio_unitario, pre, emp)")
+            .eq("id", orden_id).eq("usuario_id", user.id).limit(1).execute())
+        if not res.data:
+            return JSONResponse({"mensaje": "La orden no existe o no tienes acceso."}, status_code=404)
+        orden = dict(res.data[0])
+        detalles = orden.get("detalles_productos")
+        if isinstance(detalles, str):
+            detalles = json.loads(detalles)
+        orden["detalles_productos"] = detalles if isinstance(detalles, list) else []
+        return templates.TemplateResponse(request=request, name="componentes/orden_detalle.html", context={"o": orden})
+    except Exception:
+        return JSONResponse({"mensaje": "No se pudo cargar el detalle. Puedes reintentarlo."}, status_code=500)
+
 
 @router.post("/ordenes/actualizar/{orden_id}")
 async def actualizar_orden(

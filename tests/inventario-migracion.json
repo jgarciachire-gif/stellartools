@@ -1,0 +1,72 @@
+[
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-multitienda.js",
+    "sha256": "0812d31c7bd30bc2cfbc61ffa23e4563f35ee2daf61f726e2ef5c060507f4e64"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-listado.js",
+    "sha256": "55d12bcd5ec0bae5df700e82a0be95d9cfc7950ca8654c690c1912c92233a971"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-fechas.js",
+    "sha256": "f54fd446a837b87d8703b1613ecfaf97c98dba66ef64408627665924a749c769"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-creacion.js",
+    "sha256": "f36c2b0af3ea79e35b7d052c34f2364eba031239885bd809a4e21d71af61865a"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-seleccion.js",
+    "sha256": "f0fc6c96fefc53a677d65e174fb6020fb36f8625dd4ef905da5026eb79225c42"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-buscador.js",
+    "sha256": "41a327b2578b7fe4de4fb7a5f9aaab07f7fcaa1f89612df959eecb833a253779"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/js/inventario/inventario-modales.js",
+    "sha256": "6d1e823d317875f905f107735fba7e1c834c5972e61cd6afbbb4913e396b8288"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/css/inventario-1.css",
+    "sha256": "2a5875f2965a503f69f0522cf5f4ccb4ca600adfec4e91069ac706678ec84b4e"
+  },
+  {
+    "template": "inventario.html",
+    "asset": "static/css/inventario-2.css",
+    "sha256": "bece2a1c9a56a651931311bb27837beb47a7528612c8430556573241760e876e"
+  },
+  {
+    "template": "inventario_nuevo.html",
+    "asset": "static/js/inventario/inventario-documento-vista.js",
+    "sha256": "a16b1301a721191fcfff06dbd97931990cffa84c9e8fba9ada50e1f263a51eea"
+  },
+  {
+    "template": "inventario_nuevo.html",
+    "asset": "static/js/inventario/inventario-documento-header.js",
+    "sha256": "578d97097c5e78fcfe2ccfd7f9e4320be07e5a35fe0c7cb7f3337f37dec6f688"
+  },
+  {
+    "template": "inventario_nuevo.html",
+    "asset": "static/js/inventario/inventario-documento.js",
+    "sha256": "78b6fc3c7405aac4cf1be55b899634b91ef74a9daebb6854a93698b47a29f5d0"
+  },
+  {
+    "template": "inventario_nuevo.html",
+    "asset": "static/css/inventario_nuevo-1.css",
+    "sha256": "c22d0c4126f11f45a10efcee87a377dadfb78a52bc5379d3740af7610997f29c"
+  },
+  {
+    "template": "inventario_nuevo.html",
+    "asset": "static/css/inventario_nuevo-2.css",
+    "sha256": "9fbd50ace8f9385ad54ae12b71ca9fac787cd48f8f86b3194653839147bb6bdc"
+  }
+]

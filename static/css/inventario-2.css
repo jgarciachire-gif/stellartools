@@ -1,0 +1,10 @@
+
+    /* Ocultar la barra sin desactivar el desplazamiento */
+    .ocultar-scrollbar {
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+    }
+
+    .ocultar-scrollbar::-webkit-scrollbar {
+        display: none;
+    }

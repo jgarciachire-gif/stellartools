@@ -298,11 +298,15 @@ async def vista_perfil(request: Request, access_token: str = Cookie(None)):
         return RedirectResponse(url="/login", status_code=303)
 
     # Consulta a la tabla perfiles usando la ID del usuario ya resuelta
-    res_perfil = supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+    res_perfil = await run_in_threadpool(
+        lambda: supabase.table("perfiles").select("*").eq("usuario_id", user.id).maybe_single().execute()
+    )
     perfil = res_perfil.data if res_perfil and res_perfil.data else {"nombre_comprador": "", "cargo": ""}
 
     # Consulta de categorías creadas por el usuario activo
-    res_cats = supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
+    res_cats = await run_in_threadpool(
+        lambda: supabase.table("categorias").select("*").eq("usuario_id", user.id).order("nombre").execute()
+    )
     categorias = res_cats.data if res_cats and res_cats.data else []
 
     return templates.TemplateResponse(request=request, name="perfil.html", context={
@@ -428,10 +432,10 @@ async def crear_categoria(nombre: str = Form(...), access_token: str = Cookie(No
         return RedirectResponse(url="/login", status_code=303)
 
     if nombre.strip():
-        supabase.table("categorias").insert({
+        await run_in_threadpool(lambda: supabase.table("categorias").insert({
             "usuario_id": user.id,
             "nombre": nombre.strip()
-        }).execute()
+        }).execute())
 
     return RedirectResponse(url="/perfil", status_code=303)
 
@@ -443,7 +447,7 @@ async def actualizar_categoria(cat_id: int, nombre: str = Form(...), access_toke
         return RedirectResponse(url="/login", status_code=303)
 
     if nombre.strip():
-        supabase.table("categorias").update({"nombre": nombre.strip()}).eq("id", cat_id).eq("usuario_id", user.id).execute()
+        await run_in_threadpool(lambda: supabase.table("categorias").update({"nombre": nombre.strip()}).eq("id", cat_id).eq("usuario_id", user.id).execute())
 
     return RedirectResponse(url="/perfil", status_code=303)
 
@@ -454,6 +458,6 @@ async def eliminar_categoria(cat_id: int, access_token: str = Cookie(None)):
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    supabase.table("categorias").delete().eq("id", cat_id).eq("usuario_id", user.id).execute()
+    await run_in_threadpool(lambda: supabase.table("categorias").delete().eq("id", cat_id).eq("usuario_id", user.id).execute())
 
     return RedirectResponse(url="/perfil", status_code=303)

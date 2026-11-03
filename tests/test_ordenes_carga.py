@@ -156,7 +156,7 @@ class OrdenesSinPagosTests(unittest.IsolatedAsyncioTestCase):
         db = ListaDatabase()
         listing, _ = handler('routes/ordenes.py', 'listar_ordenes', config=NS(supabase_async=db),
             timedelta=timedelta, templates=NS(TemplateResponse=lambda **kwargs: kwargs['context']))
-        result = await listing(object())
+        result = await listing(NS(query_params={}))
         order = result['ordenes_agrupadas']['Octubre 2026'][0]
         self.assertEqual(order['vencimiento_factura_str'], '29/11/2026')
         self.assertEqual(order['estatus'], 'Despacho Recibido')

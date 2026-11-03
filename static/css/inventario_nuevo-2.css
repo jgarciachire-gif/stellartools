@@ -1,0 +1,30 @@
+
+    /* =========================================================
+       BLOQUEAR SELECCIÓN DE TEXTO EN MÓVIL
+       Evita "Copiar / Seleccionar todo / Búsqueda web" al
+       mantener presionado cualquier elemento del inventario.
+       ========================================================= */
+
+    @media (max-width: 767px) {
+
+        #inventario-app,
+        #inventario-app * {
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+        }
+
+        /*
+         * Los campos siguen pudiendo recibir escritura.
+         * Solo evitamos que Android trate el texto como
+         * contenido seleccionable.
+         */
+        #inventario-app input,
+        #inventario-app textarea,
+        #inventario-app [contenteditable="true"] {
+            -webkit-user-select: text;
+            user-select: text;
+            -webkit-touch-callout: default;
+        }
+
+    }

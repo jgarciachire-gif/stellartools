@@ -244,11 +244,16 @@ def main():
                                    creationflags=subprocess.CREATE_NO_WINDOW)
         try:
             debug = Path(temp) / 'DevToolsActivePort'
+            browser_port = None
             for _ in range(100):
-                if debug.exists():
+                try:
+                    browser_port = int(debug.read_text().splitlines()[0])
                     break
+                except (FileNotFoundError, PermissionError, IndexError, ValueError):
+                    pass
                 time.sleep(.1)
-            browser_port = int(debug.read_text().splitlines()[0])
+            if browser_port is None:
+                raise RuntimeError('Edge no publicó su puerto de depuración.')
             asyncio.run(exercise(server.server_port, browser_port, state))
         finally:
             browser.terminate()

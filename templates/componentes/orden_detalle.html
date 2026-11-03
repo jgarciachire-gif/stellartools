@@ -1,0 +1,86 @@
+                            <!-- max-w-4xl y mx-auto centran el contenedor horizontalmente -->
+                            <div
+                                class="max-w-6xl mx-auto bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
+                                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                                    <span
+                                        class="text-xs font-bold text-slate-600 tracking-wider flex items-center gap-2">
+                                        <i class="fa-solid fa-boxes-stacked text-blue-600"></i> Detalle de Orden de
+                                        Compra
+                                    </span>
+                                    <span class="text-xs font-semibold text-slate-500">
+                                        {{ o.detalles_productos|length if o.detalles_productos else 0 }} ítem(s)
+                                    </span>
+                                </div>
+
+                                {% if o.detalles_productos and o.detalles_productos|length > 0 %}
+                                <div class="overflow-x-auto">
+                                    <table class="w-full text-left text-xs">
+                                        <thead>
+                                            <tr
+                                                class="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
+                                                <th class="p-2">Código</th>
+                                                <th class="p-2">Descripción</th>
+                                                <th class="p-2 text-right">Cantidad/Pre.</th>
+                                                <th class="p-2 text-right">Cantidad/Emp.</th>
+                                                <th class="p-2 text-right">Cantidad/Und.</th>
+                                                <th class="p-2 text-right">Costo/Und.</th>
+                                                <th class="p-2 text-right">Subtotal</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                            {% for dp in o.detalles_productos %}
+                                            <tr class="hover:bg-slate-50">
+                                                <!-- Lee el código del producto -->
+                                                <td class="p-2 font-semibold text-blue-800">{{ dp.codigo or
+                                                    dp.codigo_producto or dp.producto_id or '-' }}</td>
+                                                <!-- Lee la descripción del producto -->
+                                                <td class="p-2 text-slate-700 font-medium">{{ dp.descripcion or
+                                                    dp.nombre_producto or 'Sin descripción' }}</td>
+                                                <!-- Evalúa la presentación PRE comprobando que no sea None -->
+                                                <td class="p-2 text-right font-semibold text-slate-700">
+                                                    {% set val_pre = dp.pre if dp.pre is not none else (dp.unidad_manejo
+                                                    if dp.unidad_manejo is not none else 1) %}
+                                                    {{ val_pre | int }}
+                                                </td>
+                                                <!-- Evalúa los empaques EMP comprobando que no sea None -->
+                                                <td class="p-2 text-right font-semibold text-slate-700">
+                                                    {% set val_emp = dp.emp if dp.emp is not none else (dp.empaques if
+                                                    dp.empaques is not none else 0) %}
+                                                    {{ val_emp | int }}
+                                                </td>
+                                                <!-- Lee la cantidad aplicando el filtro para limpiar comas de miles -->
+                                                <td class="p-2 text-right font-semibold text-slate-800">{{ (dp.cantidad
+                                                    | limpiar_cantidad) | int }}</td>
+                                                <!-- Lee el precio unitario en dólares -->
+                                                <td class="p-2 text-right font-semibold text-slate-800">${{
+                                                    "{:,.2f}".format((dp.precio_unitario or 0) | float).replace(",",
+                                                    "X").replace(".", ",").replace("X", ".") }}</td>
+                                                <!-- Calcula el subtotal multiplicando la cantidad limpia por el precio unitario -->
+                                                <td class="p-2 text-right font-semibold text-slate-800">${{
+                                                    "{:,.2f}".format((dp.cantidad | limpiar_cantidad) *
+                                                    ((dp.precio_unitario
+                                                    or 0) | float)).replace(",", "X").replace(".", ",").replace("X",
+                                                    ".") }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                        <!-- Pie de tabla para mostrar la suma total -->
+                                        <tfoot class="border-t-2 border-slate-200 bg-slate-50/80">
+                                            <tr>
+                                                <!-- Colspan en 6 para alinear la etiqueta 'Total:' exactamente a la izquierda del monto final -->
+                                                <td colspan="6"
+                                                    class="p-2 text-right font-bold text-[11px] tracking-wider text-slate-600">
+                                                    Total:</td>
+                                                <!-- Muestra el total general de la orden -->
+                                                <td class="p-2 text-right font-bold text-blue-900 text-sm">${{
+                                                    "{:,.2f}".format(o.monto_total or 0).replace(",", "X").replace(".",
+                                                    ",").replace("X", ".") }}</td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                                {% else %}
+                                <p class="text-xs text-slate-400 italic py-1">Sin ítems o detalle registrado para esta
+                                    orden.</p>
+                                {% endif %}
+                            </div>

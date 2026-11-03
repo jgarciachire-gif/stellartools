@@ -2,8 +2,10 @@
 
 Contexto: Vercel, 8–10 usuarios simultáneos. Se revisaron las rutas, configuración,
 plantillas y recursos del repositorio, junto con metadatos, índices, funciones y
-estadísticas de rendimiento del proyecto StellarTools en Supabase. Las consultas
-a producción fueron de lectura; no se modificaron datos, funciones ni índices.
+estadísticas de rendimiento del proyecto StellarTools en Supabase. La primera
+auditoría fue de lectura. En la continuación del 3 de noviembre se optimizó la
+función de demanda comercial, con pruebas de equivalencia y respaldo; no se
+modificaron registros ni índices.
 No se midieron aún TTFB, LCP o INP de la aplicación desplegada.
 
 ## Cambios aplicados
@@ -80,6 +82,11 @@ y [sin clave primaria](https://supabase.com/docs/guides/database/database-linter
 
 ## Siguientes mejoras, por prioridad
 
+Estado actualizado del 3 de noviembre: los cuatro frentes principales (Órdenes,
+Inventario, Perfil y demanda comercial de Kardex) ya se trabajaron. El detalle
+y las limitaciones están en la sección siguiente. Las otras filas de esta tabla
+son oportunidades condicionadas a mediciones, no cambios pendientes obligatorios.
+
 | Prioridad | Pantalla/área | Hallazgo y trabajo concreto |
 | --- | --- | --- |
 | Alta | Kardex/comparaciones | Medir planes actuales con rangos y cantidades representativas; evaluar cobertura diaria por sede precalculada, actualizada junto a las importaciones. Comparar resultados exactos de demanda regular/alta y días cubiertos antes de cambiar la RPC |
@@ -107,6 +114,10 @@ El manifiesto anterior solo contenía ajustes del build y podía dejar fuera las
 dependencias necesarias para importar la aplicación y recopilar sus estáticos.
 La confirmación de la recopilación CDN requiere un nuevo build en Vercel.
 
+El usuario confirmó posteriormente que la aplicación ya funciona en Vercel.
+Los cambios de la continuación requieren otro despliegue del repositorio;
+la función SQL de demanda comercial ya está aplicada en Supabase.
+
 El CSS generado está incluido en el repositorio. Para modificar clases:
 
 ```sh
@@ -128,7 +139,7 @@ Usar documentos de prueba para operaciones de escritura.
 
 ## Verificación
 
-- 108 pruebas JavaScript y 61 pruebas Python aprobadas.
+- 110 pruebas JavaScript y 69 pruebas Python aprobadas en la continuación.
 - Edge con HTML real y API local simulada: CSS compilado, colores, espaciado,
   visibilidad, proveedor, productos, cálculos, tiendas, sugeridos, guardado,
   restauración, XML/TXT, importador, comparación, confirmaciones y filas manuales.
@@ -141,3 +152,108 @@ Usar documentos de prueba para operaciones de escritura.
 Fuentes: [Tailwind: configuración de contenido](https://v3.tailwindcss.com/docs/content-configuration),
 [Vercel: FastAPI, build y recursos estáticos](https://vercel.com/docs/frameworks/backend/fastapi),
 [Supabase: optimización y planes](https://supabase.com/docs/guides/database/query-optimization).
+
+## Continuación aplicada — 3 de noviembre de 2026
+
+### Órdenes
+
+El listado solicita únicamente cabeceras y devuelve 20 documentos por página.
+Los detalles de productos se solicitan al desplegar cada orden, se conservan
+mientras esa fila siga en pantalla y permiten cerrar/reintentar si hay un error.
+El fragmento reutiliza el HTML y las fórmulas Jinja originales de cantidades,
+presentaciones, empaques, costos y subtotales. El nuevo endpoint exige identidad
+y filtra tanto por ID de orden como por usuario.
+
+La búsqueda y la paginación actualizan solo el listado, conservando el buscador,
+los badges y el modo de selección. Las solicitudes anteriores se cancelan y sus
+respuestas tardías no reemplazan resultados nuevos. Escribir mantiene el filtro
+visual inmediato y espera 350 ms antes de consultar. Seleccionar todo y eliminar
+se limitan a las filas visibles de la página actual; la confirmación vuelve a
+validar la selección si el listado cambió.
+
+Límite explícito: para conservar la búsqueda en todos los campos visuales,
+incluidos vencimiento calculado y monto formateado, el servidor lee las cabeceras
+del usuario en bloques de 1.000 y filtra antes de paginar. No descarga los productos
+de todas las órdenes. Por tanto, la paginación limita HTML/DOM y detalle, pero aún
+no limita a 20 las cabeceras leídas de la BD. El caso de más de 1.000 documentos
+y la búsqueda fuera de la página inicial están cubiertos por pruebas.
+
+### Inventario
+
+Se extrajeron diez bloques JS y cuatro CSS a recursos versionados, conservando
+su texto, orden y ámbito global. No se reescribieron cálculos ni eventos.
+Comparación del HTML original y actual excluyendo únicamente scripts/estilos:
+idéntica. Checksums de los bloques normalizados en LF registrados en
+`tests/inventario-migracion.json`.
+
+Tamaños de fuentes HTML normalizadas en LF:
+
+| Plantilla | Antes | Después |
+| --- | ---: | ---: |
+| inventario.html | 124.728 bytes | 36.873 bytes |
+| inventario_nuevo.html | 255.379 bytes | 48.279 bytes |
+
+La lógica sigue descargándose en la primera visita, pero queda en archivos
+reutilizables por caché/CDN entre documentos. Estas cifras no representan el
+porcentaje de mejora del tiempo completo de navegación.
+
+### Perfil y categorías
+
+Las consultas síncronas de lectura del perfil/categorías y creación, edición y
+eliminación de categorías se ejecutan con `run_in_threadpool`, igual que el
+guardado de perfil existente. Conservan filtros por usuario y respuestas.
+Las pruebas verifican que las cinco ejecuciones ocurran fuera del hilo del bucle
+de eventos y mantengan el usuario en las restricciones de acceso.
+
+### Kardex: cambio ya aplicado en Supabase
+
+`obtener_demanda_comercial_kardex` ya no obtiene días cubiertos recorriendo todas
+las ventas del intervalo. Obtiene las sedes de los productos con ventas, recorre
+el calendario y comprueba si existe alguna venta positiva de cualquier producto
+en esa sede/día, usando el índice existente por sede/fecha. Materializa esa
+cobertura una vez por consulta para reutilizarla entre productos. No restringe
+los días cubiertos a los códigos seleccionados y no introduce un resumen que
+pueda quedar desactualizado tras importar datos.
+
+Se conservaron parámetros, columnas devueltas, validación de fechas, cantidades,
+semanas regulares/altas, división, orden, propietario, `search_path` y permisos.
+La función sigue siendo invoker y solo postgres/service_role pueden ejecutarla.
+No hubo cambios de índices, tablas ni políticas RLS.
+
+Medición comparable de la RPC completa con dos productos y octubre de 2026:
+
+| Métrica | Antes | Después |
+| --- | ---: | ---: |
+| Tiempo de ejecución en BD | 10.249,500 ms | 733,883 ms |
+| Filas devueltas | 7 | 7 |
+| Bloques compartidos encontrados en caché | 484.603 | 2.004 |
+| Bloques leídos | 3.630 | 233 |
+
+Fue una medición por versión, con estados de caché distintos. Demuestra menor
+trabajo en esta muestra, no una garantía de 14× para toda la aplicación ni un p95.
+La consulta aislada de cobertura anterior tardó 24.782 ms; no se comparó ese
+subcomponente con la RPC completa para calcular la mejora.
+
+La comparación bidireccional con `EXCEPT ALL` dio cero diferencias con datos
+reales. Otra prueba con datos sintéticos también dio cero diferencias, incluyendo
+días cubiertos por otros productos, productos sin ventas, códigos repetidos,
+cantidades cero/negativas, sede nula, nombres de sede distintos y cambio de mes.
+
+Archivos reproducibles:
+
+- `scripts/sql/kardex-demanda-comercial.sql`: definición optimizada aplicada.
+- `scripts/sql/kardex-demanda-comercial-rollback.sql`: definición anterior.
+- `scripts/sql/verificar-demanda-comercial.sql`: comparación con datos sintéticos,
+  solo lectura; debe devolver cero diferencias y cuatro días cubiertos en CENTRO.
+
+### Verificación de la continuación
+
+`python tests/optimizaciones_navegador.py` abre Edge y sirve las plantillas y
+recursos reales con APIs locales simuladas. Verifica paginación de órdenes,
+búsqueda fuera de página, detalle bajo demanda, reutilización y reintento tras
+error, selección y cancelación de confirmación; modales de inventario, filas,
+duplicados, cantidades por ubicación, guardado y vista móvil. No escribe en BD.
+
+Las pruebas unitarias adicionales cubren respuestas tardías y recuperación del
+listado, aislamiento por usuario del detalle, escape HTML y consultas no bloqueantes.
+La revisión de asesores de Supabase no exigió cambiar permisos para esta mejora.

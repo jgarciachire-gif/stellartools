@@ -1,6 +1,11 @@
 {% extends "base.html" %}
 {% block page_styles %}
 <style>
+    /* La clase hidden controla la visibilidad; flex se aplica al abrir. */
+    .ordenes-flex:not(.hidden) {
+        display: flex;
+    }
+
     /* Barra integrada al header. */
     .ordenes-header-menu {
         position: relative;
@@ -235,7 +240,7 @@
 
     <!-- Barra de Acciones de Selección -->
     <div id="barra-seleccion"
-        class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl flex flex-wrap justify-between items-center gap-4 shadow-sm transition-all mb-4">
+        class="hidden bg-blue-50 border border-blue-200 p-4 rounded-xl ordenes-flex flex-wrap justify-between items-center gap-4 shadow-sm transition-all mb-4">
         <div class="flex items-center gap-4">
             <span id="contador-seleccion" class="font-bold text-blue-800 bg-blue-100 px-3 py-1 rounded-lg text-sm">0
                 seleccionados</span>
@@ -253,6 +258,7 @@
         </div>
     </div>
 
+    <div id="ordenes-resultados">
     {% for mes, lista_ordenes in ordenes_agrupadas.items() %}
     <details class="group bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden mb-4" open>
         <summary
@@ -369,92 +375,7 @@
                     <tr id="detalle-{{ o.id }}" class="hidden bg-slate-50/80 border-b border-slate-200">
                         <!-- td ajustado sin pl-12 para garantizar centrado simétrico -->
                         <td colspan="9" class="p-4">
-                            <!-- max-w-4xl y mx-auto centran el contenedor horizontalmente -->
-                            <div
-                                class="max-w-6xl mx-auto bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-3">
-                                <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                                    <span
-                                        class="text-xs font-bold text-slate-600 tracking-wider flex items-center gap-2">
-                                        <i class="fa-solid fa-boxes-stacked text-blue-600"></i> Detalle de Orden de
-                                        Compra
-                                    </span>
-                                    <span class="text-xs font-semibold text-slate-500">
-                                        {{ o.detalles_productos|length if o.detalles_productos else 0 }} ítem(s)
-                                    </span>
-                                </div>
-
-                                {% if o.detalles_productos and o.detalles_productos|length > 0 %}
-                                <div class="overflow-x-auto">
-                                    <table class="w-full text-left text-xs">
-                                        <thead>
-                                            <tr
-                                                class="bg-slate-100/70 text-slate-600 font-bold border-b border-slate-200">
-                                                <th class="p-2">Código</th>
-                                                <th class="p-2">Descripción</th>
-                                                <th class="p-2 text-right">Cantidad/Pre.</th>
-                                                <th class="p-2 text-right">Cantidad/Emp.</th>
-                                                <th class="p-2 text-right">Cantidad/Und.</th>
-                                                <th class="p-2 text-right">Costo/Und.</th>
-                                                <th class="p-2 text-right">Subtotal</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody class="divide-y divide-slate-100">
-                                            {% for dp in o.detalles_productos %}
-                                            <tr class="hover:bg-slate-50">
-                                                <!-- Lee el código del producto -->
-                                                <td class="p-2 font-semibold text-blue-800">{{ dp.codigo or
-                                                    dp.codigo_producto or dp.producto_id or '-' }}</td>
-                                                <!-- Lee la descripción del producto -->
-                                                <td class="p-2 text-slate-700 font-medium">{{ dp.descripcion or
-                                                    dp.nombre_producto or 'Sin descripción' }}</td>
-                                                <!-- Evalúa la presentación PRE comprobando que no sea None -->
-                                                <td class="p-2 text-right font-semibold text-slate-700">
-                                                    {% set val_pre = dp.pre if dp.pre is not none else (dp.unidad_manejo
-                                                    if dp.unidad_manejo is not none else 1) %}
-                                                    {{ val_pre | int }}
-                                                </td>
-                                                <!-- Evalúa los empaques EMP comprobando que no sea None -->
-                                                <td class="p-2 text-right font-semibold text-slate-700">
-                                                    {% set val_emp = dp.emp if dp.emp is not none else (dp.empaques if
-                                                    dp.empaques is not none else 0) %}
-                                                    {{ val_emp | int }}
-                                                </td>
-                                                <!-- Lee la cantidad aplicando el filtro para limpiar comas de miles -->
-                                                <td class="p-2 text-right font-semibold text-slate-800">{{ (dp.cantidad
-                                                    | limpiar_cantidad) | int }}</td>
-                                                <!-- Lee el precio unitario en dólares -->
-                                                <td class="p-2 text-right font-semibold text-slate-800">${{
-                                                    "{:,.2f}".format((dp.precio_unitario or 0) | float).replace(",",
-                                                    "X").replace(".", ",").replace("X", ".") }}</td>
-                                                <!-- Calcula el subtotal multiplicando la cantidad limpia por el precio unitario -->
-                                                <td class="p-2 text-right font-semibold text-slate-800">${{
-                                                    "{:,.2f}".format((dp.cantidad | limpiar_cantidad) *
-                                                    ((dp.precio_unitario
-                                                    or 0) | float)).replace(",", "X").replace(".", ",").replace("X",
-                                                    ".") }}</td>
-                                            </tr>
-                                            {% endfor %}
-                                        </tbody>
-                                        <!-- Pie de tabla para mostrar la suma total -->
-                                        <tfoot class="border-t-2 border-slate-200 bg-slate-50/80">
-                                            <tr>
-                                                <!-- Colspan en 6 para alinear la etiqueta 'Total:' exactamente a la izquierda del monto final -->
-                                                <td colspan="6"
-                                                    class="p-2 text-right font-bold text-[11px] tracking-wider text-slate-600">
-                                                    Total:</td>
-                                                <!-- Muestra el total general de la orden -->
-                                                <td class="p-2 text-right font-bold text-blue-900 text-sm">${{
-                                                    "{:,.2f}".format(o.monto_total or 0).replace(",", "X").replace(".",
-                                                    ",").replace("X", ".") }}</td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                                {% else %}
-                                <p class="text-xs text-slate-400 italic py-1">Sin ítems o detalle registrado para esta
-                                    orden.</p>
-                                {% endif %}
-                            </div>
+                            <div data-detalle-contenido class="max-w-6xl mx-auto" aria-live="polite"></div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -462,15 +383,16 @@
             </table>
         </div>
     </details>
-    {% else %}
-    <div class="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200">
-        <p>No hay órdenes registradas.</p>
-    </div>
     {% endfor %}
+    {% include 'componentes/ordenes_paginacion.html' %}
+    </div>
 </div>
 
+<script id="ordenes-filtros-iniciales" type="application/json">{{ filtros_ordenes | default({}) | tojson }}</script>
+<script src="{{ asset_url('js/ordenes-listado.js') }}"></script>
+<script src="{{ asset_url('js/ordenes-detalle.js') }}"></script>
 <script>
-    let etiquetasFiltro = [];
+    let etiquetasFiltro = JSON.parse(document.getElementById('ordenes-filtros-iniciales').textContent).tags || [];
 
     // Función para agregar etiquetas dinámicas (Odoo Style)
     function agregarEtiqueta(tipo, valor) {
@@ -491,6 +413,11 @@
         filtrarOrdenes();
     }
 
+    function escaparEtiquetaOrden(valor) {
+        const span = document.createElement('span'); span.textContent = String(valor ?? '');
+        return span.innerHTML;
+    }
+
     // Renderiza los badges dentro del contenedor del buscador
     function renderizarEtiquetas() {
         const contenedor = document.getElementById('lista-etiquetas');
@@ -501,8 +428,8 @@
             const badge = document.createElement('span');
             badge.className = 'inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-0.5 rounded-md border border-blue-200';
             badge.innerHTML = `
-            <span class="text-[10px] text-blue-500 uppercase font-bold">${f.tipo}:</span>
-            <span>${f.valor}</span>
+            <span class="text-[10px] text-blue-500 uppercase font-bold">${escaparEtiquetaOrden(f.tipo)}:</span>
+            <span>${escaparEtiquetaOrden(f.valor)}</span>
             <button type="button" onclick="removerEtiqueta(${idx})" class="hover:text-rose-600 ml-0.5 focus:outline-none">
                 <i class="fa-solid fa-xmark text-xs"></i>
             </button>
@@ -596,6 +523,11 @@
                     mostrarMes = true;
                 } else {
                     row.style.display = 'none';
+                    const detalleId = row.dataset?.id;
+                    if (detalleId) {
+                        document.getElementById(`detalle-${detalleId}`)?.classList.add('hidden');
+                        document.getElementById(`icono-desplegar-${detalleId}`)?.classList.remove('rotate-90');
+                    }
 
                     // ====================================================
                     // IMPORTANTE:
@@ -619,6 +551,7 @@
         if (typeof actualizarEstadoSeleccion === 'function') {
             actualizarEstadoSeleccion();
         }
+        window.consultarListadoOrdenes?.();
     }
 
 
@@ -1187,17 +1120,6 @@
             }
         });
     }
-    // Alternar visibilidad del detalle desplegable de la Orden de Compra
-    function toggleDetalleOC(ordenId) {
-        const filaDetalle = document.getElementById(`detalle-${ordenId}`);
-        const icono = document.getElementById(`icono-desplegar-${ordenId}`);
-        if (filaDetalle) {
-            filaDetalle.classList.toggle('hidden');
-            if (icono) {
-                icono.classList.toggle('rotate-90'); // Rotar flecha indicadora
-            }
-        }
-    }
 
 </script>
 {% endblock %}
@@ -1252,7 +1174,7 @@
 <script src="{{ asset_url('js/ordenes-carga.js') }}" defer></script>
 <!-- Modal 1: Cargar Órdenes de Compra (PDF) -->
 <div id="modal-cargar-oc" role="dialog" aria-modal="true" aria-labelledby="titulo-carga-oc"
-    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+    class="hidden fixed inset-0 z-[100] ordenes-flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
     <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h3 id="titulo-carga-oc" class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             <i class="fa-solid fa-file-pdf text-red-500"></i> Cargar Órdenes de Compra (PDF)
@@ -1310,7 +1232,7 @@
 
 <!-- Modal 2: Cargar Recepciones (XML) -->
 <div id="modal-cargar-xml"
-    class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
+    class="hidden fixed inset-0 z-[100] ordenes-flex items-center justify-center bg-slate-900/50 backdrop-blur-sm overflow-y-auto p-4">
     <div class="relative z-10 bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h3 class="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
             <i class="fa-solid fa-file-code text-emerald-600"></i> Cargar Recepciones (XML)
@@ -1368,7 +1290,7 @@
 
 <!-- Modal 3: Resultado de Órdenes Extraídas de PDF -->
 <div id="modal-detalle-extraido-oc" role="dialog" aria-modal="true" aria-labelledby="titulo-revision-oc"
-    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm ordenes-flex items-center justify-center p-4 z-50 hidden">
     <div
         class="bg-slate-50 rounded-2xl max-w-5xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[90vh]">
 
@@ -1418,7 +1340,7 @@
 
 <!-- Modal 4: Resultado del Procesamiento de Recepciones XML -->
 <div id="modal-detalle-xml-oc"
-    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
+    class="fixed inset-0 bg-slate-900/40 backdrop-blur-sm ordenes-flex items-center justify-center p-4 z-50 hidden">
     <div class="bg-white rounded-2xl max-w-4xl w-full p-6 shadow-xl border border-slate-100 flex flex-col max-h-[85vh]">
 
         <!-- Cabecera -->
@@ -1482,7 +1404,7 @@
             </div>
             <!-- Resumen Informativo: OC No Procesadas en una sola línea -->
             <div id="alerta-xml-no-encontradas"
-                class="hidden bg-amber-50 border border-amber-200/80 rounded-xl p-3 flex items-center justify-between text-xs text-amber-900">
+                class="hidden bg-amber-50 border border-amber-200/80 rounded-xl p-3 ordenes-flex items-center justify-between text-xs text-amber-900">
                 <div class="flex items-center gap-2">
                     <i class="fa-solid fa-triangle-exclamation text-amber-600 text-sm"></i>
                     <span>Órdenes no procesadas:</span>

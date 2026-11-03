@@ -1,0 +1,13 @@
+<div class="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-white border border-slate-200 rounded-xl text-xs text-slate-600">
+    <span>{{ total_ordenes }} orden(es) · Página {{ pagina_actual }} de {{ total_paginas }}</span>
+    <div class="flex items-center gap-2">
+        {% if pagina_actual > 1 %}
+        <a data-pagina-ordenes="{{ pagina_actual - 1 }}" href="{{ request.url.include_query_params(page=pagina_actual - 1) }}" class="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100" aria-label="Página anterior"><i class="fa-solid fa-chevron-left"></i></a>
+        {% endif %}
+        <span class="w-8 h-8 inline-flex items-center justify-center rounded-lg bg-indigo-50 text-indigo-700 font-semibold">{{ pagina_actual }}</span>
+        {% if pagina_actual < total_paginas %}
+        <a data-pagina-ordenes="{{ pagina_actual + 1 }}" href="{{ request.url.include_query_params(page=pagina_actual + 1) }}" class="w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 hover:bg-slate-100" aria-label="Página siguiente"><i class="fa-solid fa-chevron-right"></i></a>
+        {% endif %}
+    </div>
+</div>
+{% if not total_ordenes %}<p class="p-6 text-center text-sm text-slate-500">No hay órdenes que coincidan con los filtros.</p>{% endif %}

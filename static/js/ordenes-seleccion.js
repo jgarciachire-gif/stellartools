@@ -133,17 +133,26 @@ document.addEventListener('DOMContentLoaded', () => {
         visibles.forEach(casilla => { casilla.checked = marcar; });
         actualizarEstadoSeleccion();
     });
-    filas().forEach(fila => {
-        fila.querySelector('.select-row')?.addEventListener('change', actualizarEstadoSeleccion);
-        fila.addEventListener('click', evento => {
-            if (eliminando || !visible(fila) || $('barra-seleccion').classList.contains('hidden')
-                || evento.target.closest('button, input, label, a, select, textarea')) return;
-            const casilla = fila.querySelector('.select-row');
-            if (!casilla || casilla.disabled) return;
-            casilla.checked = !casilla.checked;
-            actualizarEstadoSeleccion();
+    const enlazadas = new WeakSet();
+    function enlazarFilas() {
+        const activo = !$('barra-seleccion').classList.contains('hidden');
+        document.querySelectorAll('.col-seleccion').forEach(columna => columna.classList.toggle('hidden', !activo));
+        filas().forEach(fila => {
+            if (enlazadas.has(fila)) return;
+            enlazadas.add(fila);
+            fila.querySelector('.select-row')?.addEventListener('change', actualizarEstadoSeleccion);
+            fila.addEventListener('click', evento => {
+                if (eliminando || !visible(fila) || $('barra-seleccion').classList.contains('hidden')
+                    || evento.target.closest('button, input, label, a, select, textarea')) return;
+                const casilla = fila.querySelector('.select-row');
+                if (!casilla || casilla.disabled) return;
+                casilla.checked = !casilla.checked;
+                actualizarEstadoSeleccion();
+            });
         });
-    });
-    document.querySelectorAll('details.group').forEach(grupo => grupo.addEventListener('toggle', actualizarEstadoSeleccion));
-    actualizarEstadoSeleccion();
+        document.querySelectorAll('details.group').forEach(grupo => grupo.addEventListener('toggle', actualizarEstadoSeleccion));
+        actualizarEstadoSeleccion();
+    }
+    enlazarFilas();
+    document.addEventListener('ordenes:listado', enlazarFilas);
 });
