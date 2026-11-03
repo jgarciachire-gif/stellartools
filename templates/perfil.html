@@ -1,7 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
-<!-- Importación CDN de Alpine.js e inclusión de la regla CSS para ocultamiento previo -->
-<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<!-- Ocultamiento previo a la inicialización de Alpine.js desde base.html. -->
 <style>
     [x-cloak] {
         display: none !important;

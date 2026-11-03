@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% block shared_modal_script %}{% endblock %}
 {% block page_styles %}
 <style>
     /* Barra integrada al header. */
@@ -1280,14 +1281,7 @@
         </section>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
     <script>
-        // Inicialización del cliente Supabase en el navegador
-        const SUPABASE_URL = 'https://wrcbuseidkupjndpovdd.supabase.co'; // URL de tu proyecto
-        const SUPABASE_KEY = 'sb_publishable_m6ayEiPYF_dIWiNf-9kRog_j-HbKhwA'; // Clave pública
-        window.supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-
         // Obtiene el ID del usuario desde request.state inyectado por FastAPI/Jinja2
         const USUARIO_ID_SESION = "{{ request.state.user.id if request.state and request.state.user else (request.state.perfil.usuario_id if request.state and request.state.perfil else (user.id if user is defined and user else '')) }}";
     </script>

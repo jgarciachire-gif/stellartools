@@ -1,0 +1,8 @@
+# Only /static is mounted publicly. Keep files in the function bundle:
+# asset_url reads their revisions when rendering templates.
+[tool.vercel.fastapi.static]
+cdn = true
+exclude = false
+
+[tool.vercel.scripts]
+build = "npm ci --include=dev --ignore-scripts && npm run build:css"

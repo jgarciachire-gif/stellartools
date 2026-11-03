@@ -77,6 +77,13 @@ async def exercise(port, browser_port, state):
             await cdp.evaluate(r"""window.check = (condition, message) => { if (!condition) throw Error(message); };
                 window.waitFor = async predicate => { for(let i=0;i<100;i++){if(predicate())return; await new Promise(r=>setTimeout(r,30));} throw Error('Espera agotada'); };
                 window.rows = () => [...document.querySelectorAll('#filas-tabla-analisis tr')];
+                check(getComputedStyle(document.body).fontFamily.includes('ui-sans-serif'), 'CSS compilado cargado');
+                const cssProbe = document.createElement('div');
+                cssProbe.className = 'hidden p-4 bg-emerald-700'; document.body.append(cssProbe);
+                check(getComputedStyle(cssProbe).display === 'none', 'Utilidad hidden compilada');
+                check(getComputedStyle(cssProbe).paddingTop === '16px', 'Espaciado compilado');
+                check(getComputedStyle(cssProbe).backgroundColor === 'rgb(4, 120, 87)', 'Colores conservados');
+                cssProbe.remove();
                 check(rows().length===1, 'Fila inicial');
                 check(document.getElementById('modal-productos-proveedor').parentElement===document.body, 'Modal fuera del main');
                 'inicio correcto';""")
@@ -157,19 +164,17 @@ async def exercise(port, browser_port, state):
 
 def main():
     vendors = {}
-    for name, url in [('tailwind', 'https://cdn.tailwindcss.com'), ('alpine', 'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js')]:
+    for name, url in [('alpine', 'https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js')]:
         request = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urlopen(request, timeout=30) as response:
             vendors[name] = response.read()
-    vendors['supabase'] = b'window.supabase={createClient:()=>({})};'
     env = Environment(loader=FileSystemLoader(ROOT / 'templates'), autoescape=select_autoescape())
     profile = NS(tipo_usuario='normal', nombre_comprador='Prueba', usuario_id='prueba')
     html = env.get_template('analisis_pedido.html').render(
         request=NS(state=NS(perfil=profile, user=NS(id='prueba'))), user=NS(id='prueba'),
         active_app='Análisis de Pedido', proveedores=[dict(id=5, nombre='Proveedor de prueba')],
         asset_url=lambda name: '/static/' + name)
-    for url, path in [('https://cdn.tailwindcss.com', '/vendor/tailwind'), ('https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js', '/vendor/alpine'),
-                      ('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2', '/vendor/supabase')]:
+    for url, path in [('https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js', '/vendor/alpine')]:
         html = html.replace(url, path)
     state = {}
 

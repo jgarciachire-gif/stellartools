@@ -19,7 +19,7 @@
  * ============================================================
  */
 
-const CACHE_NAME = 'stellartools-static-v1';
+const CACHE_NAME = 'stellartools-static-v2';
 
 
 /*
@@ -186,27 +186,8 @@ self.addEventListener('fetch', event => {
     }
 
 
-    /*
-     * ========================================================
-     * ESTRATEGIA:
-     *
-     * STALE-WHILE-REVALIDATE
-     * ========================================================
-     *
-     * 1. Si existe una copia local:
-     *      → se entrega inmediatamente.
-     *
-     * 2. En paralelo:
-     *      → se consulta la versión actual al servidor.
-     *
-     * 3. Si cambia:
-     *      → se actualiza la caché.
-     *
-     * Resultado:
-     *      - interfaz rápida
-     *      - actualización automática
-     *      - sin almacenar datos privados
-     */
+    // Versioned URLs change with every asset revision. Reuse them without
+    // revalidating on every page; unversioned files keep revalidating.
     event.respondWith(
         (async () => {
 
@@ -216,10 +197,14 @@ self.addEventListener('fetch', event => {
             const respuestaCache =
                 await cache.match(request);
 
+            if (respuestaCache && /-[a-f0-9]+-[a-f0-9]+$/i.test(url.searchParams.get('v') || '')) {
+                return respuestaCache;
+            }
+
 
             const actualizarCache =
                 fetch(request)
-                    .then(respuesta => {
+                    .then(async respuesta => {
 
                         /*
                          * Solo almacenamos respuestas HTTP
@@ -231,10 +216,11 @@ self.addEventListener('fetch', event => {
                             respuesta.type === 'basic'
                         ) {
 
-                            cache.put(
-                                request,
-                                respuesta.clone()
-                            );
+                            try {
+                                await cache.put(request, respuesta.clone());
+                            } catch (_) {
+                                // Storage may be unavailable or full; keep the network response.
+                            }
 
                         }
 

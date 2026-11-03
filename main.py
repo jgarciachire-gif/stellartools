@@ -6,7 +6,8 @@ from fastapi.responses import (
     JSONResponse,
 )
 from fastapi.staticfiles import StaticFiles  # Soporte de archivos estáticos
-from starlette.middleware.sessions import SessionMiddleware  # Middleware para manejo de sesiones
+from starlette.middleware.gzip import GZipMiddleware
+from middleware_recursos import SesionesSinRecursosEstaticos
 from supabase import create_async_client, ClientOptions  # Importa cliente asíncrono y opciones de timeout
 
 # Importación de configuración y utilidades compartidas
@@ -56,6 +57,21 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
     ]
     
     path = request.url.path  # Obtiene la ruta actual solicitada por el usuario
+
+    # These public files do not access, validate or renew a user session.
+    if path.startswith("/static/") or path == "/service-worker.js":
+        response = await call_next(request)
+        if path == "/service-worker.js":
+            response.headers["Cache-Control"] = "no-cache"
+        elif response.status_code in (200, 304):
+            response.headers["Cache-Control"] = (
+                "public, max-age=31536000, immutable"
+                if request.query_params.get("v")
+                else "public, max-age=0, must-revalidate"
+            )
+        else:
+            response.headers["Cache-Control"] = "no-store"
+        return response
     
     user = request.session.get("user")  # Obtiene los datos del usuario en la sesión
     access_token = request.cookies.get("access_token")  # Verifica si existe la cookie del token de acceso
@@ -175,13 +191,6 @@ async def autenticacion_y_cache_middleware(request: Request, call_next):
 
     response = await call_next(request)
 
-    # Los recursos estáticos pueden ser reutilizados por el navegador.
-    if path.startswith("/static/"):
-        response.headers["Cache-Control"] = (
-            "public, max-age=86400"
-        )
-        return response
-
     # Las páginas privadas siguen sin almacenarse en caché.
     response.headers["Cache-Control"] = (
         "no-store, no-cache, must-revalidate, max-age=0, private"
@@ -245,13 +254,15 @@ async def sesion_supabase_middleware(request: Request, call_next):
         )
 
 app.add_middleware(
-    SessionMiddleware,
+    SesionesSinRecursosEstaticos,
     secret_key=config.SECRET_KEY,
     session_cookie="session",
     max_age=3600 * 24 * 7,
     same_site="lax",
     https_only=config.COOKIE_SECURE,
 )
+
+app.add_middleware(GZipMiddleware, minimum_size=1000, compresslevel=5)
 
 # Registro de rutas modulares
 app.include_router(auth.router)

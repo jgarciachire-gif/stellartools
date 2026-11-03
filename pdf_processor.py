@@ -1,4 +1,3 @@
-import pdfplumber
 import re
 
 def extraer_datos_oc(pdf_file):
@@ -13,6 +12,7 @@ def extraer_datos_oc(pdf_file):
     }
 
     try:
+        import pdfplumber  # Load the PDF engine only when a document is read.
         if hasattr(pdf_file, 'seek'):
             pdf_file.seek(0)
 

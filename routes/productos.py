@@ -4,7 +4,6 @@ import urllib.parse  # Formateo de URL
 import asyncio  # Manejo de concurrencia y reintentos asíncronos
 from typing import List, Optional  # Tipado
 import xml.etree.ElementTree as ET  # Parseador XML
-import pandas as pd  # Lectura de archivos Excel y CSV
 from fastapi import APIRouter, Request, Form, UploadFile, File, Cookie  # FastAPI
 from fastapi.responses import RedirectResponse, JSONResponse  # Respuestas HTTP
 import config
@@ -245,6 +244,7 @@ def validar_columnas_producto(columnas):
 
 def texto_valor(valor):
     """Convierte un valor del archivo en texto limpio."""
+    import pandas as pd
     if valor is None or pd.isna(valor):
         return ""
 
@@ -354,6 +354,7 @@ async def cargar_lista_productos(
 
     contenido = await archivo.read()
     nombre = archivo.filename.lower()
+    import pandas as pd  # Only imports need the spreadsheet engine.
     filas = []
 
     if nombre.endswith(".csv"):
