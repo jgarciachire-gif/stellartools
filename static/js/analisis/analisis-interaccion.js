@@ -414,8 +414,8 @@
                     'justify-items:center;padding:0 2px';
 
                 const nombresDias = [
-                    'Lunes', 'Martes', 'Miércoles', 'Jueves',
-                    'Viernes', 'Sábado', 'Domingo'
+                    'Domingo', 'Lunes', 'Martes', 'Miércoles',
+                    'Jueves', 'Viernes', 'Sábado'
                 ];
 
                 semana.dias_con_venta.forEach((conVenta, indice) => {
@@ -442,7 +442,54 @@
                             : 'sin ventas registradas'}` +
                         `${conRecepcion ? ', con recepción' : ''}`
                     );
+                    const cantidadRecibida = semana.cargos_por_dia?.[indice];
 
+                    if (
+                        conRecepcion &&
+                        Number.isFinite(cantidadRecibida) &&
+                        cantidadRecibida > 0
+                    ) {
+                        const cantidad = cantidadRecibida.toLocaleString('es-VE', {
+                            maximumFractionDigits: 20
+                        });
+                        const detalle = `Recibido: ${cantidad} unidades`;
+
+                        // El tooltip principal ignora el puntero. Este punto sí lo recibe.
+                        punto.style.pointerEvents = 'auto';
+                        // Muestra el detalle con los mismos colores del tooltip principal.
+                        punto.style.position = 'relative';
+
+                        const aviso = document.createElement('span');
+                        aviso.textContent = detalle;
+                        aviso.hidden = true;
+                        aviso.setAttribute('aria-hidden', 'true');
+                        aviso.style.cssText =
+                            'position:absolute;bottom:calc(100% + 7px);' +
+                            'left:50%;transform:translateX(-50%);z-index:1;' +
+                            'white-space:nowrap;pointer-events:none;' +
+                            'padding:4px 8px;border-radius:6px;' +
+                            'border:1px solid rgba(36, 48, 88, 0.4);' +
+                            'font:inherit;line-height:1.25;' +
+                            'box-shadow:0 2px 8px rgb(0 0 0 / 25%);';
+
+                        const estiloTooltip = getComputedStyle(cuadro);
+                        aviso.style.backgroundColor = estiloTooltip.backgroundColor;
+                        aviso.style.color = estiloTooltip.color;
+
+                        punto.appendChild(aviso);
+
+                        punto.addEventListener('pointerenter', () => {
+                            aviso.hidden = false;
+                        });
+
+                        punto.addEventListener('pointerleave', () => {
+                            aviso.hidden = true;
+                        });
+                        punto.setAttribute(
+                            'aria-label',
+                            `${punto.getAttribute('aria-label')}. ${detalle}`
+                        );
+                    }
                     dias.appendChild(punto);
                 });
 

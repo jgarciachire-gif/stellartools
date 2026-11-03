@@ -867,7 +867,7 @@ async def consultar_sugeridos_tooltip_lote(request: Request):
     }
 
     hoy = datetime.now(ZoneInfo("America/Caracas")).date()
-    lunes = hoy - timedelta(days=hoy.weekday())
+    domingo_actual = hoy - timedelta(days=(hoy.weekday() + 1) % 7)
 
     try:
         def consultar():
@@ -875,7 +875,7 @@ async def consultar_sugeridos_tooltip_lote(request: Request):
                 "obtener_ventas_semanales_sugeridos_lote",
                 {
                     "p_codigos": codigos,
-                    "p_lunes_actual": lunes.isoformat(),
+                    "p_lunes_actual": domingo_actual.isoformat(),
                 },
             ).execute()
 
@@ -956,17 +956,17 @@ async def obtener_ventas_semanales_tooltip(
 
     # Excluye siempre la semana que está en curso.
     hoy = datetime.now(ZoneInfo("America/Caracas")).date()
-    lunes = hoy - timedelta(days=hoy.weekday())
+    domingo_actual = hoy - timedelta(days=(hoy.weekday() + 1) % 7)
 
     try:
 
         def consultar():
             return config.supabase_admin.rpc(
-                "obtener_ventas_semanales_tooltip",
+                "obtener_ventas_semanales_tooltip_con_cargos",
                 {
                     "p_codigo": codigo,
                     "p_sede": sede,
-                    "p_lunes_actual": lunes.isoformat(),
+                    "p_lunes_actual": domingo_actual.isoformat(),
                 },
             ).execute()
 
@@ -995,6 +995,25 @@ async def obtener_ventas_semanales_tooltip(
                 )
 
             semana["dias_con_recepcion"] = dias_con_recepcion
+            cargos_por_dia = fila.get("cargos_por_dia")
+
+            # Verifica que cada cantidad corresponda al aro del mismo día.
+            if (
+                not isinstance(cargos_por_dia, list)
+                or len(cargos_por_dia) != 7
+                or any(
+                    type(cantidad) not in (int, float)
+                    or not Decimal(str(cantidad)).is_finite()
+                    or cantidad < 0
+                    or (cantidad > 0) != con_recepcion
+                    for cantidad, con_recepcion in zip(
+                        cargos_por_dia, dias_con_recepcion
+                    )
+                )
+            ):
+                raise ValueError("Las cantidades diarias de recepción no son válidas.")
+
+            semana["cargos_por_dia"] = cargos_por_dia
 
         return {
             "status": "ok",
