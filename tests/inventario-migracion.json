@@ -2,7 +2,9 @@
   {
     "template": "inventario.html",
     "asset": "static/js/inventario/inventario-multitienda.js",
-    "sha256": "0812d31c7bd30bc2cfbc61ffa23e4563f35ee2daf61f726e2ef5c060507f4e64"
+    "sha256": "d79dc0dc59af1bc6a398ebb4bad4235c0b9529cc94ae7cdaa5ef38b3ddab1d2d",
+    "migration_sha256": "0812d31c7bd30bc2cfbc61ffa23e4563f35ee2daf61f726e2ef5c060507f4e64",
+    "revision": "Carga por proveedor en multitienda y modal compartido fuera del contenedor."
   },
   {
     "template": "inventario.html",
@@ -32,7 +34,9 @@
   {
     "template": "inventario.html",
     "asset": "static/js/inventario/inventario-modales.js",
-    "sha256": "6d1e823d317875f905f107735fba7e1c834c5972e61cd6afbbb4913e396b8288"
+    "sha256": "7864456b7d3a71cabf4b6f8006ff9c71b625db9eab1373918a390c9dbfd3f82a",
+    "migration_sha256": "6d1e823d317875f905f107735fba7e1c834c5972e61cd6afbbb4913e396b8288",
+    "revision": "Carga por proveedor en multitienda y modal compartido fuera del contenedor."
   },
   {
     "template": "inventario.html",

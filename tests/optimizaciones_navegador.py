@@ -94,6 +94,54 @@ async def exercise(port, browser_port, state):
                 cerrarModalNuevoInventario();
                 if(!document.getElementById('modal-nuevo-inventario').classList.contains('hidden')) throw Error('Cerrar inventario');
             """)
+            await run("""window.check=(v,m)=>{if(!v)throw Error(m)};
+                window.waitFor=async fn=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,50));}throw Error('Espera agotada')};
+                abrirModalMultitienda();
+                const nombre=document.getElementById('multi-nombre'); nombre.value='Proveedor';
+                document.getElementById('multi-realizado-por').value='Responsable';
+                const tipo=document.querySelector('[name="multi-tipo-carga"][value="proveedor"]');
+                tipo.click();
+                await waitFor(()=>document.getElementById('inventario-proveedor').value==='1' && !document.getElementById('btn-ejecutar-importacion-inventario').disabled);
+                check(!document.getElementById('multi-codigos').required,'Pegado no obligatorio por proveedor');
+                check(document.getElementById('buscar-proveedor-inventario').value==='Proveedor','Proveedor preseleccionado');
+                check(document.getElementById('modal-importar-inventario').parentElement===document.body,'Modal fuera del contenedor');
+                const dept=document.getElementById('buscar-departamento-inventario'); dept.click();
+                const opcionDept=[...document.querySelectorAll('#opciones-departamento-inventario button')].find(b=>b.textContent==='Alimentos');
+                if(!opcionDept)throw Error(JSON.stringify({disabled:dept.disabled,modal:getComputedStyle(document.getElementById('modal-importar-inventario')).display,info:document.getElementById('inventario-importacion-info').textContent,opciones:document.getElementById('opciones-departamento-inventario').innerHTML}));
+                opcionDept.click();
+                document.getElementById('btn-ejecutar-importacion-inventario').click();
+                await waitFor(()=>!document.getElementById('multi-estado-validacion').classList.contains('hidden'));
+                await waitFor(()=>document.getElementById('modal-importar-inventario').classList.contains('hidden'));
+                for(const tienda of document.querySelectorAll('.multi-tienda-checkbox')) {
+                    tienda.checked=['CENTRO','GARIBALDI'].includes(tienda.value);
+                    tienda.dispatchEvent(new Event('change',{bubbles:true}));
+                }
+                check(!document.getElementById('multi-btn-crear').disabled,'Crear habilitado tras elegir tiendas');
+                document.getElementById('form-multitienda').dispatchEvent(new Event('submit',{cancelable:true}));
+                await waitFor(()=>document.getElementById('multi-estado-creacion').textContent.includes('simulado'));
+                check(!document.getElementById('multi-btn-crear').disabled,'Reintento disponible');
+                document.querySelector('[name="multi-tipo-carga"][value="manual"]').click();
+                check(document.getElementById('multi-codigos').required,'Pegado manual obligatorio');
+                const codigos=document.getElementById('multi-codigos');codigos.value='3\\n000004';
+                codigos.dispatchEvent(new Event('input',{bubbles:true}));
+                await waitFor(()=>!document.getElementById('multi-btn-crear').disabled);
+                document.getElementById('form-multitienda').dispatchEvent(new Event('submit',{cancelable:true}));
+                await waitFor(()=>document.getElementById('multi-estado-creacion').textContent.includes('simulado'));
+                cerrarModalMultitienda();
+                abrirModalMultitienda();
+                document.getElementById('form-multitienda').dispatchEvent(new Event('submit',{cancelable:true}));
+            """)
+            for _ in range(100):
+                if len(state['multi'])==3:
+                    break
+                await asyncio.sleep(.05)
+            assert state['multi'][0]['codigos']==['000001','000002'], state['multi']
+            assert state['multi'][0]['tiendas']==['CENTRO','GARIBALDI'], state['multi']
+            assert state['multi'][1]['codigos']==['000003','000004'], state['multi']
+            assert len(state['multi'])==3 and state['multi'][1]==state['multi'][2], state['multi']
+            assert state['import_filters']['proveedor_id']==['1'], state['import_filters']
+            assert state['import_filters']['departamento']==['Alimentos'], state['import_filters']
+            print('OK: multitienda por proveedor, filtros, dos tiendas, reintento y carga manual',flush=True)
             await navigate('/inventario/7', "typeof agregarFilaInventario==='function' && typeof obtenerProductosInventario==='function'")
             await run("""const original=obtenerProductosInventario();
                 if(original.length!==1)throw Error('Producto inicial');
@@ -133,7 +181,7 @@ def main():
         fecha_envio='2026-10-01', fecha_recepcion=None, monto_total=12) for i in range(1,46)]
     suppliers = [dict(id=i,codigo=f'{i:06}',nombre=f'Proveedor {i:03}',contacto='Atención',telefono='0414',
         email='prueba@example.com',categorias=['Lácteos'],dias_credito=30) for i in range(1,46)]
-    state = {'details':0, 'detail_failure':True, 'deletes':[], 'saved':None}
+    state = {'details':0, 'detail_failure':True, 'deletes':[], 'saved':None,'multi':[]}
     def render(template, path, **context):
         context.update(request=NS(url=__import__('starlette.datastructures',fromlist=['URL']).URL('http://localhost'+path),
             state=NS(perfil=profile,user=NS(id='user-1'))), asset_url=lambda n:'/static/'+n, perfil=profile,
@@ -184,9 +232,20 @@ def main():
                     created_at='2026-11-01T12:00:00',updated_at='2026-11-01T12:00:00'),productos=[dict(codigo='000001',descripcion='Producto',cantidad=2,
                     cantidad_almacen=2,cantidad_piso_ventas=0,precio=2)]),'text/html; charset=utf-8')
             if path=='/api/proveedores':return self.respond([dict(id=1,nombre='Proveedor')])
+            if path=='/api/clasificacion':return self.respond([dict(departamento='Alimentos',grupo='Lácteos',subgrupo='Leche',marca='Marca')])
+            if path=='/api/productos/importar-analisis':
+                state['import_filters']=parse_qs(urlparse(self.path).query)
+                return self.respond([dict(codigo='1',descripcion='Producto'),dict(codigo='000002',descripcion='Otro'),dict(codigo='1',descripcion='Repetido')])
             return self.respond(dict(notificaciones=[],total=0,data=[],productos=[]))
         def do_POST(self):
             data=json.loads(self.rfile.read(int(self.headers.get('Content-Length',0))) or '{}')
+            if self.path=='/api/inventarios/multitienda/validar-productos':
+                return self.respond(dict(ok=True,productos=[dict(codigo=c,descripcion='Producto') for c in data['codigos']],codigos_no_encontrados=[]))
+            if self.path=='/api/inventarios/multitienda/crear':
+                state['multi'].append(data)
+                if len(state['multi'])==3:
+                    return self.respond(dict(ok=True,inventarios=[dict(id=i+10,nombre=data['nombre'],tienda=t) for i,t in enumerate(data['tiendas'])]))
+                return self.respond(dict(ok=False,error='Fallo simulado de creación'),status=503)
             if self.path.endswith('/guardar'):state['saved']=data
             if self.path.endswith('eliminar_masivo'):state['deletes'].append(data)
             return self.respond(dict(ok=True,status='ok',success=True))

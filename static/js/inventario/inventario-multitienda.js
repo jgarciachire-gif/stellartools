@@ -193,6 +193,47 @@
         let solicitudPendiente = null;
         let validando = false;
         let creando = false;
+        let codigosProveedor = [];
+        const tipoCarga = () => formulario.querySelector('[name="multi-tipo-carga"]:checked')?.value || 'manual';
+        const importador = window.crearImportadorMultitienda({
+            obtenerProveedores: async () => {
+                await cargarProveedoresMultitienda();
+                opcionesProveedor.classList.add('hidden');
+                if (!proveedoresMultitienda.length) throw new Error('No se pudieron cargar los proveedores. Vuelve a intentarlo.');
+                return proveedoresMultitienda;
+            },
+            alImportar: async (codigos, proveedor) => {
+                if (creando || validando || tipoCarga() !== 'proveedor') throw new Error('Espera a que termine la operación actual.');
+                codigosProveedor = codigos;
+                if (!nombre.value.trim()) seleccionarProveedorMultitienda(proveedor.nombre);
+                invalidarValidacion();
+                document.getElementById('multi-resumen-importacion').textContent = `${proveedor.nombre}: ${codigos.length} productos seleccionados.`;
+                await validarProductos();
+            }
+        });
+
+        function abrirImportador() {
+            if (!creando && !validando) importador.abrir(nombre.value.trim());
+        }
+        document.getElementById('multi-abrir-importador').addEventListener('click', abrirImportador);
+        formulario.querySelectorAll('[name="multi-tipo-carga"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                if (creando || validando) {
+                    formulario.querySelector(`[name="multi-tipo-carga"][value="${radio.value === 'manual' ? 'proveedor' : 'manual'}"]`).checked = true;
+                    return;
+                }
+                clearTimeout(temporizadorValidacion);
+                const manual = tipoCarga() === 'manual';
+                document.getElementById('multi-carga-manual').classList.toggle('hidden', !manual);
+                document.getElementById('multi-carga-proveedor').classList.toggle('hidden', manual);
+                codigosTexto.required = manual;
+                codigosTexto.disabled = !manual;
+                invalidarValidacion();
+                if (manual) {
+                    if (obtenerCodigos().length) validarProductos();
+                } else abrirImportador();
+            });
+        });
 
         function mostrarEstado(elemento, mensaje, tipo) {
             elemento.textContent = mensaje;
@@ -227,6 +268,7 @@
 
 
         function obtenerCodigos() {
+            if (tipoCarga() === 'proveedor') return [...codigosProveedor];
             // Normalizar cada código a 6 dígitos antes de consultar.
             return [...new Set(
                 codigosTexto.value
@@ -337,6 +379,9 @@
 
         function actualizarBotonCrear() {
             const datos = obtenerDatosFormulario();
+            if (productosValidados && JSON.stringify(productosValidados.codigos) === JSON.stringify(datos.codigos)) {
+                productosValidados.firma = firmaDatos(datos);
+            }
             const pendiente = recuperarSolicitud();
             const mismaSolicitud = pendiente &&
                 pendiente.firma === firmaDatos(datos);
@@ -454,6 +499,8 @@
                 );
 
                 const resultado = await leerRespuesta(respuesta);
+                // Una respuesta anterior no valida códigos editados durante la consulta.
+                if (JSON.stringify(datos.codigos) !== JSON.stringify(obtenerCodigos())) return;
                 mostrarProductos(resultado);
 
                 if ((resultado.codigos_no_encontrados || []).length > 0) {
@@ -475,7 +522,7 @@
                 }
 
                 productosValidados = {
-                    firma: firmaDatos(datos),
+                    firma: firmaDatos(obtenerDatosFormulario()),
                     codigos: datos.codigos
                 };
 
@@ -673,13 +720,14 @@
         window.cerrarModalMultitienda = function () {
             if (creando || validando) return;
 
+            importador.cerrar();
             modal.classList.add('hidden');
             modal.classList.remove('flex');
         };
 
         listaTiendas.addEventListener('change', function (evento) {
             if (evento.target.matches('.multi-tienda-checkbox')) {
-                invalidarValidacion();
+                // La validación del catálogo es común a todas las tiendas.
                 actualizarTiendas();
             }
         });

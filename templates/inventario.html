@@ -855,7 +855,28 @@
                 </div>
             </section>
 
-            <section>
+            <fieldset>
+                <legend class="mb-2 text-sm font-semibold text-slate-700">Carga de productos</legend>
+                <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 hover:bg-indigo-50/50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
+                        <input type="radio" name="multi-tipo-carga" value="proveedor" class="h-4 w-4 accent-indigo-600">
+                        <span class="text-sm font-medium text-slate-700">Productos por proveedor</span>
+                    </label>
+                    <label class="flex cursor-pointer items-center gap-3 rounded-xl border border-slate-200 px-4 py-3 hover:bg-indigo-50/50 has-[:checked]:border-indigo-400 has-[:checked]:bg-indigo-50">
+                        <input type="radio" name="multi-tipo-carga" value="manual" checked class="h-4 w-4 accent-indigo-600">
+                        <span class="text-sm font-medium text-slate-700">Carga de productos manual</span>
+                    </label>
+                </div>
+            </fieldset>
+
+            <section id="multi-carga-proveedor" class="hidden">
+                <button type="button" id="multi-abrir-importador" class="inline-flex items-center gap-2 rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm font-semibold text-indigo-700 hover:bg-indigo-100">
+                    <i class="fa-solid fa-download"></i> Importar productos
+                </button>
+                <p id="multi-resumen-importacion" class="mt-2 text-xs text-slate-500" role="status">Selecciona un proveedor y configura los filtros.</p>
+            </section>
+
+            <section id="multi-carga-manual">
                 <label for="multi-codigos" class="mb-2 block text-sm font-semibold text-slate-700">
                     Códigos de productos
                 </label>
@@ -910,6 +931,10 @@
 {% endif %}
 
 
+{% if perfil and perfil.tipo_usuario|lower in ['normal', 'administrador', 'admin'] %}
+{% include 'componentes/inventario_importar_productos.html' %}
+<script src="{{ asset_url('js/inventario/inventario-multitienda-importador.js') }}"></script>
+{% endif %}
 <script src="{{ asset_url('js/inventario/inventario-multitienda.js') }}"></script>
 
 

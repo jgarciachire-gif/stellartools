@@ -3,7 +3,8 @@
         // Saca los modales del contenedor con desenfoque.
         const idsModales = [
             'modal-nuevo-inventario',
-            'modal-multitienda'
+            'modal-multitienda',
+            'modal-importar-inventario'
         ];
 
         idsModales.forEach(id => {
