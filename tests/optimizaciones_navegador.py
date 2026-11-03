@@ -20,6 +20,7 @@ import websockets
 from analisis_navegador import CDP
 from test_ordenes_carga import handler
 from test_optimizaciones import Query
+from fakes_listados import ListadosRPC
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -56,7 +57,7 @@ async def exercise(port, browser_port, state):
                 check(document.querySelectorAll('.row-orden').length===20,'Página de 20');
                 document.querySelector('[data-pagina-ordenes="2"]').click();
                 await waitFor(()=>location.search.includes('page=2'));
-                check(document.querySelector('.row-orden').dataset.id==='21','Segunda página');
+                check(document.querySelector('.row-orden').dataset.id==='25','Segunda página');
                 await toggleDetalleOC('21');
                 check(document.querySelector('#detalle-21').innerText.includes('Reintentar'),'Error recuperable');
                 document.querySelector('#detalle-21 button').click();
@@ -74,6 +75,19 @@ async def exercise(port, browser_port, state):
             assert state['details'] == 3, state
             assert not state['deletes'], state
             print('OK: órdenes, paginación, filtro fuera de página, detalle reutilizado, selección y confirmación', flush=True)
+            await navigate('/proveedores', "typeof cargarListadoProveedores==='function' && typeof abrirFichaProveedor==='function'")
+            await run("""const check=(v,m)=>{if(!v)throw Error(m)};
+                check(document.querySelectorAll('.fila-proveedor').length===20,'Proveedores: página de 20');
+                await cargarListadoProveedores('/proveedores?page=2');
+                check(document.querySelectorAll('.fila-proveedor').length===20,'Proveedores: segunda página');
+                await cargarListadoProveedores('/proveedores?tags=lacteos,000045');
+                check(document.querySelectorAll('.fila-proveedor').length===1,'Proveedores: badges y acentos');
+                await abrirFichaProveedor('/proveedores?tags=000045&select=1');
+                check(document.getElementById('modal-ficha-proveedor').open,'Ficha abierta');
+                check(document.querySelector('#form-proveedor-ficha input[name="id"]').value==='1','Ficha fuera del filtro');
+                document.getElementById('modal-ficha-proveedor').close();
+            """)
+            print('OK: proveedores, paginación, categorías, acentos y ficha fuera del filtro', flush=True)
             await navigate('/inventario', "typeof abrirModalNuevoInventario==='function'")
             await run("""abrirModalNuevoInventario();
                 if(document.getElementById('modal-nuevo-inventario').classList.contains('hidden')) throw Error('Modal inventario');
@@ -117,6 +131,8 @@ def main():
     rows = [dict(id=i, usuario_id='user-1', numero_orden=f'OC-{i:04}', proveedor='Proveedor',
         proveedores={'nombre':'Proveedor','dias_credito':30}, tienda_destino='CENTRO',
         fecha_envio='2026-10-01', fecha_recepcion=None, monto_total=12) for i in range(1,46)]
+    suppliers = [dict(id=i,codigo=f'{i:06}',nombre=f'Proveedor {i:03}',contacto='Atención',telefono='0414',
+        email='prueba@example.com',categorias=['Lácteos'],dias_credito=30) for i in range(1,46)]
     state = {'details':0, 'detail_failure':True, 'deletes':[], 'saved':None}
     def render(template, path, **context):
         context.update(request=NS(url=__import__('starlette.datastructures',fromlist=['URL']).URL('http://localhost'+path),
@@ -144,6 +160,16 @@ def main():
                 fn,_=handler('routes/ordenes.py','listar_ordenes', config=NS(supabase_async=Query(rows)),
                     timedelta=timedelta,templates=NS(TemplateResponse=lambda **kw:kw['context']))
                 return self.respond(render('ordenes.html',self.path,**asyncio.run(fn(NS(query_params=params)))),'text/html; charset=utf-8')
+            if path=='/proveedores':
+                params={k:v[-1] for k,v in parse_qs(urlparse(self.path).query).items()}
+                client=ListadosRPC(suppliers)
+                client.table=lambda name:Query([])
+                async def database():return client
+                fn,_=handler('routes/proveedores.py','vista_proveedores',_db=database,
+                    templates=NS(TemplateResponse=lambda **kw:kw['context']))
+                url=__import__('starlette.datastructures',fromlist=['URL']).URL('http://localhost'+self.path)
+                context=asyncio.run(fn(NS(query_params=params,url=url),select=int(params['select']) if params.get('select') else None))
+                return self.respond(render('proveedores.html',self.path,**context),'text/html; charset=utf-8')
             if path.endswith('/detalle'):
                 state['details']+=1
                 if path=='/ordenes/21/detalle' and state['detail_failure']:

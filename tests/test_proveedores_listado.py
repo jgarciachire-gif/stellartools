@@ -11,6 +11,7 @@ from fastapi import Request
 from fastapi.responses import RedirectResponse
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from test_productos_listado import Query
+from fakes_listados import ListadosRPC
 
 
 class SupplierListTests(unittest.IsolatedAsyncioTestCase):
@@ -24,7 +25,10 @@ class SupplierListTests(unittest.IsolatedAsyncioTestCase):
             return NS(id='user')
 
         async def database():
-            return NS(table=lambda name: Query(self.rows[:] if name == 'proveedores' else []))
+            return self.client
+
+        self.client = ListadosRPC(lambda: self.rows, user_id='user')
+        self.client.table = lambda name: Query([])
 
         self.env = Environment(loader=FileSystemLoader('templates'), autoescape=select_autoescape())
         self.env.globals['asset_url'] = lambda path: '/static/' + path
@@ -53,6 +57,7 @@ class SupplierListTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(pages[0]['total_proveedores'], 45)
         ids = [p['id'] for page in pages for p in page['proveedores']]
         self.assertEqual(len(set(ids)), 45)
+        self.assertEqual(len(self.client.rpc_calls), 3)
 
     async def test_sort_applies_before_pagination(self):
         context = (await self.request('page=2&sort=nombre&dir=desc'))['context']
@@ -80,6 +85,14 @@ class SupplierListTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status_code, 303)
         self.assertIn('page=1', response.headers['location'])
         self.assertIn('tags=000045', response.headers['location'])
+
+    async def test_oversized_page_and_selection_are_bounded_before_rpc(self):
+        response = await self.request('page=99999999999999999999999', selected=2**60)
+        self.assertEqual(response.status_code, 303)
+        name, params = self.client.rpc_calls[-1]
+        self.assertEqual(name, 'st_listar_proveedores')
+        self.assertEqual(params['p_pagina'], 2147483647)
+        self.assertIsNone(params['p_seleccion'])
 
     async def test_directory_larger_than_api_limit_is_not_truncated(self):
         self.rows = [dict(self.rows[0], id=i, nombre=f'Proveedor {i:04}') for i in range(1, 1026)]

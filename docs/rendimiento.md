@@ -171,7 +171,8 @@ visual inmediato y espera 350 ms antes de consultar. Seleccionar todo y eliminar
 se limitan a las filas visibles de la página actual; la confirmación vuelve a
 validar la selección si el listado cambió.
 
-Límite explícito: para conservar la búsqueda en todos los campos visuales,
+Límite de la primera etapa, resuelto en la etapa SQL descrita más abajo:
+para conservar la búsqueda en todos los campos visuales,
 incluidos vencimiento calculado y monto formateado, el servidor lee las cabeceras
 del usuario en bloques de 1.000 y filtra antes de paginar. No descarga los productos
 de todas las órdenes. Por tanto, la paginación limita HTML/DOM y detalle, pero aún
@@ -257,3 +258,82 @@ duplicados, cantidades por ubicación, guardado y vista móvil. No escribe en BD
 Las pruebas unitarias adicionales cubren respuestas tardías y recuperación del
 listado, aislamiento por usuario del detalle, escape HTML y consultas no bloqueantes.
 La revisión de asesores de Supabase no exigió cambiar permisos para esta mejora.
+
+## Paginación en la base de datos — 3 de noviembre de 2026
+
+Esta etapa elimina las lecturas completas de cabeceras de Órdenes y del directorio
+de Proveedores desde las rutas Python. Ambas rutas llaman una RPC con el JWT del
+usuario; SQL aplica los filtros, el orden, el conteo y `LIMIT 20 / OFFSET`.
+La respuesta contiene una fila de metadatos con hasta 20 registros en su campo
+JSON `registros`. El conteo puede examinar las filas que coinciden en BD, pero
+esos registros ya no se transfieren completos al servidor de la aplicación.
+
+Se conservaron:
+
+- Órdenes: texto, badges combinados, coincidencia por fecha de envío o recepción,
+  vencimiento calculado, monto con formato latino, orden estable por fecha/ID,
+  detalle bajo demanda y selección limitada a filas visibles.
+- Proveedores: código, nombre, contacto, teléfono, correo, categorías, búsqueda
+  sin acentos, orden ascendente/descendente y desempate por ID. `%` y `_` siguen
+  siendo caracteres literales, no comodines SQL.
+- La ficha de proveedor puede estar fuera de la página y del filtro. Se devuelve
+  solo esa ficha adicional, junto con una lista compacta de etiquetas para el
+  buscador. Las categorías editables del usuario siguen en su consulta existente.
+
+La normalización SQL reproduce NFD, eliminación de marcas Mn y `casefold`, con
+tablas Unicode generadas por `scripts/generar_normalizacion_listados.py`.
+El generador no se ejecuta durante las peticiones ni durante el build de Vercel.
+Los nombres habituales en español usan una rama rápida ASCII después de retirar
+los acentos. El formato de monto reproduce el redondeo del float binario de
+Python, incluidos casos como 2.675, y no modifica montos almacenados ni fórmulas.
+Las aperturas sin criterios evitan calcular ese texto de búsqueda para cada orden.
+
+### Verificación real y límites de las mediciones
+
+Con un usuario normal, usando el rol `authenticated` y sus políticas RLS reales:
+
+| Listado | Registros totales visibles | Registros devueltos | Tamaño JSON de esos registros |
+| --- | ---: | ---: | ---: |
+| Órdenes | 976 | 20 | 6.296 bytes |
+| Proveedores | 703 | 20 | 4.921 bytes |
+
+Proveedores devolvió además 44 etiquetas distintas. Un usuario provisional no
+obtuvo órdenes. Las RPCs son `SECURITY INVOKER`, tienen `search_path` vacío,
+requieren identidad y no permiten ejecución anónima. Órdenes restringe además
+explícitamente `usuario_id = auth.uid()`. No se cambiaron datos de clientes,
+políticas, tablas ni índices; solo se añadieron funciones de lectura.
+
+Un `EXPLAIN ANALYZE` de la RPC de Órdenes sin filtros dio 18,235 ms después de
+evitar el formato de búsqueda innecesario; Proveedores dio 39,749 ms en la muestra.
+Son ejecuciones aisladas de BD, con compilación/caché variables, no tiempos de
+navegación ni percentiles de producción. Los tamaños JSON tampoco equivalen a
+bytes HTTP comprimidos ni incluyen todo el HTML de la página.
+
+Pasaron 70 pruebas Python y 110 JavaScript. El navegador con API local simulada
+verificó también Proveedores: paginación, badges por categoría/acento y ficha fuera
+del filtro. Las pruebas SQL ejecutaron 1.025 proveedores y 1.025 órdenes sintéticas,
+otra identidad y permisos anónimos, dentro de tablas temporales y con `ROLLBACK`.
+También compararon normalización Unicode y 111 valores monetarios con Python.
+Los stubs de las pruebas de interfaz no sustituyen esa verificación real de SQL.
+
+### Instalación y reversión
+
+Las funciones de esta etapa ya se instalaron y verificaron en el proyecto
+StellarTools de Supabase. Falta desplegar las rutas actualizadas en Vercel para
+que la aplicación las use. El backend anterior sigue funcionando con estas
+funciones adicionales presentes.
+
+Para reproducir la preparación en otro entorno, generar SQL en archivos UTF-8:
+
+```sh
+python scripts/verificar_listados_sql.py --tipo verificacion --salida prueba-listados.sql
+python scripts/verificar_listados_sql.py --tipo instalacion --salida instalar-listados.sql
+```
+
+El script solo genera archivos; no abre conexiones. El archivo de verificación
+usa datos temporales y termina en `ROLLBACK`. El de instalación aplica las dos
+fuentes SQL y sus permisos en una transacción y notifica la recarga del esquema
+a PostgREST. Instalar las funciones antes de desplegar el nuevo backend.
+En una reversión, desplegar primero las rutas anteriores; el archivo
+`scripts/sql/listados-paginados-rollback.sql` retira únicamente estas funciones
+nuevas, sin tocar registros ni la optimización de Kardex.

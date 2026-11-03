@@ -20,25 +20,6 @@ async def listar_ordenes(
     if not user:
         return RedirectResponse(url="/login", status_code=303)
 
-    # Only document headers are read here; product lines load on demand.
-    ordenes = []
-    offset = 0
-    while True:
-        res = await (
-            config.supabase_async.table("ordenes_compra")
-            .select("id, numero_orden, proveedor, tienda_destino, fecha_envio, "
-                    "fecha_recepcion, monto_total, estatus, proveedor_id, "
-                    "proveedores(nombre, dias_credito)")
-            .eq("usuario_id", user.id)
-            .order("fecha_envio", desc=True).order("id", desc=True)
-            .range(offset, offset + 999).execute()
-        )
-        lote = res.data or []
-        ordenes.extend(lote)
-        if len(lote) < 1000:
-            break
-        offset += 1000
-
     texto = request.query_params.get("q", "").strip().lower()
     fecha = request.query_params.get("fecha", "").strip()
     try:
@@ -49,34 +30,18 @@ async def listar_ordenes(
         etiquetas = []
     etiquetas = [e for e in etiquetas if isinstance(e, dict) and isinstance(e.get("valor"), str)]
     criterios = [texto] + [e["valor"].strip().lower() for e in etiquetas]
-    filtradas = []
-    for orden in ordenes:
-        proveedor = orden.get("proveedores") or {}
-        nombre = proveedor.get("nombre") or orden.get("proveedor") or ""
-        recibida = str(orden.get("fecha_recepcion") or "").strip()
-        tiene_recepcion = recibida.lower() not in ("", "none", "nan", "nat", "null")
-        estatus = "Despacho Recibido" if tiene_recepcion else "Enviada"
-        vencimiento = ""
-        if tiene_recepcion and proveedor.get("dias_credito", 30):
-            try:
-                vencimiento = (datetime.strptime(recibida, "%Y-%m-%d") + timedelta(
-                    days=int(proveedor.get("dias_credito", 30)))).strftime("%d/%m/%Y")
-            except (ValueError, TypeError):
-                pass
-        monto = "{:,.2f}".format(orden.get("monto_total") or 0).replace(",", "X").replace(".", ",").replace("X", ".")
-        contenido = " ".join(str(v) for v in (orden.get("numero_orden") or "", nombre,
-                    orden.get("tienda_destino") or "", vencimiento, "$" + monto, estatus)).lower()
-        if all(c in contenido for c in criterios) and (
-            not fecha or fecha in (orden.get("fecha_envio"), orden.get("fecha_recepcion"))
-        ):
-            filtradas.append(orden)
-    total = len(filtradas)
-    total_paginas = max(1, (total + 19) // 20)
     try:
-        pagina = min(total_paginas, max(1, int(request.query_params.get("page", "1"))))
+        pagina_solicitada = min(2147483647, max(1, int(request.query_params.get("page", "1"))))
     except (ValueError, TypeError):
-        pagina = 1
-    ordenes = filtradas[(pagina - 1) * 20:pagina * 20]
+        pagina_solicitada = 1
+    respuesta = await config.supabase_async.rpc("st_listar_ordenes", {
+        "p_criterios": criterios, "p_fecha": fecha, "p_pagina": pagina_solicitada,
+    }).execute()
+    resultado = respuesta.data[0]
+    ordenes = resultado["registros"]
+    total = resultado["total"]
+    pagina = resultado["pagina"]
+    total_paginas = max(1, (total + 19) // 20)
 
     meses_espanol = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     ordenes_agrupadas = {}

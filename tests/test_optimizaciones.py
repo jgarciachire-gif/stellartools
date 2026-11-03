@@ -13,10 +13,12 @@ from starlette.concurrency import run_in_threadpool
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from test_ordenes_carga import handler, Response
+from fakes_listados import ListadosRPC
 
 
-class Query:
+class Query(ListadosRPC):
     def __init__(self, rows):
+        super().__init__(rows)
         self.rows, self.filters, self.bounds, self.fields, self.executions = rows, [], None, '', []
 
     def table(self, name):
@@ -65,16 +67,18 @@ class OrdenesListadoTests(unittest.IsolatedAsyncioTestCase):
         fn, _ = handler('routes/ordenes.py', 'listar_ordenes', config=NS(supabase_async=self.db), templates=self.template, timedelta=timedelta)
         return await fn(NS(query_params=params))
 
-    async def test_pagination_reads_all_headers_but_only_renders_20_and_no_lines(self):
+    async def test_pagination_requests_one_bounded_rpc_and_no_header_scan(self):
         result = await self.list({'page': '53'})
         rows = [r for group in result['ordenes_agrupadas'].values() for r in group]
         self.assertEqual(len(rows), 11)
-        self.assertEqual(rows[0]['id'], 1041)
+        self.assertEqual(rows[0]['id'], 11)
         self.assertEqual(result['total_ordenes'], 1051)
         self.assertEqual(result['total_paginas'], 53)
-        self.assertEqual(len(self.db.executions), 2)
-        self.assertTrue(all('detalles_productos' not in fields for fields, _, _ in self.db.executions))
-        self.assertTrue(all(('usuario_id', 'user-1') in filters for _, filters, _ in self.db.executions))
+        self.assertEqual(len(self.db.executions), 0)
+        self.assertEqual(len(self.db.rpc_calls), 1)
+        self.assertEqual(self.db.rpc_calls[0][0], 'st_listar_ordenes')
+        self.assertEqual(self.db.rpc_calls[0][1]['p_pagina'], 53)
+        self.assertTrue(all('detalles_productos' not in row for row in rows))
 
     async def test_filters_search_beyond_first_page_and_combine_tags_status_and_date(self):
         result = await self.list({'q': 'OC-1005', 'tags': json.dumps([{'tipo': 'tienda', 'valor': 'CENTRO'},
