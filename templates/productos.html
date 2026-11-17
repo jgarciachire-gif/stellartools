@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block page_styles %}
+<link rel="stylesheet" href="{{ asset_url('css/importacion-archivo.css') }}">
 <style>
     #lista-productos {
         transition: opacity .2s ease;
@@ -126,6 +127,15 @@
             flex: 1;
         }
     }
+    .importacion-productos-contenido { padding: 0; }
+    .importacion-productos-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .importacion-productos-cifras > div { background: #f8fafc; border-radius: 10px; padding: 12px; }
+    .importacion-productos-cifras dt { font-size: 12px; color: #64748b; }
+    .importacion-productos-cifras dd { margin: 4px 0 0; font-size: 20px; font-weight: 700; }
+    .importacion-productos-icono { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; }
+    [data-tipo="success"] .importacion-productos-icono { color: #047857; background: #d1fae5; }
+    [data-tipo="warning"] .importacion-productos-icono { color: #92400e; background: #fef3c7; }
+    [data-tipo="error"] .importacion-productos-icono { color: #be123c; background: #ffe4e6; }
 </style>
 {% endblock %}
 
@@ -161,7 +171,8 @@
         <div id="menu-productos-opciones" class="productos-panel" x-show="abierto === 'opciones'" x-cloak
             x-transition.opacity.duration.120ms>
             <button type="button" class="productos-item" data-accion-productos
-                onclick="document.getElementById('input_archivo_excel').click()">
+                onclick="abrirModalImportarProductos()"
+                title="CSV, XLSX o XML. Código y al menos otro campo: descripción, UM o costo. Columnas en cualquier orden.">
                 <i class="fa-solid fa-file-import" aria-hidden="true"></i>
                 <span>Importar Lista de Productos</span>
             </button>
@@ -779,11 +790,58 @@
         }
     });
 </script>
-<form id="form-cargar-archivo" action="/productos/cargar-lista" method="POST" enctype="multipart/form-data"
-    class="hidden">
-    <input type="file" id="input_archivo_excel" name="archivo" accept=".csv, .xlsx, .xml"
-        onchange="document.getElementById('form-cargar-archivo').submit();">
-</form>
+{% from 'componentes/selector_archivo.html' import selector_archivo %}
+<dialog id="modal-importar-productos" class="modal-importacion-archivo" aria-labelledby="titulo-importar-productos">
+    <form id="form-cargar-archivo" action="/productos/cargar-lista" method="POST" enctype="multipart/form-data" novalidate>
+        <h2 id="titulo-importar-productos" class="mb-2 flex items-center gap-2 text-lg font-bold text-slate-800">
+            <i class="fa-solid fa-file-import text-emerald-600" aria-hidden="true"></i>
+            Importar productos
+        </h2>
 
+        <div class="importacion-productos-contenido">
+            <section id="importar-productos-seleccion">
+                <p class="mb-4 text-xs text-slate-500">
+                    Selecciona un archivo CSV, XLSX o XML con código y al menos otra columna reconocida.
+                    Puedes actualizar descripción, unidad de manejo o precio, con las columnas en cualquier orden.
+                </p>
+                {{ selector_archivo('input_archivo_excel', '.csv,.xlsx,.xml', 'Las celdas vacías conservan el dato existente. Un costo 0 sí actualiza el precio a cero. Los códigos nuevos necesitan descripción y unidad de manejo.', descripcion_id='ayuda-importar-productos') }}
+                <p id="estado-importar-productos" role="status" class="mt-4 text-xs font-semibold text-slate-600" hidden>
+                    <i class="fa-solid fa-spinner fa-spin mr-2" aria-hidden="true"></i>
+                    Procesando el archivo. Espera a que termine la importación.
+                </p>
+            </section>
+
+            <section id="resultado-importar-productos" hidden>
+                <div class="mb-3 flex items-center gap-3">
+                    <span class="importacion-productos-icono" aria-hidden="true">
+                        <i id="icono-resultado-importar-productos" class="fa-solid"></i>
+                    </span>
+                    <h3 id="titulo-resultado-importar-productos" tabindex="-1" class="text-sm font-semibold text-slate-800"></h3>
+                </div>
+                <p id="mensaje-resultado-importar-productos" class="mb-4 whitespace-pre-line text-xs text-slate-600"></p>
+                <dl id="resumen-importar-productos" class="importacion-productos-cifras mb-4" hidden>
+                    <div><dt>Creados</dt><dd id="importados-creados">0</dd></div>
+                    <div><dt>Actualizados</dt><dd id="importados-actualizados">0</dd></div>
+                    <div><dt>Sin cambios</dt><dd id="importados-sin-cambios">0</dd></div>
+                    <div><dt>Nuevos omitidos</dt><dd id="importados-omitidos">0</dd></div>
+                </dl>
+                <details id="detalles-importar-productos" hidden>
+                    <summary class="cursor-pointer text-xs font-semibold text-slate-600">Ver causas y observaciones</summary>
+                    <ul id="avisos-importar-productos" class="mt-3 list-disc space-y-2 pl-5 text-xs text-slate-700"></ul>
+                    <p id="limite-avisos-importar-productos" class="mt-2 text-xs text-slate-500"></p>
+                </details>
+            </section>
+        </div>
+
+        <div class="mt-4 flex flex-wrap items-center justify-end gap-3 border-t border-slate-100 pt-4">
+            <button type="button" id="cerrar-importar-productos"
+                class="rounded-xl bg-slate-100 px-4 py-2.5 text-xs font-semibold text-slate-600 transition-all hover:bg-slate-200 disabled:cursor-wait disabled:opacity-50">Cancelar</button>
+            <button type="submit" id="aceptar-importar-productos"
+                class="flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-xs font-medium text-white shadow-sm transition-all hover:bg-blue-700 disabled:cursor-wait disabled:opacity-50">Importar</button>
+        </div>
+    </form>
+</dialog>
+
+<script src="{{ asset_url('js/productos-importacion.js') }}" defer></script>
 <script src="{{ asset_url('js/productos-listado.js') }}" defer></script>
 {% endblock %}
