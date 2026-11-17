@@ -1,16 +1,18 @@
-import io  # Manejo de IO en memoria
+import logging
 import re  # Expresiones regulares
 import urllib.parse  # Formateo de URL
 import asyncio  # Manejo de concurrencia y reintentos asíncronos
 from typing import List, Optional  # Tipado
-import xml.etree.ElementTree as ET  # Parseador XML
 from fastapi import APIRouter, Request, Form, UploadFile, File, Cookie  # FastAPI
 from fastapi.responses import RedirectResponse, JSONResponse  # Respuestas HTTP
+from starlette.concurrency import run_in_threadpool
 import config
+from importacion_productos import leer_filas_productos
 from config import templates, obtener_usuario_actual, script_alerta_modal  # Dependencias globales
 from models import CodigosProductosRequest  # Modelo para búsquedas masivas
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Función auxiliar para ejecutar operaciones con reintentos exponenciales asíncronos
 async def ejecutar_supabase_con_reintento_async(func, max_reintentos: int = 3, espera_inicial: float = 0.5):
@@ -212,36 +214,6 @@ async def eliminar_producto(
     return RedirectResponse(url="/productos", status_code=303)
 
 
-def validar_columnas_producto(columnas):
-    requeridas = {
-        "CodigoDelProducto",
-        "CodigoEAN",
-        "Descripcion",
-        "UnidadManejo",
-        "CostoActual",
-        "Departamento",
-        "Grupo",
-        "SubGrupo",
-        "Proveedor",
-        "Marca"
-    }
-
-    disponibles = {
-        str(col).replace("\ufeff", "").strip()
-        for col in columnas
-    }
-
-    faltantes = sorted(requeridas - disponibles)
-
-    if faltantes:
-        return (
-            False,
-            "Faltan columnas requeridas: "
-            + ", ".join(faltantes)
-        )
-
-    return True, ""
-
 def texto_valor(valor):
     """Convierte un valor del archivo en texto limpio."""
     import pandas as pd
@@ -344,173 +316,89 @@ def convertir_precio(valor):
 
 @router.post("/productos/cargar-lista")
 async def cargar_lista_productos(
-    archivo: UploadFile = File(...),
+    request: Request,
+    archivo: Optional[UploadFile] = File(None),
     access_token: str = Cookie(None),
-    refresh_token: str = Cookie(None)
+    refresh_token: str = Cookie(None),
 ):
+    es_ajax = (
+        "application/json" in request.headers.get("accept", "")
+        or request.headers.get("x-requested-with") == "XMLHttpRequest"
+    )
+
+    def responder(tipo, titulo, mensaje, estado=200, resumen=None, avisos=None, incierto=False):
+        if es_ajax:
+            return JSONResponse(status_code=estado, content={
+                "ok": tipo != "error", "tipo": tipo, "titulo": titulo, "mensaje": mensaje,
+                "resumen": resumen,
+                "advertencias": (avisos or [])[:100],
+                "total_advertencias": len(avisos or []),
+                "resultado_incierto": incierto,
+            })
+        return script_alerta_modal(
+            "exito" if tipo == "success" else "warning" if tipo == "warning" else "error",
+            titulo, mensaje, "/productos",
+        )
+
     user = await obtener_usuario_actual(access_token, refresh_token)
     if not user:
+        if es_ajax:
+            return responder("error", "Sesión vencida", "Inicia sesión nuevamente antes de cargar el archivo.", 401)
         return RedirectResponse(url="/login", status_code=303)
 
-    contenido = await archivo.read()
-    nombre = archivo.filename.lower()
-    import pandas as pd  # Only imports need the spreadsheet engine.
-    filas = []
+    if archivo is None:
+        return responder("error", "Revisa el archivo", "Selecciona un archivo CSV, XLSX o XML.", 422)
 
-    if nombre.endswith(".csv"):
-        try:
-            df = pd.read_csv(
-                io.BytesIO(contenido),
-                sep=None,
-                engine="python",
-                encoding="utf-8-sig",
-                dtype=str,
-                keep_default_na=False
-            )
-        except UnicodeDecodeError:
-            df = pd.read_csv(
-                io.BytesIO(contenido),
-                sep=None,
-                engine="python",
-                encoding="latin1",
-                dtype=str,
-                keep_default_na=False
-            )
-
-        # Normalizar encabezados SIEMPRE, independientemente
-        # de la codificación utilizada.
-        df.columns = [
-            str(col).replace("\ufeff", "").strip()
-            for col in df.columns
-        ]
-
-        columnas_validas, mensaje_columnas = validar_columnas_producto(
-            df.columns
-        )
-
-        if not columnas_validas:
-            return script_alerta_modal(
-                "error",
-                "Formato de archivo incorrecto",
-                mensaje_columnas,
-                "/productos"
-            )
-
-        for _, r in df.iterrows():
-            filas.append({
-                "codigo": r.get("CodigoDelProducto", ""),
-                "codigo_ean": r.get("CodigoEAN", ""),
-                "descripcion": r.get("Descripcion", ""),
-                "unidad_manejo": r.get("UnidadManejo", ""),
-                "marca": r.get("Marca", ""),
-                "departamento": r.get("Departamento", ""),
-                "grupo": r.get("Grupo", ""),
-                "subgrupo": r.get("SubGrupo", ""),
-                "costo": r.get("CostoActual", 0),
-                "proveedor": r.get("Proveedor", "")
-            })
-
-
-    elif nombre.endswith(".xlsx"):
-        df = pd.read_excel(
-            io.BytesIO(contenido),
-            dtype=str,
-            keep_default_na=False
-        )
-
-        # Normalizar encabezados.
-        df.columns = [
-            str(col).replace("\ufeff", "").strip()
-            for col in df.columns
-        ]
-
-        columnas_validas, mensaje_columnas = validar_columnas_producto(
-            df.columns
-        )
-
-        if not columnas_validas:
-            return script_alerta_modal(
-                "error",
-                "Formato de archivo incorrecto",
-                mensaje_columnas,
-                "/productos"
-            )
-
-        for _, r in df.iterrows():
-            filas.append({
-                "codigo": r.get("CodigoDelProducto", ""),
-                "codigo_ean": r.get("CodigoEAN", ""),
-                "descripcion": r.get("Descripcion", ""),
-                "unidad_manejo": r.get("UnidadManejo", ""),
-                "marca": r.get("Marca", ""),
-                "departamento": r.get("Departamento", ""),
-                "grupo": r.get("Grupo", ""),
-                "subgrupo": r.get("SubGrupo", ""),
-                "costo": r.get("CostoActual", 0),
-                "proveedor": r.get("Proveedor", "")
-            })
-
-
-    elif nombre.endswith(".xml"):
-        root = ET.fromstring(contenido)
-
-        for item in (root.findall(".//Producto") or root):
-            filas.append({
-                "codigo": item.findtext("CodigoDelProducto", ""),
-                "codigo_ean": item.findtext("CodigoEAN", ""),
-                "descripcion": item.findtext("Descripcion", ""),
-                "unidad_manejo": item.findtext("UnidadManejo", ""),
-                "marca": item.findtext("Marca", ""),
-                "departamento": item.findtext("Departamento", ""),
-                "grupo": item.findtext("Grupo", ""),
-                "subgrupo": item.findtext("SubGrupo", ""),
-                "costo": item.findtext("CostoActual", "0"),
-                "proveedor": item.findtext("Proveedor", "")
-            })
-
-
-    else:
-        return script_alerta_modal(
-            "error",
-            "Formato no compatible",
-            "El archivo debe ser CSV, XLSX o XML.",
-            "/productos"
-        )
+    try:
+        contenido = await archivo.read()
+        filas = await run_in_threadpool(leer_filas_productos, contenido, archivo.filename or "")
+    except ValueError as error:
+        return responder("error", "Revisa el archivo", str(error), 422)
+    except Exception:
+        logger.exception("No se pudo leer el archivo de productos.")
+        return responder("error", "No se pudo leer el archivo",
+            "La lectura del archivo falló. Comprueba que no esté dañado, protegido ni vacío y vuelve a seleccionarlo.", 500)
 
     # 2. Leer todos los proveedores, sin limitarse a la primera página.
     mapa_proveedores = {}
-    ids_proveedores = set()
+    ids_proveedores = {}
     inicio = 0
 
     def clave_proveedor(valor):
         return " ".join(texto_valor(valor).split()).casefold()
 
-    while True:
-        res_prov = await (
-            config.supabase_async.table("proveedores")
-            .select("id, nombre")
-            .order("id")
-            .range(inicio, inicio + 499)
-            .execute()
-        )
+    consultar_proveedores = any(texto_valor(fila.get("proveedor")) for fila in filas)
+    try:
+        while consultar_proveedores:
+            res_prov = await (
+                config.supabase_async.table("proveedores")
+                .select("id, nombre")
+                .order("id")
+                .range(inicio, inicio + 499)
+                .execute()
+            )
 
-        proveedores = res_prov.data or []
+            proveedores = res_prov.data or []
 
-        if not proveedores:
-            break
+            if not proveedores:
+                break
 
-        for proveedor in proveedores:
-            proveedor_id = int(proveedor["id"])
-            ids_proveedores.add(proveedor_id)
+            for proveedor in proveedores:
+                proveedor_id = int(proveedor["id"])
+                ids_proveedores[str(proveedor_id)] = proveedor_id
 
-            clave = clave_proveedor(proveedor.get("nombre"))
+                clave = clave_proveedor(proveedor.get("nombre"))
 
-            if clave:
-                mapa_proveedores.setdefault(
-                    clave, set()
-                ).add(proveedor_id)
+                if clave:
+                    mapa_proveedores.setdefault(
+                        clave, set()
+                    ).add(proveedor_id)
 
-        inicio += len(proveedores)
+            inicio += len(proveedores)
+    except Exception:
+        logger.exception("No se pudieron consultar los proveedores para importar productos.")
+        return responder("error", "No se pudieron validar los proveedores",
+            "Falló la consulta de proveedores. Comprueba la conexión con Supabase y vuelve a intentar.", 503)
 
     # 3. Preparar actualizaciones parciales.
     productos_importacion = []
@@ -572,11 +460,9 @@ async def cargar_lista_productos(
 
         if proveedor_raw:
             # Admitir un ID existente o un nombre que coincida.
-            if (
-                proveedor_raw.isdigit()
-                and int(proveedor_raw) in ids_proveedores
-            ):
-                proveedor_id = int(proveedor_raw)
+            id_archivo = proveedor_raw.lstrip("0") or "0"
+            if id_archivo in ids_proveedores:
+                proveedor_id = ids_proveedores[id_archivo]
             else:
                 coincidencias = mapa_proveedores.get(
                     clave_proveedor(proveedor_raw),
@@ -595,71 +481,27 @@ async def cargar_lista_productos(
         productos_importacion.append(producto)
 
     if not productos_importacion:
-        return script_alerta_modal(
-            "error",
-            "No se pudo procesar el archivo",
-            "No se encontraron filas con código de producto válido.",
-            "/productos"
+        return responder("error", "No se encontraron productos",
+            "El archivo no contiene filas con código de producto válido. Revisa los códigos y las filas del archivo.",
+            422, avisos=avisos_importacion)
+
+    # Un fallo de conexión puede ocurrir después de confirmar la escritura.
+    try:
+        respuesta = await config.supabase_async.rpc(
+            "importar_productos_masivo", {"p_productos": productos_importacion}
+        ).execute()
+        resultado = respuesta.data
+        total_nuevos = int(resultado["creados"])
+        total_actualizados = int(resultado["actualizados"])
+        total_sin_cambios = int(resultado["sin_cambios"])
+        total_omitidos = int(resultado.get("omitidos", 0))
+    except Exception:
+        logger.exception("No se pudo confirmar la importación masiva de productos.")
+        return responder(
+            "error", "No se pudo confirmar la importación",
+            "Falló el guardado o la conexión con Supabase. Actualiza el catálogo antes de repetir la carga.",
+            503, avisos=avisos_importacion, incierto=True,
         )
-
-
-    # ============================================================
-    # 5. UNA SOLA OPERACIÓN EN SUPABASE
-    # ============================================================
-
-    if productos_importacion:
-
-        try:
-            res_importacion = await (
-                ejecutar_supabase_con_reintento_async(
-                    lambda: config.supabase_async.rpc(
-                        "importar_productos_masivo",
-                        {
-                            "p_productos": productos_importacion
-                        }
-                    ).execute()
-                )
-            )
-
-            resultado = res_importacion.data or {}
-
-            total_nuevos = int(
-                resultado.get("creados", 0)
-            )
-
-            total_actualizados = int(
-                resultado.get("actualizados", 0)
-            )
-
-            total_sin_cambios = int(
-                resultado.get("sin_cambios", 0)
-            )
-
-        except Exception as e:
-            print(
-                "ERROR EN IMPORTACIÓN MASIVA DE PRODUCTOS:",
-                repr(e)
-            )
-
-            return script_alerta_modal(
-                "error",
-                "Error al cargar productos",
-                "No fue posible completar la importación. "
-                "Revise el formato del archivo y vuelva a intentarlo.",
-                "/productos"
-            )
-
-    else:
-        total_nuevos = 0
-        total_actualizados = 0
-        total_sin_cambios = 0
-
-
-    # ============================================================
-    # 6. MENSAJE DE CONFIRMACIÓN
-    # ============================================================
-
-    total_omitidos = int(resultado.get("omitidos", 0))
 
     msj = (
         f"Proceso finalizado: "
@@ -684,12 +526,19 @@ async def cargar_lista_productos(
         if len(avisos_importacion) > 10:
             msj += "\nSe muestran las primeras 10 advertencias."
 
-    return script_alerta_modal(
-        "exito",
-        "Resultado de la importación",
-        msj,
-        "/productos"
-    )
+    tipo = "warning" if avisos_importacion or total_omitidos else "success"
+    titulo = "Importación completada con observaciones" if tipo == "warning" else "Importación completada"
+    mensaje = msj
+    if es_ajax:
+        mensaje = "Los datos del archivo se procesaron. Puedes consultar el resultado en el catálogo."
+        if tipo == "warning":
+            mensaje = "El archivo se procesó con observaciones. Revisa las causas antes de preparar otra carga."
+        if total_omitidos:
+            mensaje += " Los códigos nuevos omitidos necesitan descripción y unidad de manejo válidas."
+    return responder(tipo, titulo, mensaje, resumen={
+        "creados": total_nuevos, "actualizados": total_actualizados,
+        "sin_cambios": total_sin_cambios, "omitidos": total_omitidos,
+    }, avisos=avisos_importacion)
 
 # Endpoint asíncrono para buscar productos por coincidencia parcial en la descripción
 @router.get("/api/productos/buscar")
